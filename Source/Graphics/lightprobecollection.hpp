@@ -72,6 +72,7 @@ class LightProbeCollection {
     bool DeleteProbe(int id);
     void Draw(BulletWorld& bw);
     void Init();
+    void InitHeadless();
     void Dispose();
     int ShaderNumLightProbes();
     int ShaderNumTetrahedra();

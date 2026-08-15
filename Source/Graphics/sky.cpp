@@ -612,6 +612,22 @@ Sky::Sky() : lighting_changed(false),
              fog("fog"),
              shader("envobject #SKY") {}
 
+void Sky::InitializeHeadless() {
+    cube_map_texture_ref.clear();
+    spec_cube_map_texture_ref.clear();
+    original_spec_cube_map_texture_ref.clear();
+    sky_texture_ref.clear();
+    horizon_texture_ref.clear();
+    displaying_YCOCG_sky = false;
+    lighting_changed = false;
+    modified = -1;
+    cached = true;
+    load_resources_queued = false;
+    live_updated = false;
+    framebuffer = INVALID_FRAMEBUFFER;
+    framebuffer2 = INVALID_FRAMEBUFFER;
+}
+
 void Sky::GetShaderNames(std::map<std::string, int>& shader_names) {
     shader_names[simple_tex_3d_flipped] = 0;
     shader_names[fog] = 0;

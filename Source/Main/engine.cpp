@@ -578,19 +578,27 @@ void Engine::Dispose() {
     if (scriptable_menu_)
         delete scriptable_menu_;
 
-    for (auto& g_text_atla : g_text_atlas) {
-        g_text_atla.Dispose();
+    if (!RLBenchmark::Enabled()) {
+        for (auto& g_text_atla : g_text_atlas) {
+            g_text_atla.Dispose();
+        }
     }
     Models::Instance()->Dispose();
     ActiveCameras::Get()->SetCameraObject(NULL);
     particle_types.Dispose();
-    g_text_atlas_renderer.Dispose();
+    if (!RLBenchmark::Enabled()) {
+        g_text_atlas_renderer.Dispose();
+    }
     Input::Instance()->Dispose();
-    DecalTextures::Dispose();
-    Textures::Instance()->Dispose();
-    Shaders::Instance()->Dispose();
+    if (!RLBenchmark::Enabled()) {
+        DecalTextures::Dispose();
+        Textures::Instance()->Dispose();
+        Shaders::Instance()->Dispose();
+    }
     DebugDraw::Instance()->Dispose();
-    DisposeTextAtlases();
+    if (!RLBenchmark::Enabled()) {
+        DisposeTextAtlases();
+    }
     ScriptFileCache::Instance()->Dispose();
     sound.Dispose();
     ActiveCameras::Instance()->Dispose();
@@ -602,7 +610,9 @@ void Engine::Dispose() {
     Steamworks::Instance()->Dispose();
 #endif
     as_network.Dispose();
-    DisposeImGui();
+    if (!RLBenchmark::Enabled()) {
+        DisposeImGui();
+    }
 
     SDLNet_Quit();
     SDL_Quit();
@@ -678,7 +688,8 @@ void Engine::UpdateControls(float timestep, bool loading_screen) {
                 }
             }
 
-            if (SDL_GetWindowFlags(Graphics::Instance()->sdl_window_) & SDL_WINDOW_INPUT_FOCUS) {
+            SDL_Window* window = Graphics::Instance()->sdl_window_;
+            if (window != NULL && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
                 switch (event.type) {
                     case SDL_MOUSEBUTTONDOWN:
                     case SDL_KEYDOWN:
@@ -733,7 +744,9 @@ void Engine::UpdateControls(float timestep, bool loading_screen) {
             while (SDL_PollEvent(&event)) {
                 {
                     PROFILER_ZONE(g_profiler_ctx, "ImGui_ImplSdlGL3_ProcessEvent");
-                    ProcessEventImGui(&event);
+                    if (!RLBenchmark::Enabled()) {
+                        ProcessEventImGui(&event);
+                    }
                 }
                 // Redirect input events to the controller
                 switch (event.type) {
@@ -1913,7 +1926,9 @@ void Engine::Update() {
 
             // We want to load something new!
             if (new_engine_state.type != kEngineNoState) {
-                cursor.SetCursor(DEFAULT_CURSOR);
+                if (!RLBenchmark::Enabled()) {
+                    cursor.SetCursor(DEFAULT_CURSOR);
+                }
                 LOGI << "Switching game state" << std::endl;
                 ScriptableCampaign* sc = GetCurrentCampaign();
                 // Lets unload what we previously had loaded first.
@@ -2258,7 +2273,9 @@ void Engine::Update() {
     asset_manager.Update();
     as_network.Update();
 
-    UpdateImGui();
+    if (!RLBenchmark::Enabled()) {
+        UpdateImGui();
+    }
     if (Online::Instance() != nullptr) {
         Online::Instance()->LateUpdate(GetSceneGraph());
     }
@@ -3027,6 +3044,9 @@ void Engine::DrawScene(DrawingViewport drawing_viewport, Engine::PostEffectsType
 }
 
 void Engine::LoadScreenLoop(bool loading_in_progress) {
+    if (RLBenchmark::Enabled()) {
+        return;
+    }
     {
         PROFILER_ZONE_IDLE(g_profiler_ctx, "Load screen 60hz wait");
         SDL_Delay(16);  // Sleep for 16 ms, don't need more than 60 fps!
@@ -3046,6 +3066,9 @@ void Engine::LoadScreenLoop(bool loading_in_progress) {
 }
 
 void Engine::DrawLoadScreen(bool loading_in_progress) {
+    if (RLBenchmark::Enabled()) {
+        return;
+    }
 #ifndef GLDEBUG
     // don't draw loading screen on gl debug
     // makes traces more useful
@@ -5646,9 +5669,9 @@ void Engine::LoadLevel(Path queued_level) {
                 FormatString(screenshot_path, kPathSize, "Data/LevelLoading/%s_loading.jpg", shortest_path_orig_folder);
             }
 
-            if (FileExists(screenshot_path, kModPaths | kDataPaths)) {
+            if (!RLBenchmark::Enabled() && FileExists(screenshot_path, kModPaths | kDataPaths)) {
                 level_screenshot = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>(screenshot_path, PX_NOCONVERT | PX_NOREDUCE | PX_NOMIPMAP, 0x0);
-            } else if (Online::Instance()->IsActive()) {
+            } else if (!RLBenchmark::Enabled() && Online::Instance()->IsActive()) {
                 // Multiplayer needs an image for the "waiting for all clients" dialogue!
                 strscpy(screenshot_path, "Data/Images/full_fallback.png", kPathSize);
                 if (FileExists(screenshot_path, kModPaths | kDataPaths)) {
@@ -5689,6 +5712,9 @@ void Engine::LoadLevel(Path queued_level) {
             scenegraph_->particle_system = new ParticleSystem(as_data);
             scenegraph_->particle_system->particle_types = &particle_types;
             scenegraph_->sky = new Sky();
+            if (RLBenchmark::Enabled()) {
+                scenegraph_->sky->InitializeHeadless();
+            }
             scenegraph_->flares.scenegraph = scenegraph_;
             scenegraph_->map_editor = new MapEditor();
             scenegraph_->map_editor->gui = &gui;
@@ -5714,14 +5740,16 @@ void Engine::LoadLevel(Path queued_level) {
 #if THREADED
             loading_in_progress_ = true;
             std::thread load_thread(std::bind(&Engine::LoadLevelData, this, level_path));
-            bool keep_looping = loading_in_progress_;
-            last_loading_input_time = SDL_TS_GetTicks();
-            while (keep_looping) {
-                LoadScreenLoop(loading_in_progress_);
-                DisplayLastQueuedError();
-                loading_mutex_.lock();
-                keep_looping = loading_in_progress_;
-                loading_mutex_.unlock();
+            if (!RLBenchmark::Enabled()) {
+                bool keep_looping = loading_in_progress_;
+                last_loading_input_time = SDL_TS_GetTicks();
+                while (keep_looping) {
+                    LoadScreenLoop(loading_in_progress_);
+                    DisplayLastQueuedError();
+                    loading_mutex_.lock();
+                    keep_looping = loading_in_progress_;
+                    loading_mutex_.unlock();
+                }
             }
             load_thread.join();
 #else
@@ -5734,13 +5762,20 @@ void Engine::LoadLevel(Path queued_level) {
                 return;
             }
 
-            if (g_no_reflection_capture == false) {
+            if (!RLBenchmark::Enabled() && g_no_reflection_capture == false) {
                 scenegraph_->LoadReflectionCaptureCubemaps();
+            } else if (RLBenchmark::Enabled()) {
+                scenegraph_->reflection_data_loaded = true;
+                scenegraph_->cubemaps_need_refresh = false;
             }
 
             if (kLightProbeEnabled) {
                 PROFILER_ZONE(g_profiler_ctx, "Init light probe collection");
-                scenegraph_->light_probe_collection.Init();
+                if (RLBenchmark::Enabled()) {
+                    scenegraph_->light_probe_collection.InitHeadless();
+                } else {
+                    scenegraph_->light_probe_collection.Init();
+                }
             }
             {
                 PROFILER_ZONE(g_profiler_ctx, "Init dynamic light collection");
@@ -5766,10 +5801,12 @@ void Engine::LoadLevel(Path queued_level) {
 
             {
                 PROFILER_ZONE(g_profiler_ctx, "Load sky");
-                scenegraph_->sky->QueueLoadResources();
-                scenegraph_->sky->BakeFirstPass();
-                if (!scenegraph_->terrain_object_) {
-                    scenegraph_->sky->BakeSecondPass(NULL);
+                if (!RLBenchmark::Enabled()) {
+                    scenegraph_->sky->QueueLoadResources();
+                    scenegraph_->sky->BakeFirstPass();
+                    if (!scenegraph_->terrain_object_) {
+                        scenegraph_->sky->BakeSecondPass(NULL);
+                    }
                 }
             }
 
@@ -5783,13 +5820,15 @@ void Engine::LoadLevel(Path queued_level) {
             {
                 PROFILER_ZONE(g_profiler_ctx, "Preload shaders");
                 RLBenchmark::OnShaderPreloadStarted();
-                scenegraph_->PreloadShaders();
+                if (!RLBenchmark::Enabled()) {
+                    scenegraph_->PreloadShaders();
+                }
                 RLBenchmark::OnShaderPreloadFinished();
             }
 
             DrawLoadScreen(true);
 
-            if (kLightProbeEnabled) {
+            if (kLightProbeEnabled && !RLBenchmark::Enabled()) {
                 PROFILER_ZONE(g_profiler_ctx, "Update light probe texture buffer");
                 scenegraph_->light_probe_collection.UpdateTextureBuffer(*scenegraph_->bullet_world_);
             }
@@ -5893,6 +5932,7 @@ void Engine::GenerateLevelCache(ModInstance* mod_instance) {
 }
 
 void Engine::Initialize() {
+    const bool rl_headless = RLBenchmark::Enabled();
     current_menu_player = -1;
     waiting_for_input_ = false;
     back_to_menu = false;
@@ -5999,7 +6039,7 @@ void Engine::Initialize() {
         LOGE << "SDL Initialization failed" << std::endl;
     }
 
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) < 0) {
+    if (!rl_headless && SDL_InitSubSystem(SDL_INIT_VIDEO) < 0) {
         LOGE << "Failed when initializing SDL video subsystem" << std::endl;
     }
     if (SDL_InitSubSystem(SDL_INIT_EVENTS) < 0) {
@@ -6020,18 +6060,35 @@ void Engine::Initialize() {
     Input::Instance()->Initialize();
     Input::Instance()->cursor = &cursor;
     LoadConfigFile();
+    if (rl_headless) {
+        // Keep script-side layout and line-wrapping numerically well-defined
+        // without creating a window or render target.  These dimensions are
+        // metadata only; no graphics calls use them in the headless path.
+        Graphics::Instance()->window_dims[0] = 1280;
+        Graphics::Instance()->window_dims[1] = 720;
+        Graphics::Instance()->render_dims[0] = 1280;
+        Graphics::Instance()->render_dims[1] = 720;
+        Graphics::Instance()->render_output_dims[0] = 1280;
+        Graphics::Instance()->render_output_dims[1] = 720;
+    }
     AnimationRetargeter::Instance()->Load("Data/Animations/retarget.xml");
 
     ModLoading::Instance().Initialize();
     ModLoading::Instance().InitMods();
 
     std::string preferred_audio_device = config["preferred_audio_device"].str();
-    sound.Initialize(preferred_audio_device.c_str());
+    if (rl_headless) {
+        sound.InitializeNull(preferred_audio_device.c_str());
+    } else {
+        sound.Initialize(preferred_audio_device.c_str());
+    }
     sound.EnableLayeredSoundtrackLimiter(config["use_soundtrack_limiter"].toBool());
-    Graphics::Instance()->Initialize();
-    Graphics::Instance()->InitScreen();
+    if (!rl_headless) {
+        Graphics::Instance()->Initialize();
+        Graphics::Instance()->InitScreen();
+    }
 
-    if (config["has_detected_settings"].toBool() == false) {
+    if (!rl_headless && config["has_detected_settings"].toBool() == false) {
         DetectAndSetSettings();
         config.GetRef("has_detected_settings") = true;
     }
@@ -6099,7 +6156,7 @@ void Engine::Initialize() {
     show_mp_settings = config["menu_show_mp_settings"].toBool();
     break_on_script_change = config["asdebugger_break_on_script_change"].toBool();
 
-    if (!GLAD_GL_VERSION_4_0 && g_single_pass_shadow_cascade) {
+    if (!rl_headless && !GLAD_GL_VERSION_4_0 && g_single_pass_shadow_cascade) {
         LOGW << "OpenGL 4.0 not found, disabling single-pass shadow cascade" << std::endl;
         g_single_pass_shadow_cascade = false;
         config.GetRef("single_pass_shadow_cascade") = false;
@@ -6129,18 +6186,14 @@ void Engine::Initialize() {
         save_file_.SetWriteFile(save);
     }
 
-    CHECK_GL_ERROR();
-
-    cursor.SetCursor(DEFAULT_CURSOR);
-
-    CHECK_GL_ERROR();
-    PrintSpecs();
-    CHECK_GL_ERROR();
-
-    CHECK_GL_ERROR();
     FontRenderer::Instance(&font_renderer);
-
-    CHECK_GL_ERROR();
+    if (!rl_headless) {
+        CHECK_GL_ERROR();
+        cursor.SetCursor(DEFAULT_CURSOR);
+        CHECK_GL_ERROR();
+        PrintSpecs();
+        CHECK_GL_ERROR();
+    }
     if (config["load_all_levels"].toNumber<bool>()) {
         ManifestXMLParser mp;
 
@@ -6192,25 +6245,27 @@ void Engine::Initialize() {
     game_timer.target_time_scale = config["global_time_scale_mult"].toNumber<float>();
     current_global_scale_mult = config["global_time_scale_mult"].toNumber<float>();
 
-    CHECK_GL_ERROR();
-    g_text_atlas[kTextAtlasMono].Create(HardcodedPaths::paths[HardcodedPaths::kMonoFontPath], 18, &font_renderer, 0);
-    CHECK_GL_ERROR();
-    g_text_atlas[kTextAtlasDynamic].Create(HardcodedPaths::paths[HardcodedPaths::kDynamicFontPath], 18, &font_renderer, 0);
-    CHECK_GL_ERROR();
-    g_text_atlas_renderer.Init();
+    if (!rl_headless) {
+        CHECK_GL_ERROR();
+        g_text_atlas[kTextAtlasMono].Create(HardcodedPaths::paths[HardcodedPaths::kMonoFontPath], 18, &font_renderer, 0);
+        CHECK_GL_ERROR();
+        g_text_atlas[kTextAtlasDynamic].Create(HardcodedPaths::paths[HardcodedPaths::kDynamicFontPath], 18, &font_renderer, 0);
+        CHECK_GL_ERROR();
+        g_text_atlas_renderer.Init();
 
-    static const GLfloat quad_data[] = {
-        0.0f, 0.0f,
-        1.0f, 0.0f,
-        1.0f, 1.0f,
-        0.0f, 1.0f};
-    static const GLuint quad_index[] = {
-        0, 1, 2, 0, 3, 2};
+        static const GLfloat quad_data[] = {
+            0.0f, 0.0f,
+            1.0f, 0.0f,
+            1.0f, 1.0f,
+            0.0f, 1.0f};
+        static const GLuint quad_index[] = {
+            0, 1, 2, 0, 3, 2};
 
-    quad_vert_vbo.Fill(kVBOFloat | kVBOStatic, sizeof(quad_data), (void*)quad_data);
-    quad_index_vbo.Fill(kVBOElement | kVBOStatic, sizeof(quad_index), (void*)quad_index);
+        quad_vert_vbo.Fill(kVBOFloat | kVBOStatic, sizeof(quad_data), (void*)quad_data);
+        quad_index_vbo.Fill(kVBOElement | kVBOStatic, sizeof(quad_index), (void*)quad_index);
 
-    InitImGui();
+        InitImGui();
+    }
 
     ModLoading::Instance().RegisterCallback(this);
 #ifdef WIN32
@@ -6220,13 +6275,17 @@ void Engine::Initialize() {
     write_change_notification = FindFirstChangeNotificationW(UTF16fromUTF8(write_path).c_str(), true, FILE_NOTIFY_CHANGE_LAST_WRITE);
 #endif
 
-    loading_screen_logo = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/logo.tga", PX_SRGB | PX_NOREDUCE, 0x0);
+    if (!rl_headless) {
+        loading_screen_logo = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/logo.tga", PX_SRGB | PX_NOREDUCE, 0x0);
 
-    loading_screen_og_logo_casual = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/ui/ogicon_casual.png", PX_SRGB | PX_NOREDUCE, 0x0);
-    loading_screen_og_logo_hardcore = loading_screen_og_logo_casual;  //= Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/ui/ogicon_hardcore.png", PX_SRGB | PX_NOREDUCE, 0x0);
-    loading_screen_og_logo_expert = loading_screen_og_logo_casual;    //= Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/ui/ogicon_expert.png", PX_SRGB | PX_NOREDUCE, 0x0);
+        loading_screen_og_logo_casual = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/ui/ogicon_casual.png", PX_SRGB | PX_NOREDUCE, 0x0);
+        loading_screen_og_logo_hardcore = loading_screen_og_logo_casual;  //= Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/ui/ogicon_hardcore.png", PX_SRGB | PX_NOREDUCE, 0x0);
+        loading_screen_og_logo_expert = loading_screen_og_logo_casual;    //= Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/ui/ogicon_expert.png", PX_SRGB | PX_NOREDUCE, 0x0);
 
-    loading_screen_og_logo = loading_screen_og_logo_casual;
+        loading_screen_og_logo = loading_screen_og_logo_casual;
+    } else {
+        LOGI << "RL headless backend: no_video=1 no_window=1 no_gl=1 no_audio=1" << std::endl;
+    }
 }
 
 void Engine::GetShaderNames(std::map<std::string, int>& preload_shaders) {

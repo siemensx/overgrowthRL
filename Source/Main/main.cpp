@@ -392,6 +392,9 @@ int main(int argc, char* argv[]) {
             return 2;
         }
         RLBenchmark::Configure(benchmark.getValue(), static_cast<uint64_t>(benchmarkWarmupSteps.getValue()), static_cast<uint64_t>(benchmarkSteps.getValue()), static_cast<unsigned int>(benchmarkSeed.getValue()));
+        if (RLBenchmark::Enabled()) {
+            disable_rendering = true;
+        }
 
         std::stringstream configurationStream(configuration);
         config.Load(configurationStream, false, true);

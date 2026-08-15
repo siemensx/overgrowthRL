@@ -48,6 +48,8 @@
 #include <XML/xml_helper.h>
 #include <XML/level_loader.h>
 
+#include <Main/rl_benchmark.h>
+
 #include <Scripting/angelscript/ascontext.h>
 #include <Scripting/angelscript/add_on/scriptarray/scriptarray.h>
 
@@ -1839,10 +1841,12 @@ void RiggedObject::Load(const std::string& character_path, vec3 pos, SceneGraph*
     blood_surface.sleep_time = game_timer.game_time;
 
     if (!blood_inited && IsMainThread()) {
-        blood_surface.PreDrawFrame(
-            Textures::Instance()->getWidth(texture_ref) / 4,
-            Textures::Instance()->getHeight(texture_ref) / 4);
-        blood_surface.Update(scenegraph_, 0.001f, true);
+        if (!RLBenchmark::Enabled()) {
+            blood_surface.PreDrawFrame(
+                Textures::Instance()->getWidth(texture_ref) / 4,
+                Textures::Instance()->getHeight(texture_ref) / 4);
+            blood_surface.Update(scenegraph_, 0.001f, true);
+        }
         blood_inited = true;
     }
 

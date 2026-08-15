@@ -149,6 +149,17 @@ void LightProbeCollection::Init() {
     grid_buffer_object_id = -1;
 }
 
+void LightProbeCollection::InitHeadless() {
+    cube_map_fbo = INVALID_FRAMEBUFFER;
+    cube_map.clear();
+    ambient_3d_tex.clear();
+    probe_model_id = -1;
+    light_probe_texture_buffer_id = -1;
+    light_probe_buffer_object_id = -1;
+    grid_texture_buffer_id = -1;
+    grid_buffer_object_id = -1;
+}
+
 void LightProbeCollection::Dispose() {
     Graphics::Instance()->deleteFramebuffer(&cube_map_fbo);
     cube_map_fbo = INVALID_FRAMEBUFFER;

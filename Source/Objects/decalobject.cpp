@@ -40,6 +40,7 @@
 
 #include <Main/scenegraph.h>
 #include <Main/engine.h>
+#include <Main/rl_benchmark.h>
 
 #include <Editors/map_editor.h>
 #include <UserInput/input.h>
@@ -165,6 +166,14 @@ void DecalObject::Load(const std::string& type_file) {
 
     // decal_file_ref = DecalFiles::Instance()->ReturnRef(type_file);
     decal_file_ref = Engine::Instance()->GetAssetManager()->LoadSync<DecalFile>(type_file);
+
+    // Decals have no collision or script gameplay state.  Their atlas is a
+    // presentation-only GPU resource and is intentionally absent in the true
+    // headless benchmark backend.
+    if (RLBenchmark::Enabled()) {
+        texture.Set(NULL);
+        return;
+    }
 
     std::map<std::string, RC_DecalTexture>::iterator texit = textureCache.find(type_file);
 

@@ -1,0 +1,57 @@
+experiment_id: OGRL-20260815-017
+candidate: exp-008-true-headless
+status: kept
+objective: >-
+  Remove video, window, OpenGL, presentation text, visual-only GPU bootstrap,
+  and hardware audio from the RL benchmark path while retaining production
+  level loading, scripts, Bullet collision, animation events, and combat state.
+machine: Apple M4 MacBook Air, 16 GB unified memory
+build:
+  mode: Release
+  architecture: x86_64-under-Rosetta
+  compiler: AppleClang 17.0.0.17000404
+  command: bash Tools/rl/build_engine.sh
+benchmark:
+  config: Tools/rl/benchmark_config_headless.yaml
+  suite: production-reference
+  repeats: 3
+  warmup_steps: 600
+  measured_steps: 2400
+  fixed_physics_hz: 120
+  seed_range: [20260815, 20260816, 20260817]
+  aggregate_useful_steps_per_second: 1853.223605242251
+  aggregate_decisions_per_second_20hz: 308.8706008737085
+  completion_rate: 1.0
+  combat_suite_pass_rate: 1.0
+  scenario_median_steps_per_second:
+    empty: 44236.641184
+    duel: 2110.059532
+    four_character: 2532.111326
+    six_character: 1191.258372
+  scenario_median_level_load_seconds:
+    empty: 0.498616
+    duel: 1.825959
+    four_character: 3.234128
+    six_character: 1.625168
+  peak_rss_mib: 803.9609375
+  shader_preload_seconds: 0.0
+  raw_artifacts: ../research-artifacts/OGRL-20260815-017
+verification:
+  release_build: pass
+  unit_tests: "16 pass; 1 pre-existing Modloading assertion failure"
+  diff_check: pass
+  runtime_maps: "empty, duel, 2v2, and six-character production levels complete"
+  production_equivalence_trace: pending
+notes:
+  - >-
+    RL logs explicitly report no_video=1, no_window=1, no_gl=1, and no_audio=1.
+  - >-
+    Terrain heightmaps, cached terrain meshes, Bullet static meshes, scripts,
+    animation, and combat updates remain on the load/update path.
+  - >-
+    Text canvas and atlas calls are presentation-only no-ops or synthetic
+    metrics in RL mode; virtual audio handles remain valid and Stop does not
+    invalidate them.
+  - >-
+    The benchmark harness's equivalence field is still a placeholder; an
+    identical legal-action production/reference trace comparator remains open.

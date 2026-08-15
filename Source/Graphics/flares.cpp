@@ -38,6 +38,7 @@
 #include <Timing/intel_gl_perf.h>
 
 #include <Main/engine.h>
+#include <Main/rl_benchmark.h>
 #include <Main/scenegraph.h>
 
 #include <Physics/bulletworld.h>
@@ -63,12 +64,15 @@ Flares::Flares() : animation(0.0f),
     gl_state.cull_face = false;
     gl_state.depth_write = false;
 
-    shader_id = Shaders::Instance()->returnProgram(shader);
-    flare_texture_matte = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarematte.tga", PX_SRGB, 0x0);
-    flare_texture_streaks = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarestreaks_nocompress.tga", PX_SRGB, 0x0);
-    flare_texture_blur1 = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarestreaksblur1_nocompress.tga", PX_SRGB, 0x0);
-    flare_texture_blur2 = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarestreaksblur2_nocompress.tga", PX_SRGB, 0x0);
-    flare_texture_color = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarecolor_nocompress.tga", PX_SRGB, 0x0);
+    shader_id = -1;
+    if (!RLBenchmark::Enabled()) {
+        shader_id = Shaders::Instance()->returnProgram(shader);
+        flare_texture_matte = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarematte.tga", PX_SRGB, 0x0);
+        flare_texture_streaks = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarestreaks_nocompress.tga", PX_SRGB, 0x0);
+        flare_texture_blur1 = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarestreaksblur1_nocompress.tga", PX_SRGB, 0x0);
+        flare_texture_blur2 = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarestreaksblur2_nocompress.tga", PX_SRGB, 0x0);
+        flare_texture_color = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>("Data/Textures/eyeflarecolor_nocompress.tga", PX_SRGB, 0x0);
+    }
 }
 
 Flares::~Flares() {

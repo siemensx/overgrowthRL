@@ -660,10 +660,13 @@ bool NavMesh::Load(const string& level_name, const Path& level_path) {
     char rel_meta_path[kPathSize];
     char rel_zip_path[kPathSize];
 
-    char abs_model_path[kPathSize];
-    char abs_nav_path[kPathSize];
-    char abs_meta_path[kPathSize];
-    char abs_zip_path[kPathSize];
+    // FindFilePath leaves output untouched on a miss.  Zero-initialize these
+    // buffers so the diagnostic path is valid when a write-dir navmesh is
+    // absent (common for isolated headless runs).
+    char abs_model_path[kPathSize] = {'\0'};
+    char abs_nav_path[kPathSize] = {'\0'};
+    char abs_meta_path[kPathSize] = {'\0'};
+    char abs_zip_path[kPathSize] = {'\0'};
 
     string base_path = GenerateParallelPath("Data/Levels", "Data/LevelNavmeshes", ".nav", level_path);
 

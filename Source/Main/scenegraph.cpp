@@ -67,6 +67,7 @@
 #include <Timing/intel_gl_perf.h>
 
 #include <Main/engine.h>
+#include <Main/rl_benchmark.h>
 #include <Internal/stopwatch.h>
 #include <Compat/fileio.h>
 #include <AI/navmesh.h>
@@ -197,11 +198,13 @@ SceneGraph::SceneGraph()
     decal_cluster_buffer.resize(4096, 0);
     const char* empty = reinterpret_cast<const char*>(&decal_cluster_buffer[0]);
 
-    decal_data_texture = Textures::Instance()->makeBufferTexture(kMaxDecals * sizeof(ShaderDecal), GL_RGBA32F);
-    Textures::Instance()->SetTextureName(decal_data_texture, "Decal Data");
-    // TODO: should use 3D texture instead
-    decal_cluster_texture = Textures::Instance()->makeBufferTexture(decal_cluster_buffer.size() * 4, GL_R32UI, empty);
-    Textures::Instance()->SetTextureName(decal_cluster_texture, "Decal Clusters");
+    if (!RLBenchmark::Enabled()) {
+        decal_data_texture = Textures::Instance()->makeBufferTexture(kMaxDecals * sizeof(ShaderDecal), GL_RGBA32F);
+        Textures::Instance()->SetTextureName(decal_data_texture, "Decal Data");
+        // TODO: should use 3D texture instead
+        decal_cluster_texture = Textures::Instance()->makeBufferTexture(decal_cluster_buffer.size() * 4, GL_R32UI, empty);
+        Textures::Instance()->SetTextureName(decal_cluster_texture, "Decal Clusters");
+    }
 }
 
 SceneGraph::~SceneGraph() {
@@ -1200,7 +1203,9 @@ void SceneGraph::CreateNavMesh() {
     nav_mesh_->CalcNavMesh();
     Graphics::Instance()->nav_mesh_out_of_date = false;
 
-    nav_mesh_renderer_.LoadNavMesh(nav_mesh_);
+    if (!RLBenchmark::Enabled()) {
+        nav_mesh_renderer_.LoadNavMesh(nav_mesh_);
+    }
 }
 
 void SceneGraph::SaveNavMesh() {
@@ -1860,7 +1865,9 @@ void SceneGraph::Dispose() {
     if (nav_mesh_) {
         delete nav_mesh_;
         nav_mesh_ = NULL;
-        nav_mesh_renderer_.LoadNavMesh(nav_mesh_);
+        if (!RLBenchmark::Enabled()) {
+            nav_mesh_renderer_.LoadNavMesh(nav_mesh_);
+        }
     }
     delete particle_system;
     particle_system = NULL;
@@ -1875,7 +1882,9 @@ void SceneGraph::Dispose() {
     delete sky;
     sky = NULL;
     flares.CleanupFlares();
-    DecalTextures::Instance()->Clear();
+    if (!RLBenchmark::Enabled()) {
+        DecalTextures::Instance()->Clear();
+    }
 }
 
 void SceneGraph::SetNavMeshVisible(bool v) {

@@ -217,12 +217,14 @@ class ThreadedSound {
    private:
     std::thread thread;
     bool initialized;
+    bool null_backend;
 
    public:
     ThreadedSound();
     ~ThreadedSound();
 
     void Initialize(const char* preferred_device);
+    void InitializeNull(const char* preferred_device);
 
     // Following is a copy of the Sound interface
     void Update();
