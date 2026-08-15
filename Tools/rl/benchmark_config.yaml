@@ -3,8 +3,8 @@
   "experiment_id": "OGRL-20260815-004",
   "binary": "BuildRelease64/Overgrowth.app/Contents/MacOS/Overgrowth",
   "artifact_root": "../research-artifacts/OGRL-20260815-004",
-  "warmup_steps": 120,
-  "measure_steps": 600,
+  "warmup_steps": 600,
+  "measure_steps": 2400,
   "timeout_seconds": 600,
   "seed": 20260815,
   "scenarios": {
