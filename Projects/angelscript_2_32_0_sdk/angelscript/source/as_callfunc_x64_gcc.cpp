@@ -79,10 +79,13 @@ static asQWORD __attribute__((noinline)) X64_CallFunction(const asQWORD *args, i
 
 	// Backup stack pointer in R15 that is guaranteed to maintain its value over function calls
 		"  movq %%rsp, %%r15 \n"
-#ifdef __OPTIMIZE__
+#if defined(__OPTIMIZE__) && !defined(__APPLE__)
 	// Make sure the stack unwind logic knows we've backed up the stack pointer in register r15
 	// This should only be done if any optimization is done. If no optimization (-O0) is used,
 	// then the compiler already backups the rsp before entering the inline assembler code
+	// Apple Clang's assembler rejects these inline CFA-register transitions in an optimized
+	// function. Keep the original directive on other System V targets; on Apple, rely on the
+	// compiler-generated function CFI instead.
 		" .cfi_def_cfa_register r15 \n"
 #endif
 
@@ -136,7 +139,7 @@ static asQWORD __attribute__((noinline)) X64_CallFunction(const asQWORD *args, i
 
 	// Restore stack pointer
 		"  mov %%r15, %%rsp \n"
-#ifdef __OPTIMIZE__
+#if defined(__OPTIMIZE__) && !defined(__APPLE__)
 	// Inform the stack unwind logic that the stack pointer has been restored
 	// This should only be done if any optimization is done. If no optimization (-O0) is used,
 	// then the compiler already backups the rsp before entering the inline assembler code
@@ -474,4 +477,3 @@ END_AS_NAMESPACE
 
 #endif // AS_X64_GCC
 #endif // AS_MAX_PORTABILITY
-
