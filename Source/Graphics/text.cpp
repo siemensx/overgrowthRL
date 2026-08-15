@@ -43,6 +43,7 @@
 #include <Memory/allocation.h>
 #include <Compat/fileio.h>
 #include <Scripting/angelscript/ascontext.h>
+#include <Main/rl_benchmark.h>
 #include <Wrappers/glm.h>
 #include <Logging/logdata.h>
 #include <Utility/assert.h>
@@ -209,6 +210,14 @@ void TextCanvasTexture::Create(int width, int height) {
     TextCanvas::MemoryBlock& bgra_block = impl_->bgra_block;
     TextureRef& texture_ref = impl_->texture_ref;
     text_canvas.Create(width, height);
+    if (RLBenchmark::Enabled()) {
+        // Text canvases are presentation-only. Keep their CPU dimensions so
+        // scripts can continue to issue legal UI calls, but never allocate a
+        // GL texture in the no-video benchmark backend.
+        texture_ref.clear();
+        bgra_block.clear();
+        return;
+    }
     text_canvas.GetBGRA(&bgra_block);
     texture_ref = CreateTextureFromBGRABlock(bgra_block, width, height);
     Textures::Instance()->SetTextureName(texture_ref, "Text Canvas Texture");
@@ -221,6 +230,9 @@ void FillTextureFromBGRABlock(const TextureRef& texture_ref, const TextCanvas::M
 }
 
 void TextCanvasTexture::UploadTextCanvasToTexture() {
+    if (RLBenchmark::Enabled()) {
+        return;
+    }
     TextCanvas& text_canvas = impl_->text_canvas;
     TextCanvas::MemoryBlock& bgra_block = impl_->bgra_block;
     TextureRef& texture_ref = impl_->texture_ref;
@@ -238,16 +250,34 @@ void TextCanvasTexture::SetPenPosition(const vec2& point) {
 }
 
 void TextCanvasTexture::AddText(const char* str, int length, const CanvasTextStyle& style, uint32_t char_limit) {
+    if (RLBenchmark::Enabled()) {
+        return;
+    }
     TextMetrics metrics;
     RenderText(str, length, style, metrics, TMF_DRAW, char_limit);
 }
 
 void TextCanvasTexture::AddTextMultiline(const char* str, int length, const CanvasTextStyle& style, uint32_t char_limit) {
+    if (RLBenchmark::Enabled()) {
+        return;
+    }
     TextMetrics metrics;
     RenderText(str, length, style, metrics, TMF_DRAW | TMF_AUTO_NEWLINE, char_limit);
 }
 
+static void ClearTextMetrics(TextMetrics* metrics);
+
 void TextCanvasTexture::GetTextMetricsInfo(const char* str, int length, const CanvasTextStyle& style, TextMetrics& metrics, uint32_t char_limit) {
+    if (RLBenchmark::Enabled()) {
+        ClearTextMetrics(&metrics);
+        metrics.advance[0] = length * 64;
+        metrics.bounds[0] = 0;
+        metrics.bounds[1] = metrics.advance[0];
+        metrics.bounds[2] = 0;
+        metrics.bounds[3] = 64;
+        metrics.ascenderRatio = 1.0f;
+        return;
+    }
     RenderText(str, length, style, metrics, TMF_METRICS, char_limit);
 }
 
@@ -535,6 +565,9 @@ int TextCanvasTexture::GetCursorPos(const char* str, const CanvasTextStyle& styl
 }
 
 void TextCanvasTexture::DebugDrawBillboard(const vec3& pos, float scale, int lifespan_int) {
+    if (RLBenchmark::Enabled()) {
+        return;
+    }
     DDLifespan lifespan = LifespanFromInt(lifespan_int);
 
     RemoveDebugDrawBillboard();
@@ -579,6 +612,9 @@ TextureRef TextCanvasTexture::GetTexture() const {
 }
 
 int ASGetFontFaceID(const std::string& path, int pixel_height) {
+    if (RLBenchmark::Enabled()) {
+        return -1;
+    }
     return FontRenderer::Instance()->GetFontFaceID(path, pixel_height);
 }
 
@@ -610,6 +646,9 @@ void ASTextContext::ASDrawTextAtlas(const std::string& path, int pixel_height, i
 }
 
 void ASTextContext::ASDrawTextAtlas2(const std::string& path, int pixel_height, int flags, const std::string& txt, int x, int y, vec4 color, uint32_t char_limit) {
+    if (RLBenchmark::Enabled()) {
+        return;
+    }
     if (!text_atlas_renderer_setup) {
         text_atlas_renderer.Init();
         text_atlas_renderer_setup = true;
@@ -654,7 +693,21 @@ TextMetrics ASTextContext::ASGetTextAtlasMetrics(const std::string& path, int pi
 }
 
 TextMetrics ASTextContext::ASGetTextAtlasMetrics2(const std::string& path, int pixel_height, int flags, const std::string& txt, uint32_t char_limit) {
-    TextMetrics metrics;
+    TextMetrics metrics = {};
+
+    if (RLBenchmark::Enabled()) {
+        // Preserve a useful, finite metric for scripts that use text width in
+        // control flow while avoiding atlas/shader creation.  Metrics are in
+        // Metrics returned by TextAtlasRenderer are pixel units.  Use a
+        // conservative monospace estimate so script-side wrapping remains
+        // finite without constructing a font atlas.
+        const int estimated_width = int(txt.size()) * max(1, pixel_height / 2);
+        metrics.advance[0] = estimated_width;
+        metrics.bounds[2] = estimated_width;
+        metrics.bounds[3] = pixel_height;
+        metrics.ascenderRatio = 1.0f;
+        return metrics;
+    }
 
     if (!text_atlas_renderer_setup) {
         text_atlas_renderer.Init();

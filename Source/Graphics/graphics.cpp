@@ -47,6 +47,7 @@
 #include <Images/image_export.hpp>
 #include <Math/vec3math.h>
 #include <Main/scenegraph.h>
+#include <Main/rl_benchmark.h>
 #include <Logging/logdata.h>
 #include <Objects/decalobject.h>
 #include <Main/engine.h>
@@ -637,6 +638,9 @@ const char* glErrorString(GLenum errCode) {
 }
 
 bool CheckGLError(int line, const char* file, const char* exterrmsg) {
+    if (RLBenchmark::Enabled()) {
+        return false;
+    }
     GLenum errCode;
     const char* errString;
     errCode = glGetError();
@@ -662,6 +666,9 @@ bool CheckGLError(int line, const char* file, const char* exterrmsg) {
 }
 
 bool CheckGLErrorStr(char* output, unsigned length) {
+    if (RLBenchmark::Enabled()) {
+        return false;
+    }
     GLenum errCode;
     const char* errString;
     errCode = glGetError();
@@ -674,6 +681,9 @@ bool CheckGLErrorStr(char* output, unsigned length) {
 }
 
 void CheckFBOError(int line, const char* file) {
+    if (RLBenchmark::Enabled()) {
+        return;
+    }
     if (!glCheckFramebufferStatus) {
         return;
     }

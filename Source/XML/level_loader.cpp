@@ -63,6 +63,7 @@
 #include <Sound/threaded_sound_wrapper.h>
 
 #include <Main/scenegraph.h>
+#include <Main/rl_benchmark.h>
 #include <Math/vec4.h>
 #include <Editors/map_editor.h>
 #include <Game/level.h>
@@ -146,7 +147,7 @@ static void LoadAll(const PathSet& path_set, ThreadedSound* sound) {
                 }
                 break;
             case 'f':
-                if (type == "font") {
+                if (type == "font" && !RLBenchmark::Enabled()) {
                     FontRenderer::Instance()->PreLoadFont(path);
                 }
                 break;
@@ -370,21 +371,28 @@ bool LevelLoader::LoadLevel(const Path& level_path, SceneGraph& s) {
     {
         PROFILER_ZONE(g_profiler_ctx, "Parsing level xml");
         ParseLevelXML(level_path.GetFullPath(), li);
-        g_level_shadows = li.shadows_;
-        const char* localized_load_tip = GetLevelTip(config["language"].str().c_str(), FindShortestPath(level_path.GetFullPath()).c_str());
         char temp_load_screen_tip[kPathSize] = {'\0'};
-        if (localized_load_tip) {
-            FormatString(temp_load_screen_tip, kPathSize, "%s", localized_load_tip);
-        } else {
-            // Simple fallback to en_us in case there is one available
-            const char* localized_load_tip = GetLevelTip("en_us", FindShortestPath(level_path.GetFullPath()).c_str());
+        g_level_shadows = li.shadows_;
+        if (!RLBenchmark::Enabled()) {
+            const char* localized_load_tip = GetLevelTip(config["language"].str().c_str(), FindShortestPath(level_path.GetFullPath()).c_str());
             if (localized_load_tip) {
                 FormatString(temp_load_screen_tip, kPathSize, "%s", localized_load_tip);
-            } else if (li.spm_.find("Load Tip") != li.spm_.end()) {
-                FormatString(temp_load_screen_tip, kPathSize, li.spm_["Load Tip"].GetString().c_str());
+            } else {
+                // Simple fallback to en_us in case there is one available
+                const char* localized_load_tip = GetLevelTip("en_us", FindShortestPath(level_path.GetFullPath()).c_str());
+                if (localized_load_tip) {
+                    FormatString(temp_load_screen_tip, kPathSize, "%s", localized_load_tip);
+                } else if (li.spm_.find("Load Tip") != li.spm_.end()) {
+                    FormatString(temp_load_screen_tip, kPathSize, li.spm_["Load Tip"].GetString().c_str());
+                }
             }
         }
-        AnalyzeForLineBreaks(temp_load_screen_tip, kPathSize);
+        // The RL benchmark has no window, font atlas, or graphics context.  The
+        // load-tip lookup and wrapping are presentation-only and otherwise
+        // dereference graphics state, so leave the tip empty in this path.
+        if (!RLBenchmark::Enabled()) {
+            AnalyzeForLineBreaks(temp_load_screen_tip, kPathSize);
+        }
         FormatString(Engine::Instance()->load_screen_tip, kPathSize, "%s", temp_load_screen_tip);
         if (!li.script_.empty()) {
             std::string path = li.script_.substr(0, li.script_.size() - 3) + "_paths.xml";

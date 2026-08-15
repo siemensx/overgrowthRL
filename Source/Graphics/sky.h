@@ -68,6 +68,7 @@ class Sky {
 
    public:
     Sky();
+    void InitializeHeadless();
     void GetShaderNames(std::map<std::string, int>& shader_names);
 
     std::string dome_texture_name;

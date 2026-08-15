@@ -637,14 +637,24 @@ static void ThreadedSoundLoop() {
     }
 }
 
-ThreadedSound::ThreadedSound() : initialized(false) {
+ThreadedSound::ThreadedSound() : initialized(false),
+                                 null_backend(false) {
 }
 
 void ThreadedSound::Initialize(const char* preferred_device) {
     tsdb.SetPreferredDevice(preferred_device);
+    null_backend = false;
     thread = std::thread(ThreadedSoundLoop);
     ThreadedSoundMessage tsm(ThreadedSoundMessage::Initialize);
     message_queue_in.Queue(tsm);
+    initialized = true;
+}
+
+void ThreadedSound::InitializeNull(const char* preferred_device) {
+    tsdb.SetPreferredDevice(preferred_device);
+    tsdb.SetUsedDevice("RL null audio");
+    tsdb.SetAvailableDevices(std::vector<std::string>());
+    null_backend = true;
     initialized = true;
 }
 
@@ -660,18 +670,21 @@ void ThreadedSound::Update() {
 }
 
 void ThreadedSound::UpdateGameTimestep(float timestep) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFUpdateGameTimestep);
     tsm.SetData(&timestep, sizeof(float));
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::UpdateGameTimescale(float time_scale) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFUpdateGameTimescale);
     tsm.SetData(&time_scale, sizeof(float));
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::setAirWhoosh(float amount, float pitch) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetAirWhoosh);
     float f[2];
     f[0] = amount;
@@ -681,6 +694,7 @@ void ThreadedSound::setAirWhoosh(float amount, float pitch) {
 }
 
 void ThreadedSound::updateListener(vec3 pos, vec3 vel, vec3 facing, vec3 up) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFUpdateListener);
     vec3 v[4];
     v[0] = pos;
@@ -696,6 +710,11 @@ unsigned long ThreadedSound::CreateHandle(const char* ident) {
 
     tsdb.SetIdentifier(wsh, ident);
 
+    if (null_backend) {
+        tsdb.SetHandle(wsh, wsh);
+        return wsh;
+    }
+
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InRCreateHandle);
 
     tsm.SetData(&wsh, sizeof(wrapper_sound_handle));
@@ -707,6 +726,8 @@ unsigned long ThreadedSound::CreateHandle(const char* ident) {
 
 void ThreadedSound::Play(const unsigned long& handle, SoundPlayInfo spi) {
     tsdb.SetValues(handle, spi.path.c_str(), "Play");
+
+    if (null_backend) return;
 
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFPlay);
 
@@ -720,6 +741,8 @@ void ThreadedSound::Play(const unsigned long& handle, SoundPlayInfo spi) {
 
 void ThreadedSound::PlayGroup(const unsigned long& handle, const SoundGroupPlayInfo& sgpi) {
     tsdb.SetValues(handle, sgpi.GetPath().c_str(), "Group");
+
+    if (null_backend) return;
 
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFPlayGroup);
 
@@ -752,6 +775,10 @@ const std::string ThreadedSound::GetID(const unsigned long& handle) {
 }
 
 void ThreadedSound::SetPosition(const unsigned long& handle, const vec3& new_pos) {
+    if (null_backend) {
+        tsdb.SetPosition(handle, new_pos);
+        return;
+    }
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetPosition);
     tsm.SetHandle(handle);
     tsm.SetData(new_pos.entries, sizeof(new_pos.entries));
@@ -759,6 +786,10 @@ void ThreadedSound::SetPosition(const unsigned long& handle, const vec3& new_pos
 }
 
 void ThreadedSound::TranslatePosition(const unsigned long& handle, const vec3& trans) {
+    if (null_backend) {
+        tsdb.SetPosition(handle, tsdb.GetHandleData(handle).position + trans);
+        return;
+    }
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFTranslatePosition);
     tsm.SetHandle(handle);
     tsm.SetData(trans.entries, sizeof(trans.entries));
@@ -766,6 +797,7 @@ void ThreadedSound::TranslatePosition(const unsigned long& handle, const vec3& t
 }
 
 void ThreadedSound::SetVelocity(const unsigned long& handle, const vec3& new_vel) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetVelocity);
     tsm.SetHandle(handle);
     tsm.SetData(new_vel.entries, sizeof(new_vel.entries));
@@ -773,6 +805,7 @@ void ThreadedSound::SetVelocity(const unsigned long& handle, const vec3& new_vel
 }
 
 void ThreadedSound::SetPitch(const unsigned long& handle, float pitch) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetPitch);
     tsm.SetHandle(handle);
     tsm.SetData(&pitch, sizeof(float));
@@ -780,6 +813,7 @@ void ThreadedSound::SetPitch(const unsigned long& handle, float pitch) {
 }
 
 void ThreadedSound::SetVolume(const unsigned long& handle, float volume) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetVolume);
     tsm.SetHandle(handle);
     tsm.SetData(&volume, sizeof(float));
@@ -787,6 +821,11 @@ void ThreadedSound::SetVolume(const unsigned long& handle, float volume) {
 }
 
 void ThreadedSound::Stop(const unsigned long& handle) {
+    if (null_backend) {
+        // Stopping playback does not invalidate a wrapper handle in the
+        // production backend; retain the virtual handle for script queries.
+        return;
+    }
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFStop);
     tsm.SetHandle(handle);
     message_queue_in.Queue(tsm);
@@ -797,6 +836,7 @@ bool ThreadedSound::IsHandleValid(const unsigned long& handle) {
 }
 
 void ThreadedSound::AddMusic(const Path& path) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFAddMusic);
 
     Path* p = new Path(path);
@@ -806,6 +846,7 @@ void ThreadedSound::AddMusic(const Path& path) {
 }
 
 void ThreadedSound::RemoveMusic(const Path& path) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFRemoveMusic);
 
     Path* p = new Path(path);
@@ -815,30 +856,35 @@ void ThreadedSound::RemoveMusic(const Path& path) {
 }
 
 void ThreadedSound::QueueSegment(const std::string& string) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFQueueSegment);
     tsm.SetStringData(string);
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::TransitionToSegment(const std::string& string) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFTransitionToSegment);
     tsm.SetStringData(string);
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::TransitionToSong(const std::string& string) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFTransitionToSong);
     tsm.SetStringData(string);
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::SetSegment(const std::string& string) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetSegment);
     tsm.SetStringData(string);
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::SetLayerGain(const std::string& string, float v) {
+    if (null_backend) return;
     // LOGI << "Queueing call to SetLayerGain(" << string << "," << v << ")" <<  std::endl;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetLayerGain);
     char str[MusicXMLParser::NAME_MAX_LENGTH];
@@ -849,6 +895,7 @@ void ThreadedSound::SetLayerGain(const std::string& string, float v) {
 }
 
 void ThreadedSound::SetSong(const std::string& string) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetSong);
     tsm.SetStringData(string);
     message_queue_in.Queue(tsm);
@@ -887,6 +934,19 @@ const std::string ThreadedSound::GetNextSongType() const {
 }
 
 void ThreadedSound::AddAmbientTriangle(const std::string& path) {
+    if (null_backend) {
+        SoundDataCopy data = tsdb.GetData();
+        AmbientTriangle triangle;
+        triangle.path = path;
+        for (int i = 0; i < 3; ++i) {
+            triangle.handles[i] = 0;
+            triangle.rel_dir[i] = vec3(0.0f);
+            triangle.vol[i] = 0.0f;
+        }
+        data.ambient_triangles.push_back(triangle);
+        tsdb.SetData(data);
+        return;
+    }
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFAddAmbientTriangle);
     tsm.SetStringData(path);
     message_queue_in.Queue(tsm);
@@ -898,17 +958,38 @@ std::vector<AmbientTriangle> ThreadedSound::GetAmbientTriangles() {
 }
 
 void ThreadedSound::Clear() {
+    if (null_backend) {
+        std::map<wrapper_sound_handle, real_sound_handle> handles = tsdb.GetAllHandles();
+        for (const auto& handle : handles) {
+            tsdb.RemoveHandle(handle.first);
+        }
+        tsdb.SetData(SoundDataCopy());
+        return;
+    }
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFClear);
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::ClearTransient() {
+    if (null_backend) {
+        std::map<wrapper_sound_handle, real_sound_handle> handles = tsdb.GetAllHandles();
+        for (const auto& handle : handles) {
+            tsdb.RemoveHandle(handle.first);
+        }
+        return;
+    }
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFClearTransient);
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::Dispose() {
     if (initialized) {
+        if (null_backend) {
+            Clear();
+            null_backend = false;
+            initialized = false;
+            return;
+        }
         ThreadedSoundMessage tsm(ThreadedSoundMessage::Dispose);
         message_queue_in.Queue(tsm);
         thread.join();
@@ -917,18 +998,21 @@ void ThreadedSound::Dispose() {
 }
 
 void ThreadedSound::SetMusicVolume(float val) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetMusicVolume);
     tsm.SetData(&val, sizeof(float));
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::SetMasterVolume(float val) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetMasterVolume);
     tsm.SetData(&val, sizeof(float));
     message_queue_in.Queue(tsm);
 }
 
 void ThreadedSound::SetOcclusionPosition(const unsigned long& handle, const vec3& new_pos) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetOcclusionPosition);
     tsm.SetHandle(handle);
     tsm.SetData(&new_pos, sizeof(vec3));
@@ -936,6 +1020,7 @@ void ThreadedSound::SetOcclusionPosition(const unsigned long& handle, const vec3
 }
 
 void ThreadedSound::LoadSoundFile(const std::string& path) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFLoadSoundFile);
     tsm.SetStringData(path);
     message_queue_in.Queue(tsm);
@@ -971,6 +1056,7 @@ std::vector<std::string> ThreadedSound::GetAvailableDevices() {
 }
 
 void ThreadedSound::EnableLayeredSoundtrackLimiter(bool val) {
+    if (null_backend) return;
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFEnableLayeredSoundtrackLimiter);
     uint8_t d = val ? 1 : 0;
     tsm.SetData(&d, sizeof(uint8_t));
