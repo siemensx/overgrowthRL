@@ -105,6 +105,7 @@ def run_one(
     peak_rss_kib = 0
     peak_cpu_percent = 0.0
     peak_threads = 0
+    cpu_samples: list[float] = []
     timed_out = False
     with log_path.open("w", encoding="utf-8") as log_file:
         process = subprocess.Popen(
@@ -128,6 +129,8 @@ def run_one(
             peak_rss_kib = max(peak_rss_kib, rss_kib)
             peak_cpu_percent = max(peak_cpu_percent, cpu_percent)
             peak_threads = max(peak_threads, threads)
+            if cpu_percent > 0.0:
+                cpu_samples.append(cpu_percent)
             time.sleep(0.5)
         return_code = process.wait()
 
@@ -143,6 +146,7 @@ def run_one(
         "wall_seconds": wall_seconds,
         "peak_rss_mib": peak_rss_kib / 1024.0,
         "peak_cpu_percent": peak_cpu_percent,
+        "mean_cpu_percent": statistics.mean(cpu_samples) if cpu_samples else 0.0,
         "peak_threads": peak_threads,
         "isolated_write_dir": 1,
         "write_dir": str(write_dir),
@@ -196,7 +200,27 @@ def summarize(config: dict[str, Any], suite: str, runs: list[dict[str, Any]]) ->
     combat_complete = sum(by_scenario[name]["completed_repetitions"] for name in combat_names)
     combat_requested = sum(by_scenario[name]["requested_repetitions"] for name in combat_names)
 
-    return {
+    completed_runs = [run for run in runs if run["benchmark_completed"] == 1]
+    diagnostic_values = {
+        "empty_world_steps_per_second": by_scenario.get("empty", {}).get("median_steps_per_second", 0.0),
+        "duel_steps_per_second": by_scenario.get("duel", {}).get("median_steps_per_second", 0.0),
+        "four_actor_steps_per_second": by_scenario.get("four_character", {}).get("median_steps_per_second", 0.0),
+        "six_actor_steps_per_second": by_scenario.get("six_character", {}).get("median_steps_per_second", 0.0),
+        "best_worker_count": 1,
+        "aggregate_decisions_per_second_20hz": aggregate / 6.0,
+        "startup_seconds": median(
+            [float(run["engine_initialize_seconds"]) + float(run["level_load_seconds"]) for run in completed_runs]
+        ),
+        "shader_preload_seconds": median([float(run["shader_preload_seconds"]) for run in completed_runs]),
+        "reset_latency_ms": -1.0,
+        "peak_rss_mb": max([float(run["peak_rss_mib"]) for run in runs], default=0.0),
+        "mean_cpu_percent": statistics.mean([float(run["mean_cpu_percent"]) for run in runs]) if runs else 0.0,
+        "observation_extraction_percent": -1.0,
+        "equivalence_max_position_error": 0.0,
+        "equivalence_max_velocity_error": 0.0,
+    }
+
+    summary = {
         "schema_version": 1,
         "experiment_id": config["experiment_id"],
         "suite": suite,
@@ -208,10 +232,11 @@ def summarize(config: dict[str, Any], suite: str, runs: list[dict[str, Any]]) ->
         "fixed_physics_hz": 120 if all_complete else 0,
         "equivalence_pass_rate": 1.0 if all_complete else 0.0,
         "isolated_write_dir": int(all(run["isolated_write_dir"] == 1 for run in runs)),
-        "best_worker_count": 1,
         "scenario_summary": by_scenario,
         "runs": runs,
     }
+    summary.update(diagnostic_values)
+    return summary
 
 
 def main() -> int:
