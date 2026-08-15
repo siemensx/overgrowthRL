@@ -16,6 +16,10 @@ void OnShaderPreloadStarted();
 void OnShaderPreloadFinished();
 void OnLevelLoaded();
 
+// Returns a bounded number of exact fixed timesteps for the next outer engine
+// update, or -1 while normal wall-clock scheduling should remain active.
+int ManualStepCount();
+
 // Returns true when the requested measurement window has completed.
 bool OnTimestepComplete(Engine* engine);
 void Report();

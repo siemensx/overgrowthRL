@@ -12,6 +12,11 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
+// Six 120 Hz physics steps are one 20 Hz policy interval. Keeping the manual
+// batch to one control interval amortizes outer-loop services without starving
+// input/event handling for long simulation bursts.
+const uint64_t kManualStepBatchSize = 6;
+
 struct State {
     bool enabled = false;
     bool level_loaded = false;
@@ -84,6 +89,16 @@ void OnLevelLoaded() {
     }
     state.level_loaded = true;
     state.level_load_seconds = SecondsSince(state.engine_initialized_at);
+}
+
+int ManualStepCount() {
+    if (!state.enabled || !state.level_loaded || state.completed) {
+        return -1;
+    }
+
+    const uint64_t total_steps = state.warmup_steps + state.measure_steps;
+    const uint64_t remaining_steps = total_steps - state.completed_steps;
+    return static_cast<int>(remaining_steps < kManualStepBatchSize ? remaining_steps : kManualStepBatchSize);
 }
 
 bool OnTimestepComplete(Engine* engine) {
