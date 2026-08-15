@@ -620,6 +620,19 @@
 	#define STDCALL __attribute__((stdcall))
 	#define ASM_AT_N_T
 
+	// AngelScript 2.32 predates the computed-goto default used by current
+	// releases.  Clang/GCC support labels-as-values on both Rosetta x86_64
+	// and native Apple arm64; enabling it removes the VM's per-opcode switch
+	// dispatch without changing bytecode or script semantics.  Keep an
+	// explicit override for toolchains where this extension is unavailable.
+	#ifndef AS_USE_COMPUTED_GOTOS
+		#if defined(__GNUC__) && __GNUC__ >= 6
+			#define AS_USE_COMPUTED_GOTOS 1
+		#elif defined(__clang__)
+			#define AS_USE_COMPUTED_GOTOS 1
+		#endif
+	#endif
+
 	// WII U
 	#if defined(__ghs__)
 		#define AS_WIIU
