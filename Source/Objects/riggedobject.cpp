@@ -2199,7 +2199,7 @@ void RiggedObject::ApplyBoneMatricesToModel(bool old, int lod_level) {
 
 #ifndef USE_SSE
 #pragma omp parallel for
-    for (int j = 0; j < model->num_vertices; j++) {
+    for (int j = 0, len = model->vertices.size() / 3; j < len; j++) {
         mat4 transform = display_bone_matrices[(unsigned int)model->bone_ids[j][0]] * model->bone_weights[j][0];
         for (int k = 1; k < 4; k++) {
             if (model->bone_weights[j][k] > 0.0f) {

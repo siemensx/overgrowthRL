@@ -39,7 +39,9 @@
 #include <cstring>
 #include <cmath>
 
+#ifdef OG_CAMERA_USE_SSE
 #define USE_SSE
+#endif
 
 //-----------------------------------------------------------------------------
 // Functions
@@ -604,6 +606,7 @@ void Camera::calcFrustumPlanes(const mat4& _p, const mat4& _mv) {
     // TODO: Remove non-SIMD values above if all frustum culling can be made to use SIMD,
     //       and if functions that call frustum culling can all be made to be 4x aligned?
 
+#ifdef USE_SSE
     simdFrustumPlanes[0].normal_x = _mm_set_ps1(frustumPlanes[0][0]);
     simdFrustumPlanes[0].normal_y = _mm_set_ps1(frustumPlanes[0][1]);
     simdFrustumPlanes[0].normal_z = _mm_set_ps1(frustumPlanes[0][2]);
@@ -633,6 +636,7 @@ void Camera::calcFrustumPlanes(const mat4& _p, const mat4& _mv) {
     simdFrustumPlanes[5].normal_y = _mm_set_ps1(frustumPlanes[5][1]);
     simdFrustumPlanes[5].normal_z = _mm_set_ps1(frustumPlanes[5][2]);
     simdFrustumPlanes[5].d = _mm_set_ps1(frustumPlanes[5][3]);
+#endif
 }
 
 // Check if a sphere is visible

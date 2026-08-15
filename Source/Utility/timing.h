@@ -26,6 +26,9 @@
 #if defined(PLATFORM_WINDOWS) && _MSC_VER >= 1600
 #include <intrin.h>
 #endif
+#if defined(PLATFORM_MACOSX) && defined(__aarch64__)
+#include <mach/mach_time.h>
+#endif
 
 inline uint64_t getCPUTSC() {
     // Use rdtsc instruction to get the tsc or Time Stamp Counter
@@ -43,6 +46,8 @@ inline uint64_t getCPUTSC() {
     _ReadBarrier();
     i = __rdtsc();
     return (uint64_t)i;
+#elif defined(PLATFORM_MACOSX) && defined(__aarch64__)
+    return mach_absolute_time();
 #else
 
 #error "No timer implementation for current target platform"

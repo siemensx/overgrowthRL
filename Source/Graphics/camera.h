@@ -32,7 +32,10 @@
 
 #include <vector>
 #include <list>
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
 #include <emmintrin.h>
+#define OG_CAMERA_USE_SSE 1
+#endif
 
 class CameraObject;
 
@@ -98,13 +101,15 @@ class Camera {
 
     float frustumPlanes[6][4];  ///< Frustum plane parameters (ax+by+cz+d)
 
-    struct SIMDPlane {    // TODO: Comment out if SIMD not supported?
+#ifdef OG_CAMERA_USE_SSE
+    struct SIMDPlane {
         __m128 normal_x;  // same value pre-replicated 4 times for each of these
         __m128 normal_y;
         __m128 normal_z;
         __m128 d;
     };
     SIMDPlane simdFrustumPlanes[6];
+#endif
 
     mat4 biasMatrix;  ///< Bias matrix for shadow projection
     bool flexible_fov;

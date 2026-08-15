@@ -50,7 +50,9 @@
 
 #include <algorithm>
 
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
 #define USE_SSE
+#endif
 
 static const float _tile_size = 10.0f;  // How big is each tile? (in meters)
 
@@ -766,7 +768,7 @@ void DetailObjectSurface::CalcPatchInstances(const TriInt& coords, DOPatch& patc
                 vec4 centerVec4 = Mat4Vec4SimdMul(matrix, modelBoundingSphereOrigin);
                 vec3 center = *(vec3*)&centerVec4;
 #else
-                vec3 center = di.transform * model.bounding_sphere_origin;
+                vec3 center = matrix * model.bounding_sphere_origin;
 #endif
                 current_patch.detail_instance_origins_x.push_back(center.x());
                 current_patch.detail_instance_origins_y.push_back(center.y());

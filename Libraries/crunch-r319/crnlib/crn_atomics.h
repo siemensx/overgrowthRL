@@ -10,10 +10,15 @@
 #include "crn_winhdr.h"
 #endif
 
-#if defined(__GNUC__) && CRNLIB_PLATFORM_PC
+#if defined(__GNUC__) && CRNLIB_PLATFORM_PC && (defined(__i386__) || defined(__x86_64__))
 extern __inline__ __attribute__((__always_inline__,__gnu_inline__)) void crnlib_yield_processor()
 {
    __asm__ __volatile__("pause");
+}
+#elif defined(__GNUC__) && defined(__aarch64__)
+extern __inline__ __attribute__((__always_inline__,__gnu_inline__)) void crnlib_yield_processor()
+{
+   __asm__ __volatile__("yield");
 }
 #else
 CRNLIB_FORCE_INLINE void crnlib_yield_processor()
