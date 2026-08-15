@@ -50,12 +50,24 @@ OPTION(GL_TIMING_QUERY "Build with ARB_timing_query support used for timing Open
 OPTION(GL_INTEL_TIMING "Build with ARB_performance_query support used for timing OpenGL performance specifically on intel GPU's" OFF)
 OPTION(BUILD_OGDA "Build OGDA" ON)
 OPTION(BUILD_OVERGROWTH "Build the main game" ON)
+OPTION(RL_NATIVE_ARM64_TRAINING "Build the stripped Apple Silicon RL training executable" OFF)
 OPTION(MONITOR_MEMORY "Monitor memory usage and make avaiable ingame" Off)
 OPTION(OPEN_CONSOLE "Open a console on startup on windows" On)
 OPTION(FORCE_OPENGL_ERROR_CHECKING "Force OpenGL error checking in Release" Off)
 OPTION(DEPLOY "Set the codebase to compile for Deploy, this means compiling for final release to end-user, in practice, by setting the _DEPLOY define it activates a working directory change on start to force it to be the path of the binary. It also impacts some error messages. This is automatically turned on if BUILD_SERVER is On" Off)
 OPTION(ENABLE_STEAMWORKS "Build with Steamworks Support" Off)
 SET(AUX_DATA "" CACHE PATH "Auxiliary Data sourced path, used when using a Data folder from an additional path, like an already installed version of the game")
+
+IF(RL_NATIVE_ARM64_TRAINING)
+    IF(NOT APPLE)
+        MESSAGE(FATAL_ERROR "RL_NATIVE_ARM64_TRAINING is only supported on macOS")
+    ENDIF()
+    IF(NOT "${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
+        MESSAGE(FATAL_ERROR "RL_NATIVE_ARM64_TRAINING requires -DCMAKE_OSX_ARCHITECTURES=arm64")
+    ENDIF()
+    SET(ENABLE_STEAMWORKS OFF CACHE BOOL "Build with Steamworks Support" FORCE)
+    ADD_DEFINITIONS(-DOG_RL_NATIVE_ARM64_TRAINING=1 -DAS_DEPRECATED=1)
+ENDIF()
 
 #Assume we want steamworks support if we're building on the build server, until we start supporting more targets
 IF(BUILD_SERVER)
@@ -190,7 +202,9 @@ SET(OVERGROWTH_OUTPUT_NAME "Overgrowth")
 SET(OVERGROWTH_WORKER_OUTPUT_NAME "OvergrowthWorker")
 
 IF(APPLE)
-    IF(BUILD_SERVER)
+    IF(RL_NATIVE_ARM64_TRAINING)
+        SET(ARCH_OUT "arm64")
+    ELSEIF(BUILD_SERVER)
         SET(CMAKE_OSX_DEPLOYMENT_TARGET "10.9")
         SET(CMAKE_OSX_ARCHITECTURES "x86_64")
         SET(ARCH_OUT "x86_64")
@@ -304,7 +318,12 @@ IF(BUILD_OVERGROWTH)
     SET(USE_MSVC_RUNTIME_LIBRARY_DLL ON CACHE BOOL "Use MSVC Runtime Library DLL (/MD or /MDd)")
     SET(USE_GLUT OFF CACHE BOOL "Use Glut")
     ADD_SUBDIRECTORY(bullet3-2.89 bullet3-2.89)
-    ADD_SUBDIRECTORY(angelscript_2_32_0_sdk/angelscript/projects/cmake angelscript_2_32_0_sdk)
+    IF(RL_NATIVE_ARM64_TRAINING)
+        SET(ANGELSCRIPT_SDK_DIR angelscript_2_38_0_sdk)
+    ELSE()
+        SET(ANGELSCRIPT_SDK_DIR angelscript_2_32_0_sdk)
+    ENDIF()
+    ADD_SUBDIRECTORY(${ANGELSCRIPT_SDK_DIR}/angelscript/projects/cmake ${ANGELSCRIPT_SDK_DIR})
 
     #Put subprojects in the "Support" folder
     SET_PROPERTY(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -563,13 +582,9 @@ IF(APPLE)
     ENDIF()
 
     FIND_LIBRARY(SDL_FRAMEWORK SDL2 PATHS ${LIBDIR}/SDL2-2.0.20 NO_DEFAULT_PATH)
-    FIND_LIBRARY(SDL2NET_FRAMEWORK SDL2_net PATHS ${LIBDIR}/SDL2_net-2.0.1 NO_DEFAULT_PATH)
     FIND_PATH(SDL2_INCLUDE_DIR NAMES SDL.h PATHS ${SDL_FRAMEWORK}/Headers NO_DEFAULT_PATH)
-    FIND_LIBRARY(OPENAL_FRAMEWORK OpenAL)
     FIND_LIBRARY(CARBON_FRAMEWORK Carbon)
-    FIND_LIBRARY(AU_FRAMEWORK AudioUnit)
     FIND_LIBRARY(FORCE_FEEDBACK_FRAMEWORK ForceFeedback)
-    FIND_LIBRARY(CORE_AUDIO_FRAMEWORK CoreAudio)
     FIND_LIBRARY(COCOA_FRAMEWORK Cocoa)
     FIND_LIBRARY(CORE_FOUNDATION_FRAMEWORK CoreFoundation)
     FIND_LIBRARY(OPENGL_FRAMEWORK OpenGL)
@@ -577,16 +592,24 @@ IF(APPLE)
     FIND_LIBRARY(APPKIT_FRAMEWORK AppKit)
     SET(FRAMEWORKS
         ${FORCE_FEEDBACK_FRAMEWORK}
-        ${AU_FRAMEWORK}
-        ${CORE_AUDIO_FRAMEWORK}
-        ${OPENAL_FRAMEWORK}
         ${CARBON_FRAMEWORK}
         ${OPENGL_FRAMEWORK}
         ${IOKIT_FRAMEWORK}
         ${APPKIT_FRAMEWORK}
         ${SDL_FRAMEWORK}
-        ${SDL2NET_FRAMEWORK}
     )
+    IF(NOT RL_NATIVE_ARM64_TRAINING)
+        FIND_LIBRARY(SDL2NET_FRAMEWORK SDL2_net PATHS ${LIBDIR}/SDL2_net-2.0.1 NO_DEFAULT_PATH)
+        FIND_LIBRARY(OPENAL_FRAMEWORK OpenAL)
+        FIND_LIBRARY(AU_FRAMEWORK AudioUnit)
+        FIND_LIBRARY(CORE_AUDIO_FRAMEWORK CoreAudio)
+        LIST(APPEND FRAMEWORKS
+            ${AU_FRAMEWORK}
+            ${CORE_AUDIO_FRAMEWORK}
+            ${OPENAL_FRAMEWORK}
+            ${SDL2NET_FRAMEWORK}
+        )
+    ENDIF()
 ENDIF()
 
 ADD_DEFINITIONS(
@@ -615,8 +638,8 @@ INCLUDE_DIRECTORIES(
     ${LIBDIR}/openvr-master/headers
     ${LIBDIR}/glm-0.9.4.2/
     bullet3-2.89/src
-    angelscript_2_32_0_sdk/angelscript/include
-    angelscript_2_32_0_sdk
+    ${ANGELSCRIPT_SDK_DIR}/angelscript/include
+    ${ANGELSCRIPT_SDK_DIR}
     /angelscript/source
     ${LIBDIR}/stb
     ${LIBDIR}/tinyxml
@@ -695,6 +718,8 @@ if(APPLE)
         ${LIBDIR}/libogg-1.3.3/include
         ${LIBDIR}/libvorbis-1.3.6/include
         ${LIBDIR}/SDL2-2.0.20/SDL2.framework/Headers
+        # Headers provide legacy network types. The arm64 training executable
+        # deliberately does not link or bundle the x86-only SDL2_net binary.
         ${LIBDIR}/SDL2_net-2.0.1/SDL2_net.framework/Headers
         ${SDL2_SOURCE_DIR}/include
         ${SDL2_INCLUDE_DIR}
@@ -1087,7 +1112,11 @@ IF(LINUX)
 ENDIF()
 
 IF(APPLE)
-    SET(SSE_FLAGS "-msse -msse2")
+    IF("${CMAKE_OSX_ARCHITECTURES}" MATCHES "(^|;)arm64($|;)")
+        SET(SSE_FLAGS "")
+    ELSE()
+        SET(SSE_FLAGS "-msse -msse2")
+    ENDIF()
 ENDIF()
 
 IF(LINUX)
@@ -1140,7 +1169,7 @@ IF(BUILD_OVERGROWTH)
     ADD_EXECUTABLE(OvergrowthWorker ${OVERGROWTHWORKER_SRCS} ${WIN_RESOURCE_FILE})
     SET_TARGET_PROPERTIES(OvergrowthWorker PROPERTIES
         OUTPUT_NAME ${OVERGROWTH_WORKER_OUTPUT_NAME}
-        COMPILE_FLAGS ${SSE_FLAGS}
+        COMPILE_FLAGS "${SSE_FLAGS}"
         COMPILE_DEFINITIONS NO_ERR=1
         COMPILE_DEFINITIONS OG_WORKER=1
     )
@@ -1174,6 +1203,9 @@ IF(BUILD_OVERGROWTH)
     SET_TARGET_PROPERTIES(Overgrowth PROPERTIES
         OUTPUT_NAME ${OVERGROWTH_OUTPUT_NAME}
     )
+    IF(RL_NATIVE_ARM64_TRAINING)
+        TARGET_SOURCES(Overgrowth PRIVATE ${SRCDIR}/RL/arm64_headless_dependency_stubs.cpp)
+    ENDIF()
 
     target_add_grouped_source(Overgrowth AI)
     target_add_grouped_source(Overgrowth Asset)
@@ -1466,12 +1498,16 @@ IF(BUILD_OVERGROWTH)
     IF(APPLE)
         TARGET_LINK_LIBRARIES(Overgrowth
             ${FRAMEWORKS}
-            #${PLIBDIR}/Telemetry2SDKMac_20P3/lib/libTelemetryMacX86.link.a
-            ogg
-            vorbis
-            vorbisfile
             bz2
         )
+	IF(NOT RL_NATIVE_ARM64_TRAINING)
+            TARGET_LINK_LIBRARIES(Overgrowth
+                #${PLIBDIR}/Telemetry2SDKMac_20P3/lib/libTelemetryMacX86.link.a
+                ogg
+                vorbis
+                vorbisfile
+            )
+        ENDIF()
 	IF(ENABLE_STEAMWORKS)
             TARGET_LINK_LIBRARIES(Overgrowth
 		    steam_api
@@ -1535,7 +1571,9 @@ IF(APPLE)
         
     CopyFileToBundle("${CMAKE_SOURCE_DIR}/steam_appid.txt" "Resources/steam_appid.txt")
     CopyFolderToBundle("${LIBDIR}/SDL2-2.0.20/SDL2.framework" "Frameworks/SDL2.framework")
-    CopyFolderToBundle("${LIBDIR}/SDL2_net-2.0.1/SDL2_net.framework" "Frameworks/SDL2_net.framework")
+    IF(NOT RL_NATIVE_ARM64_TRAINING)
+        CopyFolderToBundle("${LIBDIR}/SDL2_net-2.0.1/SDL2_net.framework" "Frameworks/SDL2_net.framework")
+    ENDIF()
 ENDIF()
 
 

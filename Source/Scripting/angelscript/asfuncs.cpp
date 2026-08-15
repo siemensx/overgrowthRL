@@ -3198,6 +3198,27 @@ void GetObjectsInHull(std::string path, mat4 transform, CScriptArray* array) {
     }
 }
 
+#if defined(OG_RL_NATIVE_ARM64_TRAINING)
+// The Apple arm64 ABI passes the large std::string/mat4 value arguments
+// indirectly.  Keep this one collision-query binding on AngelScript's
+// generic adapter until the upstream native bridge's aggregate-value ABI is
+// verified for this exact signature; the gameplay query and result ordering
+// remain identical.
+static void GetCharactersInHullGeneric(asIScriptGeneric* gen) {
+    const std::string* path = static_cast<const std::string*>(gen->GetArgObject(0));
+    const mat4* transform = static_cast<const mat4*>(gen->GetArgObject(1));
+    CScriptArray* array = static_cast<CScriptArray*>(gen->GetArgObject(2));
+    GetCharactersInHull(*path, *transform, array);
+}
+
+static void GetObjectsInHullGeneric(asIScriptGeneric* gen) {
+    const std::string* path = static_cast<const std::string*>(gen->GetArgObject(0));
+    const mat4* transform = static_cast<const mat4*>(gen->GetArgObject(1));
+    CScriptArray* array = static_cast<CScriptArray*>(gen->GetArgObject(2));
+    GetObjectsInHull(*path, *transform, array);
+}
+#endif
+
 static void CreateCustomHull(const std::string& key, const CScriptArray& array) {
     std::vector<vec3> data;
     for (int i = 0, len = array.GetSize(); i < len; ++i) {
@@ -3262,10 +3283,17 @@ void AttachScenegraph(ASContext* context, SceneGraph* scenegraph) {
                                     asFUNCTION(GetCharactersInSphere), asCALL_CDECL);
     context->RegisterGlobalFunction("void GetCharacters(array<int>@ id_array)",
                                     asFUNCTION(GetCharacters), asCALL_CDECL);
+#if defined(OG_RL_NATIVE_ARM64_TRAINING)
+    context->RegisterGlobalFunction("void GetCharactersInHull(string model_path, mat4, array<int>@ id_array)",
+                                    asFUNCTION(GetCharactersInHullGeneric), asCALL_GENERIC);
+    context->RegisterGlobalFunction("void GetObjectsInHull(string model_path, mat4, array<int>@ id_array)",
+                                    asFUNCTION(GetObjectsInHullGeneric), asCALL_GENERIC);
+#else
     context->RegisterGlobalFunction("void GetCharactersInHull(string model_path, mat4, array<int>@ id_array)",
                                     asFUNCTION(GetCharactersInHull), asCALL_CDECL);
     context->RegisterGlobalFunction("void GetObjectsInHull(string model_path, mat4, array<int>@ id_array)",
                                     asFUNCTION(GetObjectsInHull), asCALL_CDECL);
+#endif
     context->RegisterGlobalFunction("void ResetLevel()",
                                     asFUNCTION(ResetLevel), asCALL_CDECL);
     context->RegisterGlobalFunction("bool DoesItemFitInItem(int item_id, int holster_item_id)",
@@ -5496,6 +5524,23 @@ static void NavPathCopyConstructor(void* memory, const NavPath& other) {
     new (memory) NavPath(other);
 }
 
+#if defined(OG_RL_NATIVE_ARM64_TRAINING)
+// The script declarations use 32-bit int indices while the C++ methods use
+// size_t, which is 64-bit on arm64. Typed adapters keep the native ABI honest
+// and preserve the existing valid-index behavior.
+static int NavPathNumPointsArm64(NavPath* self) {
+    return static_cast<int>(self->NumPoints());
+}
+
+static vec3 NavPathGetPointArm64(NavPath* self, int which) {
+    return self->GetPoint(static_cast<size_t>(which));
+}
+
+static uint8_t NavPathGetFlagArm64(NavPath* self, int which) {
+    return self->GetFlag(static_cast<size_t>(which));
+}
+#endif
+
 static void NavPointConstructor(void* memory) {
     new (memory) NavPoint();
 }
@@ -5539,9 +5584,15 @@ void AttachNavMesh(ASContext* context) {
     context->RegisterObjectMethod("NavPath", "NavPath& opAssign(const NavPath &in other)", asFUNCTION(NavPathAssign), asCALL_CDECL_OBJFIRST);
 
     context->RegisterObjectProperty("NavPath", "bool success", asOFFSET(NavPath, success));
+#if defined(OG_RL_NATIVE_ARM64_TRAINING)
+    context->RegisterObjectMethod("NavPath", "int NumPoints()", asFUNCTION(NavPathNumPointsArm64), asCALL_CDECL_OBJFIRST);
+    context->RegisterObjectMethod("NavPath", "vec3 GetPoint(int)", asFUNCTION(NavPathGetPointArm64), asCALL_CDECL_OBJFIRST);
+    context->RegisterObjectMethod("NavPath", "uint8 GetFlag(int)", asFUNCTION(NavPathGetFlagArm64), asCALL_CDECL_OBJFIRST);
+#else
     context->RegisterObjectMethod("NavPath", "int NumPoints()", asMETHOD(NavPath, NumPoints), asCALL_THISCALL);
     context->RegisterObjectMethod("NavPath", "vec3 GetPoint(int)", asMETHOD(NavPath, GetPoint), asCALL_THISCALL);
     context->RegisterObjectMethod("NavPath", "uint8 GetFlag(int)", asMETHOD(NavPath, GetFlag), asCALL_THISCALL);
+#endif
     context->DocsCloseBrace();
 
     context->RegisterObjectType("NavPoint", sizeof(NavPoint), asOBJ_VALUE | asOBJ_APP_CLASS_CDAK);

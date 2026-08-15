@@ -175,7 +175,7 @@ typedef vector float vec4;
 #define vgreater(a, b) vec_cmpgt(a, b)
 #define vgreaterequal(a, b) vec_cmpge(a, b)
 
-#elif defined(CPR_WINDOWS) || (defined(CPR_OSX) && !defined(__BIG_ENDIAN__))
+#elif defined(CPR_WINDOWS) || (defined(CPR_OSX) && !defined(__BIG_ENDIAN__) && (defined(__i386__) || defined(__x86_64__)))
 
 /*
     SSE implementation

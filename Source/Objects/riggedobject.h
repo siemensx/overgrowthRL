@@ -59,7 +59,9 @@
 
 #include <string>
 
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
 #define USE_SSE
+#endif
 #ifdef USE_SSE
 #include <Math/simd_mat4.h>
 #endif

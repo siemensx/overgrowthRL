@@ -25,6 +25,9 @@
 #pragma once
 
 #include <Compat/platform.h>
+#if defined(PLATFORM_MACOSX) && defined(__aarch64__)
+#include <mach/mach_time.h>
+#endif
 
 inline uint64_t GetTimestamp() {
     // Use rdtsc instruction to get the tsc or Time Stamp Counter
@@ -42,6 +45,8 @@ inline uint64_t GetTimestamp() {
     _ReadBarrier();
     i = __rdtsc();
     return (uint64_t)i;
+#elif defined(PLATFORM_MACOSX) && defined(__aarch64__)
+    return mach_absolute_time();
 #else
 
 #error "No timer implementation for current target platform"
