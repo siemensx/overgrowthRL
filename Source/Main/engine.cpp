@@ -2146,8 +2146,11 @@ void Engine::Update() {
                 }
             }
         } else {
-            int num_game_timesteps = game_timer.GetStepsNeeded();
-            num_game_timesteps = min(num_game_timesteps, _max_steps_per_frame);
+            int num_game_timesteps = RLBenchmark::ManualStepCount();
+            if (num_game_timesteps < 0) {
+                num_game_timesteps = game_timer.GetStepsNeeded();
+                num_game_timesteps = min(num_game_timesteps, _max_steps_per_frame);
+            }
             game_timer.updates_since_last_frame = num_game_timesteps;
 
             for (int curr_step = 0; curr_step < num_ui_timesteps; curr_step++) {
