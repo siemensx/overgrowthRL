@@ -1362,23 +1362,6 @@ IF(BUILD_OVERGROWTH)
         # Setting -g on angelscript prevents clang from crashing due to a bug in the compiler
         SET_TARGET_PROPERTIES(angelscript PROPERTIES COMPILE_FLAGS "-g ${BREAKPAD_FLAGS} ${NON_BREAKPAD_FLAGS}")
 
-        IF("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "x86_64" AND
-           "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-            # AngelScript 2.32's native x86-64 call bridge emits inline CFI that
-            # current Apple Clang cannot assemble in an optimized function. Keep
-            # only this bridge at optnone; the interpreter/compiler/runtime remain
-            # Release-optimized. -U__OPTIMIZE__ suppresses those inline directives,
-            # leaving the compiler-generated frame unwind metadata used by the old
-            # -O0 implementation. This deliberately preserves the baseline's unwind
-            # behavior while avoiding a target-wide performance penalty.
-            SET(ANGELSCRIPT_X64_CALL_BRIDGE
-                "${CMAKE_CURRENT_SOURCE_DIR}/angelscript_2_32_0_sdk/angelscript/source/as_callfunc_x64_gcc.cpp")
-            SET_PROPERTY(
-                SOURCE "${ANGELSCRIPT_X64_CALL_BRIDGE}"
-                TARGET_DIRECTORY angelscript
-                APPEND PROPERTY COMPILE_OPTIONS -O0 -U__OPTIMIZE__)
-        ENDIF()
-
         SET_TARGET_PROPERTIES(Overgrowth PROPERTIES COMPILE_FLAGS "${SSE_FLAGS} ${BREAKPAD_FLAGS} ${NON_BREAKPAD_FLAGS}")
         SET_TARGET_PROPERTIES(OvergrowthWorker PROPERTIES COMPILE_FLAGS "${SSE_FLAGS} ${BREAKPAD_FLAGS} ${NON_BREAKPAD_FLAGS}")
     ENDIF()
