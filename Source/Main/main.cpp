@@ -264,7 +264,7 @@ int GameMain(int argc, char* argv[]) {
             }
         }
 
-        if (time_to_draw) {
+        if (time_to_draw && !disable_rendering) {
             STIMING_START_COARSE(STDrawSwap);
             Graphics::Instance()->SwapToScreen();
             STIMING_END_COARSE(STDrawSwap);
