@@ -108,6 +108,12 @@ IF(BUILD_SERVER)
 ENDIF()
 
 IF(APPLE)
+    # CMake reports the arm64 host processor even when producing an x86_64
+    # Rosetta build. Dependencies use this value to select assembly sources.
+    IF("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "x86_64")
+        SET(CMAKE_SYSTEM_PROCESSOR "x86_64")
+    ENDIF()
+
     # assume built-in pthreads on MacOS
     set(CMAKE_THREAD_LIBS_INIT "-lpthread")
     set(CMAKE_HAVE_THREADS_LIBRARY 1)
@@ -194,7 +200,11 @@ IF(APPLE)
         SET(CMAKE_OSX_SYSROOT "macosx")
         SET(CMAKE_CONFIGURATION_TYPES "Release;Debug;MinSizeRel;RelWithDebInfo")	
     ELSEIF( "${CMAKE_GENERATOR}" STREQUAL "Unix Makefiles" )
-        SET(CMAKE_OSX_SYSROOT "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${CMAKE_OSX_DEPLOYMENT_TARGET}.sdk")
+        EXECUTE_PROCESS(
+            COMMAND xcrun --show-sdk-path
+            OUTPUT_VARIABLE CMAKE_OSX_SYSROOT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
     ENDIF()
 ENDIF()
 
@@ -584,6 +594,12 @@ ADD_DEFINITIONS(
     -DTIXML_USE_STL
     -DIMGUI_ENABLE_FREETYPE
 ) 
+
+IF(APPLE)
+    # GLM 0.9.4 predates modern Apple Clang version detection. Without this,
+    # it selects the C++98 swizzle implementation even though the project is C++11.
+    ADD_DEFINITIONS(-DGLM_FORCE_CXX11)
+ENDIF()
 
 INCLUDE_DIRECTORIES(SYSTEM
     ${LIBDIR}/crunch-r319/crnlib
@@ -1344,7 +1360,10 @@ IF(BUILD_OVERGROWTH)
 
     IF(APPLE)
         # Setting -g on angelscript prevents clang from crashing due to a bug in the compiler
-        SET_TARGET_PROPERTIES(angelscript PROPERTIES COMPILE_FLAGS "-g ${BREAKPAD_FLAGS} ${NON_BREAKPAD_FLAGS}")
+        # AngelScript 2.32's x86-64 inline CFI does not assemble under current Apple Clang
+        # when __OPTIMIZE__ is enabled. Keep the production-reference build conservative;
+        # an optimized compatibility fix is measured separately by the RL benchmark loop.
+        SET_TARGET_PROPERTIES(angelscript PROPERTIES COMPILE_FLAGS "-g -O0 ${BREAKPAD_FLAGS} ${NON_BREAKPAD_FLAGS}")
         SET_TARGET_PROPERTIES(Overgrowth PROPERTIES COMPILE_FLAGS "${SSE_FLAGS} ${BREAKPAD_FLAGS} ${NON_BREAKPAD_FLAGS}")
         SET_TARGET_PROPERTIES(OvergrowthWorker PROPERTIES COMPILE_FLAGS "${SSE_FLAGS} ${BREAKPAD_FLAGS} ${NON_BREAKPAD_FLAGS}")
     ENDIF()

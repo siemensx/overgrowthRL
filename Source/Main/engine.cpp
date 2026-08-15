@@ -22,6 +22,8 @@
 //-----------------------------------------------------------------------------
 #include "engine.h"
 
+#include <Main/rl_benchmark.h>
+
 #include <Game/hardcoded_assets.h>
 #include <Game/level.h>
 #include <Game/savefile.h>
@@ -2226,6 +2228,9 @@ void Engine::Update() {
 
                 for (auto active_context : active_contexts) {
                     active_context->profiler.Update();
+                }
+                if (RLBenchmark::OnTimestepComplete(this)) {
+                    break;
                 }
             }
             sound.UpdateGameTimescale(powf(game_timer.time_scale / current_global_scale_mult, 0.5f));
@@ -5774,7 +5779,9 @@ void Engine::LoadLevel(Path queued_level) {
             AddLoadingText("Preloading shaders...");
             {
                 PROFILER_ZONE(g_profiler_ctx, "Preload shaders");
+                RLBenchmark::OnShaderPreloadStarted();
                 scenegraph_->PreloadShaders();
+                RLBenchmark::OnShaderPreloadFinished();
             }
 
             DrawLoadScreen(true);
@@ -5802,6 +5809,7 @@ void Engine::LoadLevel(Path queued_level) {
                 scenegraph_->level->loading_screen_.image = screenshot_path;
             }
             scenegraph_->map_editor->UpdateEnabledObjects();
+            RLBenchmark::OnLevelLoaded();
             // level_screenshot.clear();
         } else {
             LOGE << "Unable to load LevelInfoAsset for " << level_path << ". Level file is likely corrupt or missing in some way." << std::endl;

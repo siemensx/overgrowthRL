@@ -35,6 +35,7 @@
 
 #include <Main/engine.h>
 #include <Main/altmain.h>
+#include <Main/rl_benchmark.h>
 
 #include <Threading/rand.h>
 #include <Threading/thread_sanity.h>
@@ -200,6 +201,11 @@ int GameMain(int argc, char* argv[]) {
     // new(engine) Engine;
     Engine* engine = new Engine();
     engine->Initialize();
+    if (RLBenchmark::Enabled()) {
+        rand_ts_seed(RLBenchmark::Seed());
+        srand(RLBenchmark::Seed());
+        RLBenchmark::OnEngineInitialized();
+    }
     Dialog::Initialize();
     PROFILER_LEAVE(&profiler_context);
 
@@ -274,6 +280,8 @@ int GameMain(int argc, char* argv[]) {
 
     STIMING_FINALIZE();
 
+    RLBenchmark::Report();
+
     LOGI << "Final check if savefile needs to be written..." << std::endl;
     Engine::Instance()->save_file_.ExecuteQueuedWrite();
 
@@ -347,6 +355,13 @@ int main(int argc, char* argv[]) {
         TCLAP::SwitchArg clearCache("", "clear-cache", "Clear the write folder of known cache files", cmd, false);
         TCLAP::SwitchArg clearCacheDryRun("", "clear-cache-dry-run", "Clear the write folder of known cache files (dry run)", cmd, false);
         TCLAP::SwitchArg levelLoadStress("", "level-load-stress", "Load levels in a loop", cmd, false);
+        TCLAP::SwitchArg benchmark("", "benchmark", "Run an exact production-timestep benchmark", cmd, false);
+        TCLAP::ValueArg<int> benchmarkWarmupSteps("", "benchmark-warmup-steps", "Completed timesteps before measurement", false, 120, "integer");
+        TCLAP::ValueArg<int> benchmarkSteps("", "benchmark-steps", "Completed timesteps to measure", false, 600, "integer");
+        TCLAP::ValueArg<int> benchmarkSeed("", "benchmark-seed", "Deterministic benchmark seed", false, 1, "integer");
+        cmd.add(benchmarkWarmupSteps);
+        cmd.add(benchmarkSteps);
+        cmd.add(benchmarkSeed);
 #ifdef UNIT_TESTS
         TCLAP::SwitchArg runUnitTests("", "run-unit-tests", "Run all unit tests", cmd, false);
 #endif
@@ -372,6 +387,11 @@ int main(int argc, char* argv[]) {
         clear_cache = clearCache.getValue();
         clear_cache_dry_run = clearCacheDryRun.getValue();
         level_load_stress = levelLoadStress.getValue();
+        if (benchmark.getValue() && (benchmarkWarmupSteps.getValue() < 0 || benchmarkSteps.getValue() <= 0 || benchmarkSeed.getValue() < 0)) {
+            std::cerr << "benchmark warmup and seed must be non-negative, and benchmark steps must be positive" << std::endl;
+            return 2;
+        }
+        RLBenchmark::Configure(benchmark.getValue(), static_cast<uint64_t>(benchmarkWarmupSteps.getValue()), static_cast<uint64_t>(benchmarkSteps.getValue()), static_cast<unsigned int>(benchmarkSeed.getValue()));
 
         std::stringstream configurationStream(configuration);
         config.Load(configurationStream, false, true);
