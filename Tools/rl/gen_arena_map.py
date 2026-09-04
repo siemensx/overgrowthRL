@@ -43,6 +43,10 @@ import paths
 
 CUBE = "Data/Objects/Buildings/basics/soft_cube.xml"
 PILLAR = "Data/Objects/Buildings/basics/soft_square_pillar.xml"
+CYL = "Data/Objects/Buildings/basics/soft_cylinder.xml"     # 2 x 2 x 2, centred
+DISK = "Data/Objects/Buildings/basics/soft_disk.xml"        # 2 x 0.23 x 2, centred
+ARCH = "Data/Objects/Buildings/basics/soft_arch.xml"        # 1.96 x 1.03 x 0.53
+POST = "Data/Objects/Buildings/Post1.xml"                   # 0.23 x 2.73 x 0.19, base ~y=0
 
 # Model half-extents (see docstring).
 CUBE_HALF = 1.0
@@ -50,9 +54,12 @@ PILLAR_HALF_Y = 1.345
 
 
 class Level:
-    def __init__(self, name: str, script: str):
+    def __init__(self, name: str, script: str, terrain: bool = False,
+                 cam: tuple = (0.0, 60.0, 0.0)):
         self.name = name
         self.script = script
+        self.terrain = terrain
+        self.cam = cam
         self.objects: list[str] = []
         self.spawns: list[str] = []
         self._id = 100
@@ -96,12 +103,16 @@ class Level:
         )
 
     def render(self) -> str:
-        return f"""<?xml version="2.0" ?>
-<Type>saved</Type>
-<Name>{self.name}</Name>
-<Description>Procedurally generated arena (Tools/rl/gen_arena_map.py)</Description>
-<Shader>post</Shader>
-<Terrain>
+        # Terrain is OPTIONAL: nothing.xml ships with no <Terrain> block at
+        # all. Omitting it puts the arena in open sky, which (a) avoids the
+        # generated court being buried in or perched on whatever the donor
+        # heightmap happens to do at those coordinates -- the first version of
+        # this generator reused oval_arena's dry_canyon terrain and landed the
+        # court on a cliff face -- and (b) removes terrain collision and
+        # rendering cost entirely.
+        terrain = ""
+        if self.terrain:
+            terrain = """<Terrain>
     <Heightmap>Data/Textures/Terrain/dry_canyon/dry_canyon_hm.png</Heightmap>
     <DetailMap></DetailMap>
     <ColorMap>Data/Textures/Terrain/dry_canyon/dry_canyon_c.tga</ColorMap>
@@ -109,14 +120,18 @@ class Level:
     <DetailMaps>
         <DetailMap colorpath="Data/Textures/Terrain/DetailTextures/rubble.tga" normalpath="Data/Textures/Terrain/DetailTextures/rubble_normal.tga" materialpath="Data/Materials/default.xml" />
         <DetailMap colorpath="Data/Textures/Terrain/DetailTextures/black_rock.tga" normalpath="Data/Textures/Terrain/DetailTextures/black_rock_normal.tga" materialpath="Data/Materials/default.xml" />
-        <DetailMap colorpath="Data/Textures/Terrain/DetailTextures/dead_grass.tga" normalpath="Data/Textures/Terrain/DetailTextures/dead_grass_normal.tga" materialpath="Data/Materials/default.xml" />
-        <DetailMap colorpath="Data/Textures/Terrain/DetailTextures/pebbles.tga" normalpath="Data/Textures/Terrain/DetailTextures/pebbles_normal.tga" materialpath="Data/Materials/default.xml" />
     </DetailMaps>
     <DetailObjects />
 </Terrain>
-<OutOfDate Shadow="true" AO="true" NavMesh="true" />
+"""
+        return f"""<?xml version="2.0" ?>
+<Type>saved</Type>
+<Name>{self.name}</Name>
+<Description>Procedurally generated arena (Tools/rl/gen_arena_map.py)</Description>
+<Shader>post</Shader>
+{terrain}<OutOfDate Shadow="true" AO="true" NavMesh="true" />
 <SpawnPoints>
-    <SpawnPoint t0="70" t1="60" t2="280" s0="1" s1="1" s2="1" r0="1" r1="0" r2="0" r3="0" r4="0" r5="1" r6="0" r7="0" r8="0" r9="0" r10="1" r11="0" r12="0" r13="0" r14="0" r15="1" />
+    <SpawnPoint t0="{self.cam[0]}" t1="{self.cam[1]}" t2="{self.cam[2]}" s0="1" s1="1" s2="1" r0="1" r1="0" r2="0" r3="0" r4="0" r5="1" r6="0" r7="0" r8="0" r9="0" r10="1" r11="0" r12="0" r13="0" r14="0" r15="1" />
 </SpawnPoints>
 <AmbientSounds />
 <Script>{self.script}</Script>
@@ -145,47 +160,124 @@ class Level:
 """
 
 
-def build_split_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
-                      cx: float, cz: float) -> None:
-    """A square court bisected by a wall with two chokepoints, plus corner
-    cover and two raised ledges.
+def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
+                cx: float, cz: float, randomize: bool) -> None:
+    """One enclosed court: floor slab, perimeter walls, a divider with
+    chokepoints, cover pillars and raised ledges.
 
-    Tactically the opposite of oval_arena's open bowl: line of sight is broken,
-    engagement has to happen through one of two gaps, and there is high ground.
-    Those gaps are the point -- `funnel_eligible` (>=2 hostiles visible) has
-    had zero samples for the whole project partly because no map ever forced a
-    choice of approach.
+    With --randomize, the tactical parameters vary per arena. These are the
+    dimensions that plausibly change what the agent must decide -- how many
+    ways there are through the middle, how wide they are, how much sight is
+    broken, and how much high ground exists -- rather than cosmetic variety.
     """
-    wall_h = 4.0
-    # Floor slab: top surface at floor_top, 2 units thick.
+    if randomize:
+        n_gaps = rng.choice([1, 2, 2, 3])          # chokepoint count
+        gap_w = rng.uniform(3.5, 8.0)              # chokepoint width
+        wall_h = rng.uniform(3.0, 6.0)
+        div_h = rng.uniform(2.0, 4.0)
+        n_pillars = rng.randint(2, 6)              # per half
+        ledge = rng.random() < 0.7
+        ledge_h = rng.uniform(1.5, 3.0)
+    else:
+        n_gaps, gap_w, wall_h, div_h = 2, 6.0, 4.0, 3.0
+        n_pillars, ledge, ledge_h = 3, True, 2.0
+
+    # Floor slab, top surface at floor_top, 2 units thick.
     lvl.box(cx, floor_top - 1.0, cz, half, 1.0, half)
 
-    # Perimeter walls, inset so they sit on the slab edge.
-    for dx, dz, sx, sz in (
-        (0, half, half, 0.5), (0, -half, half, 0.5),
-        (half, 0, 0.5, half), (-half, 0, 0.5, half),
-    ):
+    # Perimeter walls. In sky mode these are the only thing between a
+    # character and a very long fall, so they are not optional.
+    for dx, dz, sx, sz in ((0, half, half, 0.5), (0, -half, half, 0.5),
+                           (half, 0, 0.5, half), (-half, 0, 0.5, half)):
         lvl.box(cx + dx, floor_top + wall_h / 2, cz + dz, sx, wall_h / 2, sz)
 
-    # Central divider: three segments leaving two gaps.
-    gap = 6.0
-    seg = (2 * half - 2 * gap) / 3.0
-    for i in (-1, 0, 1):
-        offset = i * (seg + gap)
-        lvl.box(cx + offset, floor_top + 1.5, cz, seg / 2, 1.5, 0.6)
+    # Divider across the middle, leaving n_gaps openings.
+    n_seg = n_gaps + 1
+    seg = (2 * half - n_gaps * gap_w) / n_seg
+    if seg > 0.5:
+        left = cx - half
+        for i in range(n_seg):
+            c = left + seg / 2
+            lvl.box(c, floor_top + div_h / 2, cz, seg / 2, div_h / 2, 0.6)
+            left += seg + gap_w
 
-    # Cover pillars, mirrored so neither side has an advantage.
+    # Cover pillars, mirrored so neither side is advantaged.
     for sign in (-1, 1):
-        for px, pz in ((-half * 0.55, half * 0.45), (half * 0.55, half * 0.45),
-                       (0.0, half * 0.72)):
-            lvl.pillar(cx + px, floor_top + 1.5, cz + sign * pz, 3.0)
+        for i in range(n_pillars):
+            a = (i + 0.5) / n_pillars * math.pi
+            px = math.cos(a) * half * rng.uniform(0.35, 0.75)
+            pz = sign * half * rng.uniform(0.35, 0.78)
+            lvl.pillar(cx + px, floor_top + 1.5, cz + pz, 3.0)
 
-    # Two raised ledges in opposite corners, with a step up.
-    for sign in (-1, 1):
-        lx = cx + sign * (half * 0.62)
-        lz = cz + sign * (half * 0.62)
-        lvl.box(lx, floor_top + 1.0, lz, 4.0, 1.0, 4.0)          # ledge, top +2
-        lvl.box(lx - sign * 4.8, floor_top + 0.5, lz, 1.0, 0.5, 3.0)  # step, top +1
+    if ledge:
+        for sign in (-1, 1):
+            lx, lz = cx + sign * half * 0.62, cz + sign * half * 0.62
+            lvl.box(lx, floor_top + ledge_h / 2, lz, 4.0, ledge_h / 2, 4.0)
+            lvl.box(lx - sign * 4.8, floor_top + ledge_h / 4, lz,
+                    1.0, ledge_h / 4, 3.0)
+
+
+
+def build_sky_temple(lvl: Level, rng: random.Random, floor_top: float,
+                     cx: float, cz: float) -> None:
+    """A ruined temple floating in open sky. Built for a human to enjoy
+    fighting in, not as an RL fixture.
+
+    The design intent, in Overgrowth's own terms -- it is a game about
+    momentum, leaps, wall-runs and throws, so a good arena should reward
+    moving rather than standing:
+
+      * a round central floor with a raised altar, so the strongest position
+        is visible, contested, and can be attacked from every side;
+      * a colonnade ringing it -- columns break line of sight, give something
+        to wall-run, and turn a straight charge into a read;
+      * four bridges out to satellite platforms, which are the flanking
+        routes and the retreat that costs you the high ground;
+      * nothing underneath. A ring-out is lethal, so every exchange near an
+        edge is a real decision. This is the cheapest source of drama the
+        engine offers and stock arenas mostly waste it.
+    """
+    R = 15.0          # main floor radius
+    ring_r = 11.5     # colonnade radius
+    col_h = 6.0
+    n_col = 10
+
+    # Main floor: a thick disk. soft_cylinder is 2x2x2 centred, so s=(R,h/2,R).
+    lvl.box(cx, floor_top - 0.75, cz, R, 0.75, R, 0.0, CYL)
+    # Altar: raised, and small enough that holding it is a commitment.
+    lvl.box(cx, floor_top + 0.6, cz, 5.0, 0.6, 5.0, 0.0, CYL)
+    lvl.box(cx, floor_top + 1.35, cz, 4.2, 0.15, 4.2, 0.0, DISK)
+
+    # Colonnade + arches spanning each pair.
+    for i in range(n_col):
+        a = 2 * math.pi * i / n_col
+        px, pz = cx + math.cos(a) * ring_r, cz + math.sin(a) * ring_r
+        lvl.box(px, floor_top + col_h / 2, pz, 0.7, col_h / 2, 0.7, 0.0, CYL)
+        # arch between this column and the next, tangent to the ring
+        a2 = 2 * math.pi * (i + 0.5) / n_col
+        ax, az = cx + math.cos(a2) * ring_r, cz + math.sin(a2) * ring_r
+        span = 2 * ring_r * math.sin(math.pi / n_col)
+        lvl.box(ax, floor_top + col_h - 0.4, az,
+                span / 2 / 0.98, 0.6, 0.35, -a2, ARCH)
+
+    # Four bridges out to satellites. Narrow: crossing one is a commitment.
+    for i in range(4):
+        a = math.pi / 2 * i + math.pi / 4
+        c, sn = math.cos(a), math.sin(a)
+        for t in (R + 5.0, R + 10.0):
+            lvl.box(cx + c * t, floor_top - 0.4, cz + sn * t, 2.6, 0.4, 1.6, -a)
+        sx, sz = cx + c * (R + 16.0), cz + sn * (R + 16.0)
+        lvl.box(sx, floor_top - 0.6, sz, 6.0, 0.6, 6.0, 0.0, CYL)   # satellite
+        lvl.box(sx, floor_top + 1.6, sz, 0.6, 1.6, 0.6, 0.0, POST)  # marker post
+
+    # Broken debris at mixed heights: stepping stones and ambush perches.
+    for i in range(7):
+        a = rng.uniform(0, 2 * math.pi)
+        d = rng.uniform(R + 3.0, R + 20.0)
+        h = rng.uniform(2.0, 9.0)
+        lvl.box(cx + math.cos(a) * d, floor_top + h, cz + math.sin(a) * d,
+                rng.uniform(1.2, 3.0), 0.35, rng.uniform(1.2, 3.0),
+                rng.uniform(0, math.pi))
 
 
 def main() -> int:
@@ -194,11 +286,24 @@ def main() -> int:
     ap.add_argument("--name", default="gen_split_court")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--half-size", type=float, default=20.0,
-                    help="half the court's side length in world units (default 20 = 40x40)")
-    ap.add_argument("--script", default="Data/Scripts/arena_level.as",
-                    help="level script; use Data/Scripts/arena_level_1v1_unarmed.as for the RL fork")
-    ap.add_argument("--overgrowth-data", default=None,
-                    help="installed Overgrowth Data/ directory (default: platform Steam path)")
+                    help="half a court's side length (default 20 = 40x40)")
+    ap.add_argument("--arenas", type=int, default=1,
+                    help="number of isolated courts, laid out on a grid in open sky")
+    ap.add_argument("--arena-spacing", type=float, default=200.0,
+                    help="centre-to-centre distance between courts. Must exceed the "
+                         "engine's AI awareness and observation ranges or fights leak.")
+    ap.add_argument("--randomize", action="store_true",
+                    help="vary chokepoint count/width, wall and divider height, cover "
+                         "density and high ground per arena")
+    ap.add_argument("--terrain", action="store_true",
+                    help="include the dry_canyon heightmap. Off by default: the arena "
+                         "then floats in open sky, which is both cheaper and avoids the "
+                         "court intersecting terrain.")
+    ap.add_argument("--layout", choices=["court", "temple"], default="court",
+                    help="'court' is the RL test fixture (enclosed, chokepoints); "
+                         "'temple' is a hand-designed arena meant to be fun to play")
+    ap.add_argument("--script", default="Data/Scripts/arena_level.as")
+    ap.add_argument("--overgrowth-data", default=None)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -208,43 +313,47 @@ def main() -> int:
         return 1
 
     rng = random.Random(args.seed)
-    lvl = Level(args.name, args.script)
+    floor_top = 500.0 if not args.terrain else 36.0
+    cols = math.ceil(math.sqrt(args.arenas))
+    span = (cols - 1) * args.arena_spacing
+    cam = (0.0, floor_top + 40.0, -span / 2 - 60.0)
+    lvl = Level(args.name, args.script, terrain=args.terrain, cam=cam)
 
-    # Built in the same neighbourhood as oval_arena's floor (y ~= 36), which is
-    # known-good ground on this heightmap. The slab is solid and 2 units thick,
-    # so terrain irregularity underneath does not matter.
-    cx, cz, floor_top = 70.0, 280.0, 36.0
-    build_split_court(lvl, rng, args.half_size, floor_top, cx, cz)
-
-    sy = floor_top + 0.7  # spawns sit slightly above the slab, as in oval_arena
-    d = args.half_size * 0.6
-    # game_type 0 -> the 1v1 pair the RL fork uses: opposite sides of the divider.
-    lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)
-    lvl.spawn(cx, sy, cz + d, math.pi, 0, 1)
-    # game_type 1 -> 2v2, teams 0,0,1,1
-    for i, (ox, oz, team) in enumerate([(-4, -d, 0), (4, -d, 0), (-4, d, 1), (4, d, 1)]):
-        lvl.spawn(cx + ox, sy, cz + oz, 0.0 if oz < 0 else math.pi, 1, team)
-    # game_type 2 -> free-for-all, teams 1,0,2,3
-    for (ox, oz, team) in [(-d, -d, 1), (d, -d, 0), (d, d, 2), (-d, d, 3)]:
-        lvl.spawn(cx + ox, sy, cz + oz, 0.0, 2, team)
+    sy = floor_top + 0.7
+    for i in range(args.arenas):
+        cx = (i % cols) * args.arena_spacing - span / 2
+        cz = (i // cols) * args.arena_spacing - span / 2
+        if args.layout == "temple":
+            build_sky_temple(lvl, rng, floor_top, cx, cz)
+            d = 9.0
+        else:
+            build_court(lvl, rng, args.half_size, floor_top, cx, cz, args.randomize)
+            d = args.half_size * 0.6
+        # game_type 0 is the pair the RL fork uses; 1 and 2 are emitted for the
+        # first arena only so normal play still works without spawning a crowd.
+        lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)
+        lvl.spawn(cx, sy, cz + d, math.pi, 0, 1)
+        if i == 0:
+            for ox, oz, team in [(-4, -d, 0), (4, -d, 0), (-4, d, 1), (4, d, 1)]:
+                lvl.spawn(cx + ox, sy, cz + oz, 0.0 if oz < 0 else math.pi, 1, team)
+            for ox, oz, team in [(-d, -d, 1), (d, -d, 0), (d, d, 2), (-d, d, 3)]:
+                lvl.spawn(cx + ox, sy, cz + oz, 0.0, 2, team)
 
     xml = lvl.render()
     out = data / "Levels" / "arenas" / f"{args.name}.xml"
-    n_env = len(lvl.objects)
     if args.dry_run:
-        print(f"[dry-run] would write {out}")
-        print(f"  {n_env} EnvObjects, {len(lvl.spawns)} spawns, {len(xml)} bytes")
+        print(f"[dry-run] {out}: {len(lvl.objects)} EnvObjects, {len(lvl.spawns)} spawns, {len(xml)} bytes")
         return 0
 
     out.write_text(xml, encoding="utf-8")
     print(f"Wrote {out}")
-    print(f"  {n_env} EnvObjects, {len(lvl.spawns)} spawns")
-    print(f"  court {2*args.half_size:.0f}x{2*args.half_size:.0f} centred ({cx},{floor_top},{cz})")
-    print(f"  navmesh will be baked by the engine on first load (OutOfDate NavMesh=true)")
+    print(f"  {args.arenas} arena(s), {len(lvl.objects)} EnvObjects, {len(lvl.spawns)} spawns")
+    print(f"  terrain: {'dry_canyon' if args.terrain else 'NONE (open sky)'}, floor y={floor_top}")
+    print(f"  randomized layout: {args.randomize}  seed={args.seed}")
     print()
-    print("Launch it:")
     binary = paths.engine_binary(Path(__file__).resolve().parents[2])
-    print(f'  "{binary}" --level arenas/{args.name}.xml')
+    print("Launch it:")
+    print(f'  "{binary}" --write-dir .rl_view --no-dialogues --level arenas/{args.name}.xml')
     return 0
 
 
