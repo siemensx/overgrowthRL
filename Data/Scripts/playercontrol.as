@@ -485,16 +485,26 @@ vec3 GetTargetVelocity() {
         return target_velocity;
     }
 
-    vec3 right;
-
-    {
-        right = camera.GetFlatFacing();
-        float side = right.x;
-        right.x = -right .z;
-        right.z = side;
+    vec3 forward;
+    if(IsExternalRLController(this_mo.controller_id)) {
+        forward = this_mo.GetFacing();
+        forward.y = 0.0f;
+        if(length_squared(forward) < 0.0001f) {
+            forward = vec3(0.0f, 0.0f, 1.0f);
+        } else {
+            forward = normalize(forward);
+        }
+    } else {
+        forward = camera.GetFlatFacing();
     }
 
-    target_velocity -= GetMoveYAxis(this_mo.controller_id) * camera.GetFlatFacing();
+    vec3 right;
+    right = forward;
+    float side = right.x;
+    right.x = -right.z;
+    right.z = side;
+
+    target_velocity -= GetMoveYAxis(this_mo.controller_id) * forward;
     target_velocity += GetMoveXAxis(this_mo.controller_id) * right;
 
     if(GetInputDown(this_mo.controller_id, "walk")) {

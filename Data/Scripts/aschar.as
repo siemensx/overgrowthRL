@@ -162,6 +162,11 @@ float block_health = 1.0f;  // How strong is auto-block? Similar to ssb shield
 float temp_health = 1.0f;  // Remaining regenerating health until knocked out
 float permanent_health = 1.0f;  // Remaining non-regenerating health until killed
 bool invincible = false;  // Make character ignore all damage
+// OGRL human-duel presentation profile: do not let the idle human avatar
+// passively absorb every checkpoint strike. Active blocking through the
+// player's grab input remains available; training and ordinary matches are
+// unchanged because they never set this parameter.
+bool ogrl_disable_passive_block = false;
 
 bool test_talking = false;
 float test_talking_amount = 0.0f;
@@ -5337,7 +5342,7 @@ int BlockedAttack(const vec3 &in dir, const vec3 &in pos, int attacker_id) {
         MakeParticle("Data/Particles/impactfast.xml", pos, vec3(0.0f));
         MakeParticle("Data/Particles/impactslow.xml", pos, vec3(0.0f));
 
-        if(_draw_combat_debug) {
+        if(_draw_combat_debug && IsMatchOverlayVisible()) {
             DebugDrawWireSphere(pos, 0.4f, vec3(0.0, 1.0, 0.0), _fade);
         }
 
@@ -5831,6 +5836,16 @@ int HitByAttack(const vec3 &in dir, const vec3 &in pos, int attacker_id, float a
         can_passive_block = false;
     }
 
+    // The rendered human-duel opponent should take ordinary checkpoint hits
+    // when the player is not actively blocking. Without this match-only
+    // profile, a stationary player avatar can face the agent and passively
+    // block every legal unarmed strike indefinitely, making a working policy
+    // look like it never attacks. Active block handling occurs separately in
+    // PrepareToBlock/BlockedAttack and is intentionally not disabled here.
+    if(ogrl_disable_passive_block) {
+        can_passive_block = false;
+    }
+
     if(sharp_damage == 0.0f) {
         MakeParticle("Data/Particles/impactfast.xml", pos, vec3(0.0f));
         MakeParticle("Data/Particles/impactslow.xml", pos, vec3(0.0f));
@@ -5846,7 +5861,7 @@ int HitByAttack(const vec3 &in dir, const vec3 &in pos, int attacker_id, float a
     if(!can_passive_block) {
         frozen = false;
 
-        if(_draw_combat_debug) {
+        if(_draw_combat_debug && IsMatchOverlayVisible()) {
             DebugDrawWireSphere(pos, 0.4f, vec3(1.0, 0.0, 0.0), _fade);
         }
 
@@ -5955,7 +5970,7 @@ int HitByAttack(const vec3 &in dir, const vec3 &in pos, int attacker_id, float a
 
         ko_shield = max(0, ko_shield - 1);
     } else {  // Can passive block
-        if(_draw_combat_debug) {
+        if(_draw_combat_debug && IsMatchOverlayVisible()) {
             DebugDrawWireSphere(pos, 0.4f, vec3(0.0, 0.0, 1.0), _fade);
         }
 
@@ -7406,7 +7421,7 @@ void HandleAnimationCombatEvent(const string &in event, const vec3 &in world_pos
             string sound = "Data/Sounds/whoosh/hit_whoosh.xml";
             PlaySoundGroup(sound, world_pos, sound_priority);
 
-            if(_draw_combat_debug) {
+            if(_draw_combat_debug && IsMatchOverlayVisible()) {
                 DebugDrawWireSphere(world_pos, 0.4f, vec3(1.0, 1.0, 1.0), _fade);
             }
         }
@@ -8238,7 +8253,7 @@ bool VisibilityCheck(vec3 start, MovementObject@ character) {
         }
     }
 
-    if(_debug_draw_vis_lines) {
+    if(_debug_draw_vis_lines && IsMatchOverlayVisible()) {
         if(!intersecting) {
             DebugDrawLine(start, end, vec4(0.0f, 1.0f, 0.0f, 1.0f), vec4(0.0f, 1.0f, 0.0f, 1.0f), _fade);
         }
@@ -8477,7 +8492,7 @@ vec3 HandleBumperCollision() {
         DebugDrawLine(contact.position, contact.position + contact.normal, vec4(1.0), vec4(1.0), _fade);
     } */
 
-    if(_draw_collision_spheres) {
+    if(_draw_collision_spheres && IsMatchOverlayVisible()) {
         DebugDrawWireScaledSphere(this_mo.position + offset, size, scale, vec3(0.0f, 1.0f, 0.0f), _delete_on_update);
     }
 
@@ -8555,7 +8570,7 @@ bool HandleStandingCollision() {
                                 lower_pos,
                                 _leg_sphere_size);
 
-    if(_draw_collision_spheres) {
+    if(_draw_collision_spheres && IsMatchOverlayVisible()) {
         DebugDrawWireSphere(upper_pos, _leg_sphere_size, vec3(0.0f, 0.0f, 1.0f), _delete_on_update);
         DebugDrawWireSphere(lower_pos, _leg_sphere_size, vec3(0.0f, 0.0f, 1.0f), _delete_on_update);
     }
@@ -8862,7 +8877,7 @@ void HandleAirCollisions(const Timestep &in ts) {
         GetCollisionSphere(col_offset, col_scale, size);
         col.GetSlidingScaledSphereCollision(this_mo.position + col_offset, _leg_sphere_size, col_scale);
 
-        if(_draw_collision_spheres) {
+        if(_draw_collision_spheres && IsMatchOverlayVisible()) {
             DebugDrawWireScaledSphere(this_mo.position + col_offset, _leg_sphere_size, col_scale, vec3(0.0f, 1.0f, 0.0f), _delete_on_update);
         }
 
@@ -9045,7 +9060,7 @@ void HandleLedgeCollisions(const Timestep &in ts) {
     vec3 col_scale(1.05f);
     col.GetSlidingScaledSphereCollision(this_mo.position + col_offset, _leg_sphere_size, col_scale);
 
-    if(_draw_collision_spheres) {
+    if(_draw_collision_spheres && IsMatchOverlayVisible()) {
         DebugDrawWireScaledSphere(this_mo.position + col_offset, _leg_sphere_size, col_scale, vec3(0.0f, 1.0f, 0.0f), _delete_on_update);
     }
 
@@ -9073,7 +9088,7 @@ void HandleLedgeCollisions(const Timestep &in ts) {
 void HandleCollisions(const Timestep &in ts) {
     vec3 initial_vel = this_mo.velocity;
 
-    if(_draw_collision_spheres) {
+    if(_draw_collision_spheres && IsMatchOverlayVisible()) {
         DebugDrawWireSphere(this_mo.position,
                             _leg_sphere_size,
                             vec3(1.0f, 1.0f, 1.0f),
@@ -13345,7 +13360,7 @@ void DrawHealthBar() {
         color = vec4(1.0, 1.0, 1.0, 1.0);
     }
 
-    if(this_mo.controlled) {
+    if(this_mo.controlled && IsMatchOverlayVisible()) {
         DebugDrawWireScaledSphere(this_mo.position, GetAttackRange(), vec3(1.0, 1.0, 1.0), color, _delete_on_draw);
         DebugDrawWireScaledSphere(this_mo.position, GetCloseAttackRange(), vec3(1.0, 1.0, 1.0), color, _delete_on_draw);
     }
@@ -13359,7 +13374,7 @@ void DrawHealthBar() {
     transform = translation * scale;
     DebugDrawCircle(transform, vec3(1.0), _delete_on_draw); */
 
-    if(this_mo.controlled && target_id != -1) {
+    if(this_mo.controlled && target_id != -1 && IsMatchOverlayVisible()) {
         AttackScriptGetter temp_attack_getter;
         LoadAppropriateAttack(IsAttackMirrored(), temp_attack_getter);
         DebugText("a", temp_attack_getter.GetPath(), 0.5f);
@@ -13409,7 +13424,10 @@ void PreDrawCameraNoCull(float curr_game_time) {
         queue_fix_discontinuity = false;
     }
 
-    if(this_mo.controlled) {
+    // In the human-vs-checkpoint shared-camera match, controller 1 is a
+    // player actor for physics/input purposes but does not own a camera.
+    // Its health must not tint the human's camera when the agent is hit.
+    if(this_mo.controlled && (this_mo.controller_id == 0 || GetSplitscreen())) {
         vec3 tint = camera.GetTint();
         vec3 vignette_tint = camera.GetVignetteTint();
 
@@ -13489,15 +13507,15 @@ void PreDrawCamera(float curr_game_time) {
         FirePreDraw(curr_game_time);
     }
 
-    if(_draw_combat_debug) {
+    if(_draw_combat_debug && IsMatchOverlayVisible()) {
         DrawHealthBar();
     }
 
-    if(_debug_show_ai_state) {
+    if(_debug_show_ai_state && IsMatchOverlayVisible()) {
         DrawAIStateDebug();
     }
 
-    if(_draw_stealth_debug) {
+    if(_draw_stealth_debug && IsMatchOverlayVisible()) {
         DrawStealthDebug();
     }
 
@@ -14838,7 +14856,7 @@ void FinalAnimationMatrixUpdate(int num_frames) {
         LeaveTelemetryZone();
     }
 
-    if(_debug_draw_bones) {
+    if(_debug_draw_bones && IsMatchOverlayVisible()) {
         for(int i = 0; i < skeleton.NumBones(); ++i) {
             if(skeleton.GetBoneMass(i) > 0.03) {
                 mat4 mat = rigged_object.GetFrameMatrix(i).GetMat4() * skeleton.GetBindMatrix(i);
@@ -15379,6 +15397,10 @@ void ApplyPhysics(const Timestep &in ts) {
 
 void SetParameters() {
     CheckSpecies();
+
+    if(params.HasParam("OGRL Human Duel Role") && params.GetString("OGRL Human Duel Role") == "human") {
+        ogrl_disable_passive_block = true;
+    }
 
     params.AddIntSlider("Knockout Shield", 0, "min:0,max:10");
     max_ko_shield = max(0, params.GetInt("Knockout Shield"));
