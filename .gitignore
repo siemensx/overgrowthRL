@@ -32,3 +32,60 @@ Data/LevelNavmeshes/**/*.obj
 tags
 *.swp
 .vscode/*
+
+# ---------------------------------------------------------------------------
+# Bad Bunny RL project (OGRL). Added 2026-09-04 during the version-control
+# cleanup that preceded the Windows training-host port.
+#
+# Rule: git carries SOURCE and DOCUMENTS. Trained weights, run telemetry,
+# replay containers and raw benchmark logs are large binary research artifacts
+# and are synced between the Mac and the Windows trainer out-of-band
+# (Tools/rl/sync_artifacts.sh), not through this repository.
+# ---------------------------------------------------------------------------
+
+# macOS turds
+.DS_Store
+
+# Out-of-tree CMake build directories used by build_engine.sh / PGO
+BuildArm64/
+BuildArm64PGO/
+BuildWin64/
+BuildWin64PGO/
+
+# Locally compiled helper binary (built on demand by noaslr.py from
+# noaslr_launcher.c, which IS tracked). macOS-only.
+Tools/rl/noaslr_launcher
+
+# Training run telemetry, checkpoints, tapes and replay containers.
+# These are the reproducibility payload but are far too large for git;
+# see research-log for the index and sync_artifacts.sh for transport.
+Tools/rl/runs/
+Tools/rl/ppo/runs/
+Tools/rl/ppo/checkpoints/
+
+# Per-experiment engine --write-dir sandboxes (AGENTS.md requires a fresh
+# write-dir per experiment; they accumulate quickly and hold no source).
+.rl_write_dirs/
+.rl_match_write_dirs/
+.rl_test_write_dirs/
+.rl_diag_write_dirs/
+.rl_forced_diag/
+.rl_move_diag/
+.rl_axis_write/
+Tools/.rl_write_dirs/
+
+# Raw engine stdout from throughput probing. The summary .json/.md in each
+# experiment directory IS tracked; the multi-hundred-megabyte raw logs are not.
+research-artifacts/**/raw/
+research-artifacts/**/*.log
+research-artifacts/*.sample.txt
+
+# Engine --write-dir sandboxes captured inside experiment directories. These
+# hold only derived engine caches (shader/mcache/bytecode/DDS conversions),
+# never research evidence.
+research-artifacts/**/write_dirs/
+
+# Per-tick determinism digest traces (OGRL-20260815-038 ASLR investigation and
+# friends). Multi-megabyte raw JSONL, regenerable by re-running the equivalence
+# harness; the summary JSON/MD next to them is tracked and is the evidence.
+research-artifacts/**/digest-*.jsonl
