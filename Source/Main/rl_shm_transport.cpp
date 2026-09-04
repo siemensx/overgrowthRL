@@ -10,11 +10,7 @@
 #include <UserInput/input.h>
 #include <Graphics/pxdebugdraw.h>
 
-#include <fcntl.h>
-#include <semaphore.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include "rl_ipc_platform.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -79,14 +75,12 @@ int g_controller_id = -1;
 RLObservation::ObservationConfig g_config;
 std::string g_name;
 
-int g_fd = -1;
-void* g_map = nullptr;
-size_t g_map_size = 0;
+RLIpc::ShmRegion g_shm;
 ShmHeader* g_header = nullptr;
 float* g_obs = nullptr;
 float* g_action = nullptr;
-sem_t* g_obs_sem = SEM_FAILED;     // posted by engine, waited on by python
-sem_t* g_action_sem = SEM_FAILED;  // posted by python, waited on by engine
+RLIpc::SemHandle g_obs_sem = RLIpc::kInvalidSem;     // posted by engine, waited on by python
+RLIpc::SemHandle g_action_sem = RLIpc::kInvalidSem;  // posted by python, waited on by engine
 
 uint64_t g_step_counter = 0;
 std::vector<float> g_scratch_obs;
@@ -252,21 +246,14 @@ void DrawMatchOverlayInternal(Engine* engine) {
 }
 
 void CloseAll() {
-    if (g_map != nullptr) {
-        munmap(g_map, g_map_size);
-        g_map = nullptr;
+    RLIpc::CloseShm(&g_shm);
+    if (g_obs_sem != RLIpc::kInvalidSem) {
+        RLIpc::CloseSem(g_obs_sem);
+        g_obs_sem = RLIpc::kInvalidSem;
     }
-    if (g_fd >= 0) {
-        close(g_fd);
-        g_fd = -1;
-    }
-    if (g_obs_sem != SEM_FAILED) {
-        sem_close(g_obs_sem);
-        g_obs_sem = SEM_FAILED;
-    }
-    if (g_action_sem != SEM_FAILED) {
-        sem_close(g_action_sem);
-        g_action_sem = SEM_FAILED;
+    if (g_action_sem != RLIpc::kInvalidSem) {
+        RLIpc::CloseSem(g_action_sem);
+        g_action_sem = RLIpc::kInvalidSem;
     }
     g_header = nullptr;
     g_obs = nullptr;
@@ -362,30 +349,15 @@ bool Configure(const std::string& name, int controller_id, const RLObservation::
     g_match_debug_draw_saved_value = g_debug_runtime_disable_debug_draw;
 
     const int obs_floats = RLObservation::ComputeBufferSize(g_config);
-    g_map_size = sizeof(ShmHeader) + static_cast<size_t>(obs_floats) * sizeof(float) +
-                 static_cast<size_t>(kActionFloats) * sizeof(float);
+    const size_t map_size = sizeof(ShmHeader) + static_cast<size_t>(obs_floats) * sizeof(float) +
+                            static_cast<size_t>(kActionFloats) * sizeof(float);
 
-    shm_unlink(g_name.c_str());  // best-effort: clear a stale segment from a prior crashed run
-    g_fd = shm_open(g_name.c_str(), O_CREAT | O_RDWR, 0600);
-    if (g_fd < 0) {
-        std::fprintf(stderr, "RLShmTransport: shm_open(%s) failed: %s\n", g_name.c_str(), strerror(errno));
-        return false;
-    }
-    if (ftruncate(g_fd, static_cast<off_t>(g_map_size)) != 0) {
-        std::fprintf(stderr, "RLShmTransport: ftruncate failed: %s\n", strerror(errno));
-        CloseAll();
-        return false;
-    }
-    g_map = mmap(nullptr, g_map_size, PROT_READ | PROT_WRITE, MAP_SHARED, g_fd, 0);
-    if (g_map == MAP_FAILED) {
-        std::fprintf(stderr, "RLShmTransport: mmap failed: %s\n", strerror(errno));
-        g_map = nullptr;
-        CloseAll();
+    if (!RLIpc::CreateShm(g_name, map_size, &g_shm)) {
         return false;
     }
 
-    g_header = reinterpret_cast<ShmHeader*>(g_map);
-    g_obs = reinterpret_cast<float*>(reinterpret_cast<char*>(g_map) + sizeof(ShmHeader));
+    g_header = reinterpret_cast<ShmHeader*>(g_shm.addr);
+    g_obs = reinterpret_cast<float*>(reinterpret_cast<char*>(g_shm.addr) + sizeof(ShmHeader));
     g_action = g_obs + obs_floats;
 
     std::memset(g_header, 0, sizeof(ShmHeader));
@@ -395,16 +367,11 @@ bool Configure(const std::string& name, int controller_id, const RLObservation::
     g_header->obs_floats = static_cast<uint32_t>(obs_floats);
     g_header->action_floats = static_cast<uint32_t>(kActionFloats);
 
-    // Darwin has no unnamed process-shared semaphores (sem_init(pshared=1)
-    // is ENOSYS) -- named semaphores via sem_open are the only option. Clear
-    // any stale semaphores from a prior crashed run before creating fresh
-    // ones at value 0, so a leftover posted count can't desync a new run.
-    sem_unlink(ObsSemName(g_name).c_str());
-    sem_unlink(ActionSemName(g_name).c_str());
-    g_obs_sem = sem_open(ObsSemName(g_name).c_str(), O_CREAT | O_EXCL, 0600, 0);
-    g_action_sem = sem_open(ActionSemName(g_name).c_str(), O_CREAT | O_EXCL, 0600, 0);
-    if (g_obs_sem == SEM_FAILED || g_action_sem == SEM_FAILED) {
-        std::fprintf(stderr, "RLShmTransport: sem_open failed: %s\n", strerror(errno));
+    // Both semaphores start at 0; RLIpc clears any stale one left by a crashed
+    // run so a leftover posted count can't desync a new run.
+    g_obs_sem = RLIpc::CreateSem(ObsSemName(g_name));
+    g_action_sem = RLIpc::CreateSem(ActionSemName(g_name));
+    if (g_obs_sem == RLIpc::kInvalidSem || g_action_sem == RLIpc::kInvalidSem) {
         CloseAll();
         return false;
     }
@@ -507,8 +474,8 @@ bool Step(Engine* engine) {
     // action -- see rl_shm_transport.h for why no lock/atomic is needed on
     // the buffers themselves (the semaphore pair already establishes the
     // release/acquire ordering).
-    sem_post(g_obs_sem);
-    sem_wait(g_action_sem);
+    RLIpc::PostSem(g_obs_sem);
+    RLIpc::WaitSem(g_action_sem);
 
     if (g_header->shutdown_requested != 0) {
         g_shutdown_seen = true;
@@ -599,9 +566,9 @@ bool Step(Engine* engine) {
 
 void Shutdown() {
     if (g_enabled && !g_name.empty()) {
-        shm_unlink(g_name.c_str());
-        sem_unlink(ObsSemName(g_name).c_str());
-        sem_unlink(ActionSemName(g_name).c_str());
+        RLIpc::UnlinkShm(g_name);
+        RLIpc::UnlinkSem(ObsSemName(g_name));
+        RLIpc::UnlinkSem(ActionSemName(g_name));
     }
     CloseAll();
     g_enabled = false;
