@@ -1,0 +1,19 @@
+experiment_id: OGRL-20260815-020
+status: rejected
+commit: df786925
+hypothesis: RL-only Steam/network/online service gating improves steady-state and worker density.
+candidate_worktree: .worktrees/optimize-overgrowth-training-throughput-exp-009
+reference_aggregate_steps_per_second: 1525.624117
+candidate_aggregate_steps_per_second_first_suite: 1451.462653
+candidate_aggregate_steps_per_second_repeat: 1398.244027
+candidate_scenario_medians_first_suite:
+  duel: 1616.983492
+  four_character: 1980.125998
+  six_character: 955.034774
+candidate_scenario_medians_repeat:
+  duel: 1637.982913
+  four_character: 1931.410775
+  six_character: 864.101783
+all_candidate_runs_completed: true
+decision: reverted_no_stable_throughput_gain
+known_risk: Stock training scripts calling AngelScript TCP APIs would reach an intentionally uninitialized network backend.

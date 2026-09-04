@@ -1,0 +1,2 @@
+rc=0
+config=/tmp/ogrl-headless-024.XXXXXX.json

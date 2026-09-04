@@ -1,0 +1,28 @@
+experiment_id: OGRL-20260815-029
+status: measured
+architecture: arm64-native
+binary: BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth
+commit: 236a9c2dd679ef5842ab0ff5b07d26a965ba1927
+suite: production-reference
+scenario_maps:
+  - nothing.xml
+  - t2/vs/heavyvsheavy.xml
+  - og_story/23_Rock_Arena_2v2.xml
+  - arenas/oval_arena.xml
+repeats: 3
+warmup_steps: 600
+measured_steps: 2400
+physics_hz: 120
+benchmark_completed: 1.0
+combat_suite_pass_rate: 1.0
+cross_architecture_equivalence: untested
+aggregate_useful_steps_per_second: 3560.7046875945816
+aggregate_decisions_per_second_20hz: 593.4507812657636
+median_steps_per_second:
+  empty: 90230.370543
+  duel: 3645.484484
+  four_character: 4945.436209
+  six_character: 2504.07891
+peak_rss_mib_max_observed: 834.890625
+median_startup_seconds: 1.436663
+raw_summary: summary-production-reference-r3.json

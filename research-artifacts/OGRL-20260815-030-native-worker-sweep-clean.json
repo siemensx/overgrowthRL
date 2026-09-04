@@ -1,0 +1,141 @@
+{
+  "experiment_id": "OGRL-20260815-030",
+  "architecture": "arm64 native",
+  "binary": "/Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/.worktrees/optimize-overgrowth-training-throughput-arm64-native/BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth",
+  "scenario": "arenas/oval_arena.xml",
+  "seed": 20260815,
+  "physics_hz": 120,
+  "warmup_steps": 600,
+  "measured_steps": 2400,
+  "results": [
+    {
+      "workers": 1,
+      "aggregate_steps_per_second": 2516.136254,
+      "per_worker_steps_per_second": [
+        2516.136254
+      ],
+      "completed": 1,
+      "return_codes": [
+        0
+      ],
+      "summed_peak_rss_mib": 497.65625,
+      "wall_seconds": 2.8169291019439697
+    },
+    {
+      "workers": 2,
+      "aggregate_steps_per_second": 4778.847221,
+      "per_worker_steps_per_second": [
+        2417.704448,
+        2361.142773
+      ],
+      "completed": 2,
+      "return_codes": [
+        0,
+        0
+      ],
+      "summed_peak_rss_mib": 995.84375,
+      "wall_seconds": 3.024451732635498
+    },
+    {
+      "workers": 4,
+      "aggregate_steps_per_second": 8789.657199000001,
+      "per_worker_steps_per_second": [
+        2153.501675,
+        2168.096022,
+        2237.23613,
+        2230.823372
+      ],
+      "completed": 4,
+      "return_codes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "summed_peak_rss_mib": 1997.0,
+      "wall_seconds": 3.371497869491577
+    },
+    {
+      "workers": 6,
+      "aggregate_steps_per_second": 9376.961290000001,
+      "per_worker_steps_per_second": [
+        1542.389111,
+        1593.096581,
+        1598.071218,
+        1554.882032,
+        1547.356565,
+        1541.165783
+      ],
+      "completed": 6,
+      "return_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "summed_peak_rss_mib": 2997.40625,
+      "wall_seconds": 4.839377164840698
+    },
+    {
+      "workers": 8,
+      "aggregate_steps_per_second": 9665.934825,
+      "per_worker_steps_per_second": [
+        1202.447381,
+        1293.991993,
+        1165.323563,
+        1223.489988,
+        1153.852233,
+        1178.364274,
+        1206.688928,
+        1241.776465
+      ],
+      "completed": 8,
+      "return_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "summed_peak_rss_mib": 4000.859375,
+      "wall_seconds": 6.179888963699341
+    },
+    {
+      "workers": 10,
+      "aggregate_steps_per_second": 9732.330094,
+      "per_worker_steps_per_second": [
+        957.394833,
+        970.911819,
+        987.65869,
+        931.981121,
+        982.813225,
+        972.508715,
+        1025.390119,
+        948.516157,
+        1001.008012,
+        954.147403
+      ],
+      "completed": 10,
+      "return_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "summed_peak_rss_mib": 4995.25,
+      "wall_seconds": 7.556391000747681
+    }
+  ],
+  "notes": "Controlled sequential worker groups; each group had disposable isolated write dirs removed before next group; no other benchmark process active."
+}

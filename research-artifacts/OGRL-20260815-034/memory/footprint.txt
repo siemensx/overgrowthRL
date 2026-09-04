@@ -1,0 +1,36 @@
+======================================================================
+Overgrowth [75649]: 64-bit    Footprint: 466 MB (16384 bytes per page)
+======================================================================
+
+  Dirty      Clean  Reclaimable    Regions    Category
+    ---        ---          ---        ---    ---
+ 240 MB        0 B          0 B         53    MALLOC_LARGE
+ 221 MB        0 B        18 MB         67    MALLOC_SMALL
+2128 KB        0 B        16 KB         11    MALLOC metadata
+ 625 KB        0 B          0 B          1    page table
+ 618 KB        0 B          0 B        476    __DATA
+ 473 KB        0 B          0 B        438    __DATA_DIRTY
+ 336 KB        0 B          0 B         12    stack
+ 288 KB        0 B          0 B          1    MALLOC_TINY
+ 109 KB        0 B          0 B       1387    unused dyld shared cache area
+  64 KB        0 B          0 B          2    __TPRO_CONST
+  48 KB        0 B          0 B          4    untagged (VM_ALLOCATE)
+  32 KB     176 KB          0 B        530    __DATA_CONST
+  32 KB        0 B          0 B          1    libdispatch
+  32 KB        0 B          0 B          1    tag 22
+  16 KB        0 B          0 B          1    os_alloc_once
+  16 KB        0 B          0 B          1    Activity Tracing
+    0 B    6928 KB          0 B        547    __TEXT
+    0 B    1584 KB          0 B         13    __LINKEDIT
+    0 B        0 B          0 B          1    __CTF
+    0 B        0 B          0 B        518    __AUTH_CONST
+    0 B        0 B          0 B          1    __FONT_DATA
+    0 B        0 B          0 B        265    __AUTH
+    0 B        0 B          0 B          1    mapped file
+    ---        ---          ---        ---    ---
+ 466 MB    8688 KB        18 MB       4334    TOTAL
+
+Auxiliary data:
+    phys_footprint: 466 MB
+    phys_footprint_peak: 466 MB
+

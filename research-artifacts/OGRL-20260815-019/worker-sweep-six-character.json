@@ -1,0 +1,52 @@
+{
+  "experiment_id": "OGRL-20260815-019",
+  "objective": "Measure actual concurrent worker scaling on the true headless backend.",
+  "machine": "Apple M4 MacBook Air, 16 GB unified memory, macOS 26.5.2",
+  "binary": "BuildRelease64/Overgrowth.app/Contents/MacOS/Overgrowth",
+  "architecture": "x86_64 under Rosetta",
+  "build": "Release, AppleClang 17.0.0.17000404",
+  "scenario": "arenas/oval_arena.xml",
+  "seed": 20260815,
+  "physics_hz": 120,
+  "warmup_steps": 600,
+  "measured_steps": 2400,
+  "headless_flags": ["--disable-rendering", "--benchmark", "--no-dialogues"],
+  "config": "global_time_scale_mult: 100\\nskip_loading_pause: true\\nhas_detected_settings: true",
+  "measurement_definition": "Aggregate rate is the sum of each concurrently completed process's measured physics steps/s. RSS is from /usr/bin/time -l per process.",
+  "worker_counts": [1, 2, 4, 6, 8, 10],
+  "aggregate_steps_per_second": {
+    "1": 1144.877170,
+    "2": 2213.512161,
+    "4": 3654.178312,
+    "6": 4181.957545,
+    "8": 4576.211916,
+    "10": 4950.234278
+  },
+  "per_worker_steps_per_second": {
+    "1": [1144.877170],
+    "2": [1101.573617, 1111.938544],
+    "4": [922.674421, 919.350856, 918.976125, 893.176910],
+    "6": [691.389018, 693.872901, 707.371318, 694.755645, 702.478106, 692.090557],
+    "8": [578.988792, 580.078304, 562.571233, 575.844142, 567.192409, 578.763899, 559.713654, 573.059483],
+    "10": [499.597490, 487.522414, 484.121305, 509.470179, 496.849371, 500.917614, 498.555436, 491.896022, 492.391150, 488.913297]
+  },
+  "sum_rss_mib": {
+    "1": 470.812500,
+    "2": 943.078125,
+    "4": 1896.468750,
+    "6": 2835.703125,
+    "8": 3498.023438,
+    "10": 4155.960938
+  },
+  "max_single_process_rss_mib": {
+    "1": 470.812500,
+    "2": 473.054688,
+    "4": 475.546875,
+    "6": 476.246094,
+    "8": 456.921875,
+    "10": 422.914063
+  },
+  "completion": "All 31 processes returned rc=0 and benchmark_completed=1.",
+  "raw_logs": "/tmp/ogrl-worker-sweep-20260815-133114/",
+  "caveat": "This is one sweep on one six-character scenario; it is not a thermal-repeat average and does not measure learner/inference overhead or core placement."
+}

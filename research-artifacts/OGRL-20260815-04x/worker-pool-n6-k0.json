@@ -1,0 +1,756 @@
+{
+  "n_active": 6,
+  "k_standby_target": 0,
+  "episodes_completed": 106,
+  "wall_seconds": 90.043765875,
+  "episodes_per_hour_aggregate": 4237.9391431689155,
+  "mean_swap_latency_seconds": 0.0,
+  "max_swap_latency_seconds": 0.0,
+  "pool_underrun_count": 106,
+  "peak_total_rss_mib": 2944.515625,
+  "mean_total_rss_mib": 2315.1300364847716,
+  "episodes": [
+    {
+      "seed": 20260816,
+      "measured_steps": 4140,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 4.586570125
+    },
+    {
+      "seed": 20260817,
+      "measured_steps": 2327,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 4.6179187079999995
+    },
+    {
+      "seed": 20260818,
+      "measured_steps": 3861,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 4.650698707999999
+    },
+    {
+      "seed": 20260819,
+      "measured_steps": 2576,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 4.995838167
+    },
+    {
+      "seed": 20260815,
+      "measured_steps": 2575,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 5.0247403749999995
+    },
+    {
+      "seed": 20260820,
+      "measured_steps": 2408,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 5.054295958
+    },
+    {
+      "seed": 20260823,
+      "measured_steps": 3650,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 9.159688542000001
+    },
+    {
+      "seed": 20260821,
+      "measured_steps": 2362,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 9.516272083
+    },
+    {
+      "seed": 20260822,
+      "measured_steps": 2360,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 9.547288125
+    },
+    {
+      "seed": 20260824,
+      "measured_steps": 2547,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 9.579110833
+    },
+    {
+      "seed": 20260826,
+      "measured_steps": 2394,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 9.766850083000001
+    },
+    {
+      "seed": 20260825,
+      "measured_steps": 2408,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 9.964208542
+    },
+    {
+      "seed": 20260829,
+      "measured_steps": 3310,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 14.276494417
+    },
+    {
+      "seed": 20260827,
+      "measured_steps": 1925,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 14.307241208
+    },
+    {
+      "seed": 20260830,
+      "measured_steps": 3516,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 14.337091167
+    },
+    {
+      "seed": 20260828,
+      "measured_steps": 2383,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 14.689460167
+    },
+    {
+      "seed": 20260831,
+      "measured_steps": 1992,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 14.889033167000001
+    },
+    {
+      "seed": 20260832,
+      "measured_steps": 2277,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 14.999122083000001
+    },
+    {
+      "seed": 20260836,
+      "measured_steps": 3343,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 19.395414083000002
+    },
+    {
+      "seed": 20260833,
+      "measured_steps": 2487,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 19.419051
+    },
+    {
+      "seed": 20260834,
+      "measured_steps": 1940,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 19.445687583
+    },
+    {
+      "seed": 20260835,
+      "measured_steps": 2525,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 19.476838875000002
+    },
+    {
+      "seed": 20260837,
+      "measured_steps": 3004,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 19.508361833000002
+    },
+    {
+      "seed": 20260838,
+      "measured_steps": 1968,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 19.948252625000002
+    },
+    {
+      "seed": 20260842,
+      "measured_steps": 3299,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 24.194569292
+    },
+    {
+      "seed": 20260843,
+      "measured_steps": 3432,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 24.229259125000002
+    },
+    {
+      "seed": 20260840,
+      "measured_steps": 2326,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 24.339008833
+    },
+    {
+      "seed": 20260841,
+      "measured_steps": 2046,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 24.37173925
+    },
+    {
+      "seed": 20260839,
+      "measured_steps": 2350,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 24.561036125
+    },
+    {
+      "seed": 20260844,
+      "measured_steps": 2281,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 25.0067505
+    },
+    {
+      "seed": 20260846,
+      "measured_steps": 2274,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 29.106540250000002
+    },
+    {
+      "seed": 20260849,
+      "measured_steps": 3510,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 29.291244
+    },
+    {
+      "seed": 20260845,
+      "measured_steps": 2429,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 29.325648875
+    },
+    {
+      "seed": 20260847,
+      "measured_steps": 2108,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 29.514325417000002
+    },
+    {
+      "seed": 20260848,
+      "measured_steps": 1993,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 29.55289575
+    },
+    {
+      "seed": 20260850,
+      "measured_steps": 3515,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 29.66867925
+    },
+    {
+      "seed": 20260851,
+      "measured_steps": 2466,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 34.312246625
+    },
+    {
+      "seed": 20260855,
+      "measured_steps": 3658,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 34.352060832999996
+    },
+    {
+      "seed": 20260856,
+      "measured_steps": 2825,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 34.464640499999994
+    },
+    {
+      "seed": 20260852,
+      "measured_steps": 1741,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 34.579077708
+    },
+    {
+      "seed": 20260853,
+      "measured_steps": 2303,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 34.613691667
+    },
+    {
+      "seed": 20260854,
+      "measured_steps": 2423,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 34.728973624999995
+    },
+    {
+      "seed": 20260858,
+      "measured_steps": 2465,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 39.2448925
+    },
+    {
+      "seed": 20260861,
+      "measured_steps": 3502,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 39.366630416999996
+    },
+    {
+      "seed": 20260862,
+      "measured_steps": 3650,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 39.480560999999994
+    },
+    {
+      "seed": 20260857,
+      "measured_steps": 2480,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 39.508793167
+    },
+    {
+      "seed": 20260860,
+      "measured_steps": 2455,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 39.544239708
+    },
+    {
+      "seed": 20260859,
+      "measured_steps": 1901,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 39.660699666999996
+    },
+    {
+      "seed": 20260863,
+      "measured_steps": 3154,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 44.081266541999995
+    },
+    {
+      "seed": 20260868,
+      "measured_steps": 2037,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 44.535987125
+    },
+    {
+      "seed": 20260866,
+      "measured_steps": 1792,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 44.65005575
+    },
+    {
+      "seed": 20260864,
+      "measured_steps": 1968,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 44.689194707999995
+    },
+    {
+      "seed": 20260867,
+      "measured_steps": 1973,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 44.892503874999996
+    },
+    {
+      "seed": 20260865,
+      "measured_steps": 1731,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 44.931894707999994
+    },
+    {
+      "seed": 20260869,
+      "measured_steps": 3286,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 48.947671041999996
+    },
+    {
+      "seed": 20260874,
+      "measured_steps": 3119,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 49.808359667
+    },
+    {
+      "seed": 20260870,
+      "measured_steps": 1869,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 49.922187042
+    },
+    {
+      "seed": 20260872,
+      "measured_steps": 2253,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 50.034309625
+    },
+    {
+      "seed": 20260871,
+      "measured_steps": 2166,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 50.068076082999994
+    },
+    {
+      "seed": 20260873,
+      "measured_steps": 1341,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 50.342323416999996
+    },
+    {
+      "seed": 20260875,
+      "measured_steps": 3488,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 53.489980374999995
+    },
+    {
+      "seed": 20260876,
+      "measured_steps": 2356,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 54.918993416999996
+    },
+    {
+      "seed": 20260877,
+      "measured_steps": 1594,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 55.1128145
+    },
+    {
+      "seed": 20260878,
+      "measured_steps": 2478,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 55.146557208
+    },
+    {
+      "seed": 20260880,
+      "measured_steps": 1620,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 55.256943332999995
+    },
+    {
+      "seed": 20260879,
+      "measured_steps": 2611,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 55.291896625
+    },
+    {
+      "seed": 20260881,
+      "measured_steps": 3450,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 57.92272475
+    },
+    {
+      "seed": 20260882,
+      "measured_steps": 3233,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 59.584905375
+    },
+    {
+      "seed": 20260883,
+      "measured_steps": 2390,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 60.030858957999996
+    },
+    {
+      "seed": 20260884,
+      "measured_steps": 2014,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 60.144124082999994
+    },
+    {
+      "seed": 20260885,
+      "measured_steps": 2305,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 60.511087542
+    },
+    {
+      "seed": 20260886,
+      "measured_steps": 2204,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 60.547447667
+    },
+    {
+      "seed": 20260887,
+      "measured_steps": 2812,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 62.39567220799999
+    },
+    {
+      "seed": 20260888,
+      "measured_steps": 3386,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 64.204638792
+    },
+    {
+      "seed": 20260890,
+      "measured_steps": 2229,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 65.06981458300001
+    },
+    {
+      "seed": 20260889,
+      "measured_steps": 2475,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 65.100229833
+    },
+    {
+      "seed": 20260891,
+      "measured_steps": 1712,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 65.701368625
+    },
+    {
+      "seed": 20260892,
+      "measured_steps": 2449,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 65.73737075000001
+    },
+    {
+      "seed": 20260893,
+      "measured_steps": 3661,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 66.801892208
+    },
+    {
+      "seed": 20260894,
+      "measured_steps": 3674,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 68.67450058300001
+    },
+    {
+      "seed": 20260895,
+      "measured_steps": 2339,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 69.691749292
+    },
+    {
+      "seed": 20260896,
+      "measured_steps": 2390,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 70.211530792
+    },
+    {
+      "seed": 20260897,
+      "measured_steps": 2338,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 70.728920083
+    },
+    {
+      "seed": 20260898,
+      "measured_steps": 2287,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 70.84161791700001
+    },
+    {
+      "seed": 20260899,
+      "measured_steps": 2240,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 71.749601958
+    },
+    {
+      "seed": 20260900,
+      "measured_steps": 2878,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 73.546277375
+    },
+    {
+      "seed": 20260901,
+      "measured_steps": 3286,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 74.354815375
+    },
+    {
+      "seed": 20260902,
+      "measured_steps": 2282,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 75.286987708
+    },
+    {
+      "seed": 20260904,
+      "measured_steps": 2197,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 75.72533975
+    },
+    {
+      "seed": 20260903,
+      "measured_steps": 2215,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 75.91897862500001
+    },
+    {
+      "seed": 20260905,
+      "measured_steps": 1696,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 76.89923675
+    },
+    {
+      "seed": 20260906,
+      "measured_steps": 3378,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 78.073103792
+    },
+    {
+      "seed": 20260907,
+      "measured_steps": 1864,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 78.843383125
+    },
+    {
+      "seed": 20260908,
+      "measured_steps": 2028,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 80.347575625
+    },
+    {
+      "seed": 20260910,
+      "measured_steps": 2322,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 80.78513775
+    },
+    {
+      "seed": 20260909,
+      "measured_steps": 2391,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 80.822407375
+    },
+    {
+      "seed": 20260911,
+      "measured_steps": 2238,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 81.925285458
+    },
+    {
+      "seed": 20260912,
+      "measured_steps": 2005,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 83.0253295
+    },
+    {
+      "seed": 20260913,
+      "measured_steps": 3432,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 83.384336625
+    },
+    {
+      "seed": 20260914,
+      "measured_steps": 3612,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 84.907804958
+    },
+    {
+      "seed": 20260915,
+      "measured_steps": 1740,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 85.900075
+    },
+    {
+      "seed": 20260916,
+      "measured_steps": 2577,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 85.939326917
+    },
+    {
+      "seed": 20260917,
+      "measured_steps": 2302,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 86.872022708
+    },
+    {
+      "seed": 20260918,
+      "measured_steps": 2380,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 87.8065795
+    },
+    {
+      "seed": 20260919,
+      "measured_steps": 1781,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 87.993774125
+    },
+    {
+      "seed": 20260920,
+      "measured_steps": 3483,
+      "swap_latency_seconds": null,
+      "pool_underrun": true,
+      "wall_time": 89.397208875
+    }
+  ]
+}

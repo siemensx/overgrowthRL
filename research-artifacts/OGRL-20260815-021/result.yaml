@@ -1,0 +1,18 @@
+experiment_id: OGRL-20260815-021
+status: rejected_no_positive_signal
+commit: df786925
+hypothesis: Cache the engine-owned AngelScript array<int> type lookup used by GetObjectIDs.
+candidate_worktree: .worktrees/optimize-overgrowth-training-throughput-exp-010
+candidate_aggregate_steps_per_second: 1398.244027
+candidate_scenario_medians:
+  duel: 1510.748860
+  four_character: 1751.984990
+  six_character: 796.979040
+candidate_startup_seconds: 2.721582
+candidate_peak_rss_mb: 798.109375
+contemporaneous_reference_aggregate_steps_per_second: 1525.624117
+benchmark_completed: true
+unit_tests_passed: 16
+known_unit_test_failure: Modloading test<1> error-string assertion
+decision: do_not_merge_until_paired_repeats_show_improvement
+raw_logs: /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/research-artifacts/OGRL-20260815-021/raw/

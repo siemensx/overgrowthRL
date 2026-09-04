@@ -1,0 +1,17 @@
+experiment_id: OGRL-20260815-030
+status: measured
+architecture: arm64-native
+commit: 236a9c2dd679ef5842ab0ff5b07d26a965ba1927
+scenario: arenas/oval_arena.xml
+seed: 20260815
+physics_hz: 120
+warmup_steps: 600
+measured_steps: 2400
+worker_sweep: controlled-sequential-groups
+all_groups_completed: true
+best_worker_count: 10
+best_aggregate_steps_per_second: 9732.330094
+best_aggregate_decisions_per_second_20hz: 1622.0550156666667
+summed_peak_rss_mib_at_best: 4995.25
+cross_architecture_equivalence: untested
+raw_summary: OGRL-20260815-030-native-worker-sweep-clean.json

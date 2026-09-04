@@ -1,0 +1,557 @@
+{
+  "experiment_id": "OGRL-20260815-034",
+  "method": "overlapping-window (Stage 0.3, barrier-synchronized, fixed wall-clock measurement window)",
+  "architecture": "arm64 native",
+  "binary": "/Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth",
+  "scenario": "arenas/oval_arena.xml",
+  "measure_window_seconds": 3.0,
+  "repeats": 3,
+  "results": [
+    {
+      "workers": 1,
+      "repeats": 3,
+      "overlapping_aggregate_median": 2195.5327391695773,
+      "overlapping_aggregate_stdev": 91.6577414206289,
+      "naive_sum_median": 2195.5327391695773,
+      "naive_sum_stdev": 91.6577414206289,
+      "max_barrier_wait_seconds": 3.5e-05,
+      "any_barrier_timed_out": false,
+      "reps": [
+        {
+          "workers": 1,
+          "completed": 1,
+          "requested": 1,
+          "return_codes": [
+            0
+          ],
+          "wall_seconds": 4.879628542,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 2062.5421156503257,
+          "naive_sum_steps_per_second": 2062.5421156503257,
+          "correction_delta_percent": 0.0,
+          "per_worker_measured_steps_per_second": [
+            2062.5421156503257
+          ],
+          "max_barrier_wait_seconds": 1.9e-05,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 1,
+          "completed": 1,
+          "requested": 1,
+          "return_codes": [
+            0
+          ],
+          "wall_seconds": 4.791673291,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 2238.3010774906766,
+          "naive_sum_steps_per_second": 2238.3010774906766,
+          "correction_delta_percent": 0.0,
+          "per_worker_measured_steps_per_second": [
+            2238.3010774906766
+          ],
+          "max_barrier_wait_seconds": 3.5e-05,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 1,
+          "completed": 1,
+          "requested": 1,
+          "return_codes": [
+            0
+          ],
+          "wall_seconds": 4.964318916,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 2195.5327391695773,
+          "naive_sum_steps_per_second": 2195.5327391695773,
+          "correction_delta_percent": 0.0,
+          "per_worker_measured_steps_per_second": [
+            2195.5327391695773
+          ],
+          "max_barrier_wait_seconds": 3.5e-05,
+          "barrier_timed_out": false
+        }
+      ]
+    },
+    {
+      "workers": 2,
+      "repeats": 3,
+      "overlapping_aggregate_median": 4105.116581044807,
+      "overlapping_aggregate_stdev": 334.55016625140814,
+      "naive_sum_median": 4105.116581044807,
+      "naive_sum_stdev": 334.61324291854794,
+      "max_barrier_wait_seconds": 0.304534,
+      "any_barrier_timed_out": false,
+      "reps": [
+        {
+          "workers": 2,
+          "completed": 2,
+          "requested": 2,
+          "return_codes": [
+            0,
+            0
+          ],
+          "wall_seconds": 5.040864917,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 4546.822473294124,
+          "naive_sum_steps_per_second": 4547.096163337652,
+          "correction_delta_percent": -0.006019007157451476,
+          "per_worker_measured_steps_per_second": [
+            1964.6352327251238,
+            2582.4609306125276
+          ],
+          "max_barrier_wait_seconds": 0.304534,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 2,
+          "completed": 2,
+          "requested": 2,
+          "return_codes": [
+            0,
+            0
+          ],
+          "wall_seconds": 5.132682542000001,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 3890.7185997945658,
+          "naive_sum_steps_per_second": 3890.9183626636423,
+          "correction_delta_percent": -0.005134080195394811,
+          "per_worker_measured_steps_per_second": [
+            2112.3329180656124,
+            1778.5854445980299
+          ],
+          "max_barrier_wait_seconds": 0.182779,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 2,
+          "completed": 2,
+          "requested": 2,
+          "return_codes": [
+            0,
+            0
+          ],
+          "wall_seconds": 5.135333625000001,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 4105.116581044807,
+          "naive_sum_steps_per_second": 4105.116581044807,
+          "correction_delta_percent": 0.0,
+          "per_worker_measured_steps_per_second": [
+            2095.3858849580824,
+            2009.7306960867245
+          ],
+          "max_barrier_wait_seconds": 0.062949,
+          "barrier_timed_out": false
+        }
+      ]
+    },
+    {
+      "workers": 4,
+      "repeats": 3,
+      "overlapping_aggregate_median": 6843.193099085996,
+      "overlapping_aggregate_stdev": 982.9487722034656,
+      "naive_sum_median": 6843.935893862765,
+      "naive_sum_stdev": 984.0915227467733,
+      "max_barrier_wait_seconds": 0.355338,
+      "any_barrier_timed_out": false,
+      "reps": [
+        {
+          "workers": 4,
+          "completed": 4,
+          "requested": 4,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 5.229693917000002,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 8537.52881103625,
+          "naive_sum_steps_per_second": 8540.066850309338,
+          "correction_delta_percent": -0.02971919678820431,
+          "per_worker_measured_steps_per_second": [
+            1755.3425134158558,
+            2370.109752979969,
+            1693.5125442535518,
+            2721.102039659962
+          ],
+          "max_barrier_wait_seconds": 0.301592,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 4,
+          "completed": 4,
+          "requested": 4,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 5.438947458000001,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 6843.193099085996,
+          "naive_sum_steps_per_second": 6843.935893862765,
+          "correction_delta_percent": -0.01085332750463622,
+          "per_worker_measured_steps_per_second": [
+            1780.7785898619936,
+            1482.3474678452571,
+            1593.5891119965495,
+            1987.2207241589645
+          ],
+          "max_barrier_wait_seconds": 0.355338,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 4,
+          "completed": 4,
+          "requested": 4,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 5.515668916000003,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 6826.946374609519,
+          "naive_sum_steps_per_second": 6827.326167535862,
+          "correction_delta_percent": -0.005562835537999379,
+          "per_worker_measured_steps_per_second": [
+            1477.7719305320545,
+            1739.0800073455969,
+            1695.599973067726,
+            1914.8742565904838
+          ],
+          "max_barrier_wait_seconds": 0.080405,
+          "barrier_timed_out": false
+        }
+      ]
+    },
+    {
+      "workers": 6,
+      "repeats": 3,
+      "overlapping_aggregate_median": 8458.653846153846,
+      "overlapping_aggregate_stdev": 728.6993130981405,
+      "naive_sum_median": 8732.04477793967,
+      "naive_sum_stdev": 774.8150878047956,
+      "max_barrier_wait_seconds": 0.424653,
+      "any_barrier_timed_out": false,
+      "reps": [
+        {
+          "workers": 6,
+          "completed": 6,
+          "requested": 6,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 6.2318224580000035,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 8928.592257065608,
+          "naive_sum_steps_per_second": 8929.444818768667,
+          "correction_delta_percent": -0.009547757115505352,
+          "per_worker_measured_steps_per_second": [
+            1221.1318465786478,
+            1988.5791691832228,
+            1212.05173331396,
+            2021.6010707220441,
+            1256.75995884786,
+            1229.3210401229321
+          ],
+          "max_barrier_wait_seconds": 0.397838,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 6,
+          "completed": 6,
+          "requested": 6,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 6.416933999999998,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 8458.653846153846,
+          "naive_sum_steps_per_second": 8732.04477793967,
+          "correction_delta_percent": -3.130892462628116,
+          "per_worker_measured_steps_per_second": [
+            1390.313527030801,
+            1134.7855255356737,
+            1293.536913784865,
+            1586.2179487179487,
+            2027.1569706768844,
+            1300.033892193498
+          ],
+          "max_barrier_wait_seconds": 0.388273,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 6,
+          "completed": 6,
+          "requested": 6,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 6.449172458000007,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 7498.894427950194,
+          "naive_sum_steps_per_second": 7499.658708433463,
+          "correction_delta_percent": -0.010190870184665706,
+          "per_worker_measured_steps_per_second": [
+            1211.5507616438026,
+            1275.2036876250916,
+            1371.2844241888706,
+            1478.317291013557,
+            1219.7170256500492,
+            943.5855183120918
+          ],
+          "max_barrier_wait_seconds": 0.424653,
+          "barrier_timed_out": false
+        }
+      ]
+    },
+    {
+      "workers": 8,
+      "repeats": 3,
+      "overlapping_aggregate_median": 9300.971274864058,
+      "overlapping_aggregate_stdev": 405.7407090475803,
+      "naive_sum_median": 9303.34435011654,
+      "naive_sum_stdev": 363.0759362543967,
+      "max_barrier_wait_seconds": 0.529564,
+      "any_barrier_timed_out": false,
+      "reps": [
+        {
+          "workers": 8,
+          "completed": 8,
+          "requested": 8,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 7.104739125000009,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 9645.734481101998,
+          "naive_sum_steps_per_second": 9648.879723133674,
+          "correction_delta_percent": -0.03259696588543345,
+          "per_worker_measured_steps_per_second": [
+            1061.7904045064956,
+            1656.2621140624287,
+            974.9905750911074,
+            1716.3302659345434,
+            1101.9076296857315,
+            1044.7750251112593,
+            1034.1630411525568,
+            1058.6606675895503
+          ],
+          "max_barrier_wait_seconds": 0.49745,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 8,
+          "completed": 8,
+          "requested": 8,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 7.092696416999999,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 9300.971274864058,
+          "naive_sum_steps_per_second": 9303.34435011654,
+          "correction_delta_percent": -0.02550776541398035,
+          "per_worker_measured_steps_per_second": [
+            1076.2792061524517,
+            906.906588621372,
+            1002.16524998659,
+            1516.4007910613007,
+            1659.8132585123328,
+            1051.4136264539,
+            1007.7884557082805,
+            1082.577173620314
+          ],
+          "max_barrier_wait_seconds": 0.475463,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 8,
+          "completed": 8,
+          "requested": 8,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 7.2293321669999955,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 8837.168692661118,
+          "naive_sum_steps_per_second": 8923.005911223794,
+          "correction_delta_percent": -0.9619764843448728,
+          "per_worker_measured_steps_per_second": [
+            1020.2540935987305,
+            1074.8276692970226,
+            1086.689931139648,
+            1149.6187658847548,
+            989.4123325651084,
+            677.2970556097922,
+            1703.2430614510765,
+            1221.6630016776617
+          ],
+          "max_barrier_wait_seconds": 0.529564,
+          "barrier_timed_out": false
+        }
+      ]
+    },
+    {
+      "workers": 10,
+      "repeats": 3,
+      "overlapping_aggregate_median": 9490.253415199586,
+      "overlapping_aggregate_stdev": 800.8457926937697,
+      "naive_sum_median": 9499.039251674045,
+      "naive_sum_stdev": 801.5368724956248,
+      "max_barrier_wait_seconds": 0.724692,
+      "any_barrier_timed_out": false,
+      "reps": [
+        {
+          "workers": 10,
+          "completed": 10,
+          "requested": 10,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 7.8575253749999945,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 10382.60957025155,
+          "naive_sum_steps_per_second": 10387.743600780794,
+          "correction_delta_percent": -0.04942392425682725,
+          "per_worker_measured_steps_per_second": [
+            957.7625068792333,
+            1354.1123833310899,
+            803.2730628658625,
+            1413.7620167271843,
+            928.8563942720634,
+            830.601326029019,
+            861.6826135706682,
+            896.3070416601114,
+            1422.8476679959906,
+            918.5385874495711
+          ],
+          "max_barrier_wait_seconds": 0.514324,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 10,
+          "completed": 10,
+          "requested": 10,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 7.948506584,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 9490.253415199586,
+          "naive_sum_steps_per_second": 9499.039251674045,
+          "correction_delta_percent": -0.09249184303465734,
+          "per_worker_measured_steps_per_second": [
+            855.6146170550071,
+            770.1087182904986,
+            829.178556889511,
+            1314.4982998155704,
+            1317.9433284368772,
+            857.4437312965297,
+            841.1025908559085,
+            878.8504635936196,
+            795.6488971746297,
+            1038.6500482658944
+          ],
+          "max_barrier_wait_seconds": 0.637916,
+          "barrier_timed_out": false
+        },
+        {
+          "workers": 10,
+          "completed": 10,
+          "requested": 10,
+          "return_codes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "wall_seconds": 8.070018625000003,
+          "measure_window_seconds": 3.0,
+          "overlapping_aggregate_steps_per_second": 8784.54724488137,
+          "naive_sum_steps_per_second": 8787.953193858737,
+          "correction_delta_percent": -0.03875702228075645,
+          "per_worker_measured_steps_per_second": [
+            853.4703684819158,
+            872.6541586237264,
+            844.3085669487028,
+            864.434421951969,
+            843.5901811569084,
+            606.9097727471183,
+            1337.664055417606,
+            872.4253624945702,
+            835.2653984142623,
+            857.2309076219589
+          ],
+          "max_barrier_wait_seconds": 0.724692,
+          "barrier_timed_out": false
+        }
+      ]
+    }
+  ]
+}

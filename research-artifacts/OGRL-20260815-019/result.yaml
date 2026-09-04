@@ -1,0 +1,15 @@
+experiment_id: OGRL-20260815-019
+status: completed
+commit: df786925
+scenario: arenas/oval_arena.xml
+workers: [1, 2, 4, 6, 8, 10]
+aggregate_steps_per_second:
+  1: 1144.877170
+  2: 2213.512161
+  4: 3654.178312
+  6: 4181.957545
+  8: 4576.211916
+  10: 4950.234278
+all_runs_completed: true
+raw_logs: /tmp/ogrl-worker-sweep-20260815-133114/
+summary: worker-sweep-six-character.json
