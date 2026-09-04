@@ -1,0 +1,1807 @@
+{
+  "version": 1,
+  "created": "2026-08-17",
+  "description": "OGRL-20260817-028 Sec6.2 frozen acceptance suite. Never train on these seeds, never tune reward/curriculum against results on this suite -- report it once, after tuning on a separate validation set. Axes: difficulty (real, exercised) x 10 values x 20 seeds = 200 configs. opponents/species/weapons are recorded per-config for forward compatibility with Stage B-D but are DEGENERATE today (opponents always 1, species always the legacy random-guard/raider default, weapons always unarmed) -- arena_level_1v1_unarmed.as does not yet honor opponents>1 (see its SetUpLevel comment), and this suite was not regenerated with those axes live. Bump the version and do not compare old-vs-new numbers when that changes.",
+  "configs": [
+    {
+      "id": 0,
+      "seed": 950000,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 1,
+      "seed": 950001,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 2,
+      "seed": 950002,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 3,
+      "seed": 950003,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 4,
+      "seed": 950004,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 5,
+      "seed": 950005,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 6,
+      "seed": 950006,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 7,
+      "seed": 950007,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 8,
+      "seed": 950008,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 9,
+      "seed": 950009,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 10,
+      "seed": 950010,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 11,
+      "seed": 950011,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 12,
+      "seed": 950012,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 13,
+      "seed": 950013,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 14,
+      "seed": 950014,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 15,
+      "seed": 950015,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 16,
+      "seed": 950016,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 17,
+      "seed": 950017,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 18,
+      "seed": 950018,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 19,
+      "seed": 950019,
+      "difficulty": 0.05,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 20,
+      "seed": 950020,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 21,
+      "seed": 950021,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 22,
+      "seed": 950022,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 23,
+      "seed": 950023,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 24,
+      "seed": 950024,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 25,
+      "seed": 950025,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 26,
+      "seed": 950026,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 27,
+      "seed": 950027,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 28,
+      "seed": 950028,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 29,
+      "seed": 950029,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 30,
+      "seed": 950030,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 31,
+      "seed": 950031,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 32,
+      "seed": 950032,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 33,
+      "seed": 950033,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 34,
+      "seed": 950034,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 35,
+      "seed": 950035,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 36,
+      "seed": 950036,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 37,
+      "seed": 950037,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 38,
+      "seed": 950038,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 39,
+      "seed": 950039,
+      "difficulty": 0.15,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 40,
+      "seed": 950040,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 41,
+      "seed": 950041,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 42,
+      "seed": 950042,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 43,
+      "seed": 950043,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 44,
+      "seed": 950044,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 45,
+      "seed": 950045,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 46,
+      "seed": 950046,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 47,
+      "seed": 950047,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 48,
+      "seed": 950048,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 49,
+      "seed": 950049,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 50,
+      "seed": 950050,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 51,
+      "seed": 950051,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 52,
+      "seed": 950052,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 53,
+      "seed": 950053,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 54,
+      "seed": 950054,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 55,
+      "seed": 950055,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 56,
+      "seed": 950056,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 57,
+      "seed": 950057,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 58,
+      "seed": 950058,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 59,
+      "seed": 950059,
+      "difficulty": 0.25,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 60,
+      "seed": 950060,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 61,
+      "seed": 950061,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 62,
+      "seed": 950062,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 63,
+      "seed": 950063,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 64,
+      "seed": 950064,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 65,
+      "seed": 950065,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 66,
+      "seed": 950066,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 67,
+      "seed": 950067,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 68,
+      "seed": 950068,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 69,
+      "seed": 950069,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 70,
+      "seed": 950070,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 71,
+      "seed": 950071,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 72,
+      "seed": 950072,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 73,
+      "seed": 950073,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 74,
+      "seed": 950074,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 75,
+      "seed": 950075,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 76,
+      "seed": 950076,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 77,
+      "seed": 950077,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 78,
+      "seed": 950078,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 79,
+      "seed": 950079,
+      "difficulty": 0.35,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 80,
+      "seed": 950080,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 81,
+      "seed": 950081,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 82,
+      "seed": 950082,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 83,
+      "seed": 950083,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 84,
+      "seed": 950084,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 85,
+      "seed": 950085,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 86,
+      "seed": 950086,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 87,
+      "seed": 950087,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 88,
+      "seed": 950088,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 89,
+      "seed": 950089,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 90,
+      "seed": 950090,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 91,
+      "seed": 950091,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 92,
+      "seed": 950092,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 93,
+      "seed": 950093,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 94,
+      "seed": 950094,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 95,
+      "seed": 950095,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 96,
+      "seed": 950096,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 97,
+      "seed": 950097,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 98,
+      "seed": 950098,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 99,
+      "seed": 950099,
+      "difficulty": 0.45,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 100,
+      "seed": 950100,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 101,
+      "seed": 950101,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 102,
+      "seed": 950102,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 103,
+      "seed": 950103,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 104,
+      "seed": 950104,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 105,
+      "seed": 950105,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 106,
+      "seed": 950106,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 107,
+      "seed": 950107,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 108,
+      "seed": 950108,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 109,
+      "seed": 950109,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 110,
+      "seed": 950110,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 111,
+      "seed": 950111,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 112,
+      "seed": 950112,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 113,
+      "seed": 950113,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 114,
+      "seed": 950114,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 115,
+      "seed": 950115,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 116,
+      "seed": 950116,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 117,
+      "seed": 950117,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 118,
+      "seed": 950118,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 119,
+      "seed": 950119,
+      "difficulty": 0.55,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 120,
+      "seed": 950120,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 121,
+      "seed": 950121,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 122,
+      "seed": 950122,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 123,
+      "seed": 950123,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 124,
+      "seed": 950124,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 125,
+      "seed": 950125,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 126,
+      "seed": 950126,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 127,
+      "seed": 950127,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 128,
+      "seed": 950128,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 129,
+      "seed": 950129,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 130,
+      "seed": 950130,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 131,
+      "seed": 950131,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 132,
+      "seed": 950132,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 133,
+      "seed": 950133,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 134,
+      "seed": 950134,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 135,
+      "seed": 950135,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 136,
+      "seed": 950136,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 137,
+      "seed": 950137,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 138,
+      "seed": 950138,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 139,
+      "seed": 950139,
+      "difficulty": 0.65,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 140,
+      "seed": 950140,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 141,
+      "seed": 950141,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 142,
+      "seed": 950142,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 143,
+      "seed": 950143,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 144,
+      "seed": 950144,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 145,
+      "seed": 950145,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 146,
+      "seed": 950146,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 147,
+      "seed": 950147,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 148,
+      "seed": 950148,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 149,
+      "seed": 950149,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 150,
+      "seed": 950150,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 151,
+      "seed": 950151,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 152,
+      "seed": 950152,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 153,
+      "seed": 950153,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 154,
+      "seed": 950154,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 155,
+      "seed": 950155,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 156,
+      "seed": 950156,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 157,
+      "seed": 950157,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 158,
+      "seed": 950158,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 159,
+      "seed": 950159,
+      "difficulty": 0.75,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 160,
+      "seed": 950160,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 161,
+      "seed": 950161,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 162,
+      "seed": 950162,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 163,
+      "seed": 950163,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 164,
+      "seed": 950164,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 165,
+      "seed": 950165,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 166,
+      "seed": 950166,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 167,
+      "seed": 950167,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 168,
+      "seed": 950168,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 169,
+      "seed": 950169,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 170,
+      "seed": 950170,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 171,
+      "seed": 950171,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 172,
+      "seed": 950172,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 173,
+      "seed": 950173,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 174,
+      "seed": 950174,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 175,
+      "seed": 950175,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 176,
+      "seed": 950176,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 177,
+      "seed": 950177,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 178,
+      "seed": 950178,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 179,
+      "seed": 950179,
+      "difficulty": 0.85,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 180,
+      "seed": 950180,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 181,
+      "seed": 950181,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 182,
+      "seed": 950182,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 183,
+      "seed": 950183,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 184,
+      "seed": 950184,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 185,
+      "seed": 950185,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 186,
+      "seed": 950186,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 187,
+      "seed": 950187,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 188,
+      "seed": 950188,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 189,
+      "seed": 950189,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 190,
+      "seed": 950190,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 191,
+      "seed": 950191,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 192,
+      "seed": 950192,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 193,
+      "seed": 950193,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 194,
+      "seed": 950194,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 195,
+      "seed": 950195,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 196,
+      "seed": 950196,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 197,
+      "seed": 950197,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 198,
+      "seed": 950198,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    },
+    {
+      "id": 199,
+      "seed": 950199,
+      "difficulty": 0.95,
+      "opponents": 1,
+      "species": 0,
+      "weapons": 0.0,
+      "level": "arenas/oval_arena_1v1_unarmed.xml"
+    }
+  ]
+}

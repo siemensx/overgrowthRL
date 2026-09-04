@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "experiment_id": "OGRL-20260815-034",
+  "binary": "BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth",
+  "artifact_root": "../research-artifacts/OGRL-20260815-034",
+  "warmup_steps": 600,
+  "measure_steps": 2400,
+  "timeout_seconds": 600,
+  "seed": 20260815,
+  "scenarios": {
+    "empty": "nothing.xml",
+    "duel": "t2/vs/heavyvsheavy.xml",
+    "four_character": "og_story/23_Rock_Arena_2v2.xml",
+    "six_character": "arenas/oval_arena.xml"
+  },
+  "suites": {
+    "smoke": ["duel"],
+    "six_character_only": ["six_character"],
+    "production-reference": ["empty", "duel", "four_character", "six_character"]
+  }
+}
