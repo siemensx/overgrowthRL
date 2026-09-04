@@ -1364,13 +1364,22 @@ void Graphics::InitScreen() {
 
     if (!GLAD_GL_EXT_texture_sRGB) {
         // Apple exposes sRGB through the core 3.2/4.1 profile but does not
-        // advertise the legacy EXT name.  Native replay still needs a real
-        // window on this path; treating the alias as fatal makes the replay
-        // launcher die before the first recorded tick.  Keep the production
-        // warning fatal and narrow the compatibility exception to the
-        // explicitly verified replay viewer.
-        if (RLReplaySeed::Enabled()) {
-            LOGW << "EXT_texture_sRGB is not advertised; using the core profile for native replay" << std::endl;
+        // advertise the legacy EXT name.  sRGB textures have been core since
+        // GL 3.0, so on any core-profile 3.0+ context the capability is
+        // genuinely present and only the legacy alias is missing -- checking
+        // for the alias is testing the wrong thing.
+        //
+        // This exception was originally narrowed to RLReplaySeed::Enabled()
+        // (OGRL-20260820-049) because that was the only rendered path anyone
+        // had verified.  The consequence was that the RL build could not open
+        // a window for ANY other purpose on macOS -- including simply looking
+        // at a level -- which is how it was rediscovered on 2026-09-04 while
+        // viewing a generated arena.  Widened to the real condition; a context
+        // that is neither core 3.0+ nor advertising the extension is still
+        // fatal.  Rendering only: training runs with rendering disabled, so
+        // this cannot affect simulation semantics or production equivalence.
+        if (GLAD_GL_VERSION_3_0) {
+            LOGW << "EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing" << std::endl;
         } else {
             LOGF << "Missing necessary GL extension: EXT_texture_sRGB" << std::endl;
         }
