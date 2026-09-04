@@ -64,6 +64,7 @@ def run_one(
     warmup_steps: int,
     measure_steps: int,
     seed: int,
+    reset_after_warmup: bool,
     timeout_seconds: float,
 ) -> dict[str, Any]:
     run_name = f"{scenario_name}-r{repetition}"
@@ -100,6 +101,8 @@ def run_one(
         "--config",
         configuration,
     ]
+    if reset_after_warmup:
+        command.append("--benchmark-reset-after-warmup")
 
     started = time.monotonic()
     peak_rss_kib = 0
@@ -166,6 +169,10 @@ def run_one(
                 "engine_initialize_seconds": 0.0,
                 "level_load_seconds": 0.0,
                 "shader_preload_seconds": 0.0,
+                "reset_attempted": 0,
+                "reset_succeeded": 0,
+                "reset_state_match": 0,
+                "reset_latency_ms": 0.0,
             }
         )
     return result
@@ -201,6 +208,7 @@ def summarize(config: dict[str, Any], suite: str, runs: list[dict[str, Any]]) ->
     combat_requested = sum(by_scenario[name]["requested_repetitions"] for name in combat_names)
 
     completed_runs = [run for run in runs if run["benchmark_completed"] == 1]
+    reset_runs = [run for run in runs if int(run.get("reset_attempted", 0)) == 1]
     diagnostic_values = {
         "empty_world_steps_per_second": by_scenario.get("empty", {}).get("median_steps_per_second", 0.0),
         "duel_steps_per_second": by_scenario.get("duel", {}).get("median_steps_per_second", 0.0),
@@ -212,7 +220,8 @@ def summarize(config: dict[str, Any], suite: str, runs: list[dict[str, Any]]) ->
             [float(run["engine_initialize_seconds"]) + float(run["level_load_seconds"]) for run in completed_runs]
         ),
         "shader_preload_seconds": median([float(run["shader_preload_seconds"]) for run in completed_runs]),
-        "reset_latency_ms": -1.0,
+        "reset_latency_ms": median([float(run["reset_latency_ms"]) for run in reset_runs]) if reset_runs else -1.0,
+        "reset_state_match_rate": statistics.mean([float(run["reset_state_match"]) for run in reset_runs]) if reset_runs else -1.0,
         "peak_rss_mb": max([float(run["peak_rss_mib"]) for run in runs], default=0.0),
         "mean_cpu_percent": statistics.mean([float(run["mean_cpu_percent"]) for run in runs]) if runs else 0.0,
         "observation_extraction_percent": -1.0,
@@ -246,6 +255,7 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--reset-after-warmup", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -272,6 +282,7 @@ def main() -> int:
                     warmup_steps=int(config["warmup_steps"]),
                     measure_steps=int(config["measure_steps"]),
                     seed=int(config["seed"]) + repetition - 1,
+                    reset_after_warmup=args.reset_after_warmup,
                     timeout_seconds=float(config["timeout_seconds"]),
                 )
             )

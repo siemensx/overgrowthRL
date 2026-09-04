@@ -359,6 +359,7 @@ int main(int argc, char* argv[]) {
         TCLAP::ValueArg<int> benchmarkWarmupSteps("", "benchmark-warmup-steps", "Completed timesteps before measurement", false, 120, "integer");
         TCLAP::ValueArg<int> benchmarkSteps("", "benchmark-steps", "Completed timesteps to measure", false, 600, "integer");
         TCLAP::ValueArg<int> benchmarkSeed("", "benchmark-seed", "Deterministic benchmark seed", false, 1, "integer");
+        TCLAP::SwitchArg benchmarkResetAfterWarmup("", "benchmark-reset-after-warmup", "Reload the training scenario in-process after warmup", cmd, false);
         cmd.add(benchmarkWarmupSteps);
         cmd.add(benchmarkSteps);
         cmd.add(benchmarkSeed);
@@ -391,7 +392,15 @@ int main(int argc, char* argv[]) {
             std::cerr << "benchmark warmup and seed must be non-negative, and benchmark steps must be positive" << std::endl;
             return 2;
         }
-        RLBenchmark::Configure(benchmark.getValue(), static_cast<uint64_t>(benchmarkWarmupSteps.getValue()), static_cast<uint64_t>(benchmarkSteps.getValue()), static_cast<unsigned int>(benchmarkSeed.getValue()));
+        if (benchmarkResetAfterWarmup.getValue() && (!benchmark.getValue() || benchmarkWarmupSteps.getValue() <= 0)) {
+            std::cerr << "benchmark reset requires --benchmark and at least one warmup step" << std::endl;
+            return 2;
+        }
+        RLBenchmark::Configure(benchmark.getValue(),
+                               static_cast<uint64_t>(benchmarkWarmupSteps.getValue()),
+                               static_cast<uint64_t>(benchmarkSteps.getValue()),
+                               static_cast<unsigned int>(benchmarkSeed.getValue()),
+                               benchmarkResetAfterWarmup.getValue());
         if (RLBenchmark::Enabled()) {
             disable_rendering = true;
         }

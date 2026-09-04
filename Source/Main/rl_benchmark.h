@@ -7,8 +7,9 @@ class Engine;
 
 namespace RLBenchmark {
 
-void Configure(bool enabled, uint64_t warmup_steps, uint64_t measure_steps, unsigned int seed);
+void Configure(bool enabled, uint64_t warmup_steps, uint64_t measure_steps, unsigned int seed, bool reset_after_warmup);
 bool Enabled();
+bool ResetAfterWarmup();
 unsigned int Seed();
 
 void OnEngineInitialized();

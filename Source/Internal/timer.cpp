@@ -103,6 +103,17 @@ void Timer::SetStepFrequency(int sims) {
     srand(tick);
 }
 
+void Timer::ResetForRLTraining(float initial_game_time, float initial_time_scale, float initial_target_time_scale) {
+    game_time = initial_game_time;
+    time_scale = initial_time_scale;
+    target_time_scale = initial_target_time_scale;
+    frame_count = 0;
+    updates_since_last_frame = 0;
+    timestep_error = 0.0f;
+    timed_slow_motion_layers.clear();
+    last_tick = SDL_TS_GetTicks();
+}
+
 // Get number of timeSteps to use this display frame
 int Timer::GetStepsNeeded() {
     uint32_t tick = SDL_TS_GetTicks();

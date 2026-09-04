@@ -128,6 +128,7 @@
 
 #include <Wrappers/glm.h>
 #include <Images/image_export.hpp>
+#include <Threading/rand.h>
 #include <Threading/thread_name.h>
 #include <Network/asnetwork.h>
 #include <Version/version.h>
@@ -5625,6 +5626,38 @@ void Engine::ClearLoadedLevel() {
     }
 }
 
+bool Engine::ResetRLTrainingScenario(unsigned int seed) {
+    if (!RLBenchmark::Enabled() || !rl_training_reset_baseline_valid_ || rl_training_reset_in_progress_ ||
+        !level_loaded_ || scenegraph_ == NULL || !rl_training_scenario_path_.isValid()) {
+        return false;
+    }
+    // Campaign objects intentionally survive normal level transitions and may
+    // retain episode state. Training scenarios must remain standalone until a
+    // campaign-level reset contract is defined.
+    if (GetCurrentCampaign() != NULL || IsStateQueued()) {
+        return false;
+    }
+
+    const Path scenario_path = rl_training_scenario_path_;
+    ClearLoadedLevel();
+
+    // Dispose the old world before reseeding so cleanup cannot advance either
+    // RNG stream. LoadLevel's subsequent null-world clear matches the initial
+    // benchmark load path.
+    rand_ts_seed(seed);
+    srand(seed);
+    game_timer.ResetForRLTraining(rl_training_initial_game_time_,
+                                  rl_training_initial_time_scale_,
+                                  rl_training_initial_target_time_scale_);
+
+    rl_training_reset_in_progress_ = true;
+    LoadLevel(scenario_path);
+    rl_training_reset_in_progress_ = false;
+
+    return level_loaded_ && scenegraph_ != NULL &&
+           latest_level_path_.GetOriginalPathStr() == scenario_path.GetOriginalPathStr();
+}
+
 void Engine::LoadLevel(Path queued_level) {
     GetAssetManager()->SetLoadWarningMode(false, "", "");
     Shaders::Instance()->level_path = queued_level;
@@ -5851,6 +5884,13 @@ void Engine::LoadLevel(Path queued_level) {
                 scenegraph_->level->loading_screen_.image = screenshot_path;
             }
             scenegraph_->map_editor->UpdateEnabledObjects();
+            if (RLBenchmark::ResetAfterWarmup() && !rl_training_reset_in_progress_) {
+                rl_training_scenario_path_ = level_path;
+                rl_training_initial_game_time_ = game_timer.game_time;
+                rl_training_initial_time_scale_ = game_timer.time_scale;
+                rl_training_initial_target_time_scale_ = game_timer.target_time_scale;
+                rl_training_reset_baseline_valid_ = true;
+            }
             RLBenchmark::OnLevelLoaded();
             // level_screenshot.clear();
         } else {
@@ -6018,6 +6058,8 @@ void Engine::Initialize() {
     resize_event_frame_counter = -1;
     printed_rendering_error_message = false;
     forced_split_screen_mode = kForcedModeNone;
+    rl_training_reset_baseline_valid_ = false;
+    rl_training_reset_in_progress_ = false;
 
     active_screen_start = vec2(0.0f, 0.0f);
     active_screen_end = vec2(1.0f, 1.0f);
