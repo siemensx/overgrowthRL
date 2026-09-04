@@ -32,21 +32,121 @@ import struct
 import time
 from dataclasses import dataclass
 
-_libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+# Platform backend. The mapped wire format is byte-identical everywhere; only
+# the naming and the handle types differ. The engine side of this split lives
+# in Source/Main/rl_ipc_platform.{h,cpp} and the two MUST agree on the object
+# names, or the client attaches to nothing and blocks forever.
+_IS_WINDOWS = os.name == "nt"
 
-_libc.shm_open.restype = ctypes.c_int
-_libc.shm_open.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_uint]
-_libc.close.argtypes = [ctypes.c_int]
+if _IS_WINDOWS:
+    from ctypes import wintypes
 
-_SEM_T_P = ctypes.c_void_p
-_libc.sem_open.restype = _SEM_T_P
-_libc.sem_open.argtypes = [ctypes.c_char_p, ctypes.c_int]  # only the O_RDWR-no-create form is used here
-_libc.sem_wait.argtypes = [_SEM_T_P]
-_libc.sem_post.argtypes = [_SEM_T_P]
-_libc.sem_close.argtypes = [_SEM_T_P]
+    _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
-_O_RDWR = os.O_RDWR
-_SEM_FAILED = ctypes.cast(-1, _SEM_T_P).value
+    _k32.OpenFileMappingW.restype = wintypes.HANDLE
+    _k32.OpenFileMappingW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+    _k32.OpenSemaphoreW.restype = wintypes.HANDLE
+    _k32.OpenSemaphoreW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+    _k32.WaitForSingleObject.restype = wintypes.DWORD
+    _k32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    _k32.ReleaseSemaphore.restype = wintypes.BOOL
+    _k32.ReleaseSemaphore.argtypes = [wintypes.HANDLE, ctypes.c_long, ctypes.POINTER(ctypes.c_long)]
+    _k32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+    _FILE_MAP_ALL_ACCESS = 0x000F001F
+    _SEMAPHORE_ALL_ACCESS = 0x1F0003
+    _INFINITE = 0xFFFFFFFF
+    _SEM_FAILED = None
+
+    def _object_name(posix_name: str) -> str:
+        """/ogrl_vec0 -> Local\\ogrl_vec0. Must match RLIpc::ToObjectName."""
+        return "Local\\" + posix_name.lstrip("/")
+
+    def _shm_probe(name: str):
+        """Return an opaque handle if the engine's mapping exists, else None.
+
+        Deliberately does NOT use mmap(tagname=...) to test existence: on
+        Windows that CREATES a pagefile-backed mapping when none exists, so a
+        client started before the engine would silently attach to its own
+        zero-filled segment instead of failing and retrying.
+        """
+        h = _k32.OpenFileMappingW(_FILE_MAP_ALL_ACCESS, False, _object_name(name))
+        return h if h else None
+
+    def _shm_map(handle, name: str, size: int) -> mmap.mmap:
+        # The named section already exists (handle proves it), so this opens
+        # rather than creates.
+        return mmap.mmap(-1, size, tagname=_object_name(name))
+
+    def _shm_close(handle) -> None:
+        if handle:
+            _k32.CloseHandle(handle)
+
+    def _sem_open(name: str):
+        h = _k32.OpenSemaphoreW(_SEMAPHORE_ALL_ACCESS, False, _object_name(name))
+        return h if h else None
+
+    def _sem_wait(sem) -> None:
+        _k32.WaitForSingleObject(sem, _INFINITE)
+
+    def _sem_post(sem) -> None:
+        _k32.ReleaseSemaphore(sem, 1, None)
+
+    def _sem_close(sem) -> None:
+        if sem:
+            _k32.CloseHandle(sem)
+
+    def _last_error() -> int:
+        return ctypes.get_last_error()
+
+else:
+    _libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+
+    _libc.shm_open.restype = ctypes.c_int
+    _libc.shm_open.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_uint]
+    _libc.close.argtypes = [ctypes.c_int]
+
+    _SEM_T_P = ctypes.c_void_p
+    _libc.sem_open.restype = _SEM_T_P
+    _libc.sem_open.argtypes = [ctypes.c_char_p, ctypes.c_int]  # only the O_RDWR-no-create form is used here
+    _libc.sem_wait.argtypes = [_SEM_T_P]
+    _libc.sem_post.argtypes = [_SEM_T_P]
+    _libc.sem_close.argtypes = [_SEM_T_P]
+
+    _O_RDWR = os.O_RDWR
+    _SEM_FAILED = ctypes.cast(-1, _SEM_T_P).value
+
+    def _shm_probe(name: str):
+        fd = _libc.shm_open(name.encode("utf-8"), _O_RDWR, 0o600)
+        return fd if fd >= 0 else None
+
+    def _shm_map(handle, name: str, size: int) -> mmap.mmap:
+        return mmap.mmap(handle, size)
+
+    def _shm_close(handle) -> None:
+        if handle is not None and handle >= 0:
+            os.close(handle)
+
+    def _sem_open(name: str):
+        # sem_open's oflag only recognizes O_CREAT (+ optionally O_EXCL); 0
+        # means "open the existing named semaphore," which is what a client
+        # attaching to an engine-created semaphore wants -- O_RDWR is a
+        # shm_open/file-open concept, not a valid sem_open flag.
+        s = _libc.sem_open(name.encode("utf-8"), 0)
+        return None if s == _SEM_FAILED else s
+
+    def _sem_wait(sem) -> None:
+        _libc.sem_wait(sem)
+
+    def _sem_post(sem) -> None:
+        _libc.sem_post(sem)
+
+    def _sem_close(sem) -> None:
+        if sem is not None:
+            _libc.sem_close(sem)
+
+    def _last_error() -> int:
+        return ctypes.get_errno()
 
 # Must match Source/Main/rl_shm_transport.cpp's ShmHeader exactly, field for
 # field IN ORDER: sixteen packed fields (eleven uint32_t + five added by
@@ -136,16 +236,16 @@ class ShmEnv:
         last_err = None
         header = None
         for attempt in range(retries):
-            fd = _libc.shm_open(name_bytes, _O_RDWR, 0o600)
-            if fd < 0:
-                last_err = ctypes.get_errno()
+            fd = _shm_probe(self._name)
+            if fd is None:
+                last_err = _last_error()
                 time.sleep(delay)
                 continue
-            header_probe = mmap.mmap(fd, _HEADER_SIZE)
+            header_probe = _shm_map(fd, self._name, _HEADER_SIZE)
             first_read = _unpack_header(header_probe[:_HEADER_SIZE])
             if first_read["magic"] != _MAGIC:
                 header_probe.close()
-                os.close(fd)
+                _shm_close(fd)
                 last_err = None
                 time.sleep(delay)
                 continue
@@ -156,7 +256,7 @@ class ShmEnv:
                 # Header was still being written -- not a real connection
                 # failure, just not ready yet. Retry from scratch rather than
                 # trusting either read.
-                os.close(fd)
+                _shm_close(fd)
                 last_err = None
                 time.sleep(delay)
                 continue
@@ -173,20 +273,16 @@ class ShmEnv:
         self.los_rule_version = header["los_rule_version"]
         self.obs_floats = header["obs_floats"]
         total_size = _HEADER_SIZE + self.obs_floats * 4 + _ACTION_FLOATS * 4
-        self._mm = mmap.mmap(self._fd, total_size)
+        self._mm = _shm_map(self._fd, self._name, total_size)
 
-        # sem_open's oflag only recognizes O_CREAT (+ optionally O_EXCL); 0
-        # means "open the existing named semaphore," which is what a client
-        # attaching to an engine-created semaphore wants -- O_RDWR is a
-        # shm_open/file-open concept, not a valid sem_open flag.
-        self._obs_sem = _libc.sem_open((self._name + "o").encode("utf-8"), 0)
-        self._action_sem = _libc.sem_open((self._name + "a").encode("utf-8"), 0)
-        if self._obs_sem == _SEM_FAILED or self._action_sem == _SEM_FAILED:
-            raise OSError(ctypes.get_errno(), f"sem_open failed for {self._name}")
+        self._obs_sem = _sem_open(self._name + "o")
+        self._action_sem = _sem_open(self._name + "a")
+        if self._obs_sem is None or self._action_sem is None:
+            raise OSError(_last_error(), f"semaphore open failed for {self._name}")
 
     def wait_for_observation(self) -> Observation:
         """Blocks until the engine has published a new observation."""
-        _libc.sem_wait(self._obs_sem)
+        _sem_wait(self._obs_sem)
         header = _unpack_header(self._mm[:_HEADER_SIZE])
         obs_bytes = self._mm[_HEADER_SIZE : _HEADER_SIZE + header["obs_floats"] * 4]
         values = list(struct.unpack(f"<{header['obs_floats']}f", obs_bytes))
@@ -230,7 +326,7 @@ class ShmEnv:
         )
         offset = _HEADER_SIZE + self.obs_floats * 4
         self._mm[offset : offset + len(action)] = action
-        _libc.sem_post(self._action_sem)
+        _sem_post(self._action_sem)
 
     def reset(
         self,
@@ -269,7 +365,7 @@ class ShmEnv:
         header["reset_weapons"] = float(weapons)
         header["reset_species"] = int(species)
         self._mm[:_HEADER_SIZE] = _pack_header(header)
-        _libc.sem_post(self._action_sem)
+        _sem_post(self._action_sem)
 
         obs = self.wait_for_observation()
         reset_ok = _unpack_header(self._mm[:_HEADER_SIZE])["reset_ok"]
@@ -283,17 +379,17 @@ class ShmEnv:
         header = _unpack_header(self._mm[:_HEADER_SIZE])
         header["shutdown_requested"] = 1
         self._mm[:_HEADER_SIZE] = _pack_header(header)
-        _libc.sem_post(self._action_sem)
+        _sem_post(self._action_sem)
 
     def close(self) -> None:
-        if self._obs_sem not in (None, _SEM_FAILED):
-            _libc.sem_close(self._obs_sem)
-        if self._action_sem not in (None, _SEM_FAILED):
-            _libc.sem_close(self._action_sem)
+        if self._obs_sem is not None:
+            _sem_close(self._obs_sem)
+        if self._action_sem is not None:
+            _sem_close(self._action_sem)
         if self._mm is not None:
             self._mm.close()
         if self._fd >= 0:
-            os.close(self._fd)
+            _shm_close(self._fd)
 
     def __enter__(self) -> "ShmEnv":
         return self
