@@ -68,6 +68,7 @@
 
 #include <Main/engine.h>
 #include <Main/rl_benchmark.h>
+#include <Main/rl_subsystem_timers.h>
 #include <Internal/stopwatch.h>
 #include <Compat/fileio.h>
 #include <AI/navmesh.h>
@@ -917,6 +918,7 @@ void SceneGraph::Update(float timestep, float curr_game_time) {
     // uint64_t start_count = SDL_GetPerformanceCounter();
     {
         PROFILER_ZONE(g_profiler_ctx, "Bullet world update");
+        RL_SUBSYSTEM_ZONE(kZoneBulletWorld);
         bullet_world_->Update(timestep);
     }
     // uint64_t end_count = SDL_GetPerformanceCounter();
@@ -930,6 +932,7 @@ void SceneGraph::Update(float timestep, float curr_game_time) {
     {
         // Only updating specific subtypes of objects? -Max
         PROFILER_ZONE(g_profiler_ctx, "Object updates");
+        RL_SUBSYSTEM_ZONE(kZoneObjectUpdates);
         for (int i = 0; i < num_update_objects; ++i) {
             Object* obj = update_objects_[i];
             PROFILER_ZONE(g_profiler_ctx, "%s %d update", CStringFromEntityType(obj->GetType()), obj->GetID());

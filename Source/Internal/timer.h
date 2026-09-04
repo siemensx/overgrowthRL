@@ -51,6 +51,7 @@ class Timer {
     void UpdateWallTime();
     void Update();
     void SetStepFrequency(int sims);
+    void ResetForRLTraining(float initial_game_time, float initial_time_scale, float initial_target_time_scale);
     int GetStepsNeeded();
     void ReportFrameForFPSCount();
     int GetFramesPerSecond();

@@ -23,6 +23,7 @@
 //-----------------------------------------------------------------------------
 #include "enginemath.h"
 
+#include <Math/rng_streams.h>
 #include <Math/vec3math.h>
 
 #define _USE_MATH_DEFINES
@@ -56,15 +57,23 @@ void PlaneSpace(const vec3 &n, vec3 &p, vec3 &q) {
         q[2] = a * k;
     }
 }
+// Stage 2: routed to RngStreams' cosmetic stream (see enginemath.h). This
+// used to draw from the single process-global libc rand() stream shared with
+// every gameplay-relevant caller -- see research-log OGRL-20260815-035/-036.
 float RangedRandomFloat(float min, float max) {
-    if (min == max) {
-        return min;
-    }
-    return (((float)abs(rand())) / RAND_MAX * ((float)(max) - (float)(min)) + (float)(min));
+    return RngStreams::RangedRandomFloat(RngStreams::Stream::kCosmetic, min, max);
 }
 
 int RangedRandomInt(int min, int max) {  // Inclusive
-    return abs(rand()) % (max - min + 1) + min;
+    return RngStreams::RangedRandomInt(RngStreams::Stream::kCosmetic, min, max);
+}
+
+float RangedRandomFloatGameplay(float min, float max) {
+    return RngStreams::RangedRandomFloat(RngStreams::Stream::kGameplay, min, max);
+}
+
+int RangedRandomIntGameplay(int min, int max) {
+    return RngStreams::RangedRandomInt(RngStreams::Stream::kGameplay, min, max);
 }
 
 float Range(float val, float min_val, float max_val) {

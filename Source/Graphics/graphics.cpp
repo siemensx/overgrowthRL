@@ -48,6 +48,7 @@
 #include <Math/vec3math.h>
 #include <Main/scenegraph.h>
 #include <Main/rl_benchmark.h>
+#include <Main/rl_replay_seed.h>
 #include <Logging/logdata.h>
 #include <Objects/decalobject.h>
 #include <Main/engine.h>
@@ -1362,7 +1363,17 @@ void Graphics::InitScreen() {
     }
 
     if (!GLAD_GL_EXT_texture_sRGB) {
-        LOGF << "Missing necessary GL extension: EXT_texture_sRGB" << std::endl;
+        // Apple exposes sRGB through the core 3.2/4.1 profile but does not
+        // advertise the legacy EXT name.  Native replay still needs a real
+        // window on this path; treating the alias as fatal makes the replay
+        // launcher die before the first recorded tick.  Keep the production
+        // warning fatal and narrow the compatibility exception to the
+        // explicitly verified replay viewer.
+        if (RLReplaySeed::Enabled()) {
+            LOGW << "EXT_texture_sRGB is not advertised; using the core profile for native replay" << std::endl;
+        } else {
+            LOGF << "Missing necessary GL extension: EXT_texture_sRGB" << std::endl;
+        }
     }
 
     // Assume that the bindings in the state aren't valid anymore.

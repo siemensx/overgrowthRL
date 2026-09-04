@@ -47,6 +47,7 @@
 #include <Graphics/flares.h>
 
 #include <Math/enginemath.h>
+#include <Math/rng_streams.h>
 #include <Math/mat3.h>
 #include <Math/mat4.h>
 #include <Math/vec2math.h>
@@ -75,6 +76,8 @@
 
 #include <Main/scenegraph.h>
 #include <Main/engine.h>
+#include <Main/rl_action.h>
+#include <Main/rl_shm_transport.h>
 
 #include <GUI/dimgui/settings_screen.h>
 #include <GUI/IMUI/im_image.h>
@@ -526,6 +529,12 @@ void AttachUIQueries(ASContext* context) {
     context->RegisterGlobalFunction("float GetMoveYAxis(int controller_id)",
                                     asFUNCTION(AS_GetMoveYAxis),
                                     asCALL_CDECL);
+    context->RegisterGlobalFunction("bool IsExternalRLController(int controller_id)",
+                                    asFUNCTION(RLAction::IsExternalController),
+                                    asCALL_CDECL);
+    context->RegisterGlobalFunction("bool IsMatchOverlayVisible()",
+                                    asFUNCTION(RLShmTransport::MatchOverlayVisible),
+                                    asCALL_CDECL);
     context->RegisterGlobalFunction("void SetGrabMouse(bool)",
                                     asFUNCTION(AS_SetGrabMouse),
                                     asCALL_CDECL);
@@ -705,6 +714,23 @@ float asPow(float a, float b) {
     return (float)pow(a, b);
 }
 
+// Stage 2 (research-log OGRL-20260815-036): script-visible rand()/RangedRandomFloat()
+// are AngelScript's only entry points into randomness, and Data/Scripts/aschar.as
+// and enemycontrol.as's AI/combat logic is unambiguously gameplay -- so both
+// bindings below route to RngStreams' gameplay stream directly, rather than
+// through enginemath.cpp's RangedRandomFloat/RangedRandomInt (which are the
+// cosmetic-stream default for native call sites not yet individually
+// classified; see Source/Math/rng_streams.h).
+int ASRandGameplay() {
+    // Matches libc rand()'s [0, RAND_MAX] contract that existing script code
+    // (`rand() % N`) already assumes -- non-negative, no dependence on int width.
+    return static_cast<int>(RngStreams::NextUInt64(RngStreams::Stream::kGameplay) & 0x7FFFFFFFULL);
+}
+
+float ASRangedRandomFloatGameplay(float min_value, float max_value) {
+    return RngStreams::RangedRandomFloat(RngStreams::Stream::kGameplay, min_value, max_value);
+}
+
 // As AngelScript doesn't allow bitwise manipulation of float types we'll provide a couple of
 // functions for converting float values to IEEE 754 formatted values etc. This also allow us to
 // provide a platform agnostic representation to the script so the scripts don't have to worry
@@ -755,8 +781,10 @@ void AttachMathFuncs(ASContext* context) {
 
     context->RegisterGlobalFunction("float pow(float val, float exponent)", asFUNCTIONPR(asPow, (float, float), float), asCALL_CDECL);
     context->RegisterGlobalFunction("float sqrt(float)", asFUNCTIONPR(sqrtf, (float), float), asCALL_CDECL);
-    context->RegisterGlobalFunction("int rand()", asFUNCTIONPR(rand, (void), int), asCALL_CDECL);
-    context->RegisterGlobalFunction("float RangedRandomFloat(float min, float max)", asFUNCTION(RangedRandomFloat), asCALL_CDECL);
+    // Stage 2: gameplay stream, not libc rand()/enginemath.cpp's cosmetic-default
+    // RangedRandomFloat -- see ASRandGameplay/ASRangedRandomFloatGameplay above.
+    context->RegisterGlobalFunction("int rand()", asFUNCTIONPR(ASRandGameplay, (void), int), asCALL_CDECL);
+    context->RegisterGlobalFunction("float RangedRandomFloat(float min, float max)", asFUNCTIONPR(ASRangedRandomFloatGameplay, (float, float), float), asCALL_CDECL);
 
     context->RegisterGlobalFunction("float ceil(float)", asFUNCTIONPR(ceilf, (float), float), asCALL_CDECL);
     context->RegisterGlobalFunction("float abs(float)", asFUNCTIONPR(fabsf, (float), float), asCALL_CDECL);

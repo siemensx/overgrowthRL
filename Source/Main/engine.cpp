@@ -23,6 +23,14 @@
 #include "engine.h"
 
 #include <Main/rl_benchmark.h>
+#include <Main/rl_subsystem_timers.h>
+#include <Main/rl_equivalence.h>
+#include <Main/rl_action.h>
+#include <Main/rl_obs_test.h>
+#include <Main/rl_shm_transport.h>
+#include <Main/rl_replay_seed.h>
+#include <Math/rng_streams.h>
+#include <Threading/rand.h>
 
 #include <Game/hardcoded_assets.h>
 #include <Game/level.h>
@@ -710,6 +718,8 @@ void Engine::UpdateControls(float timestep, bool loading_screen) {
             queued_events.push(event);
         }
     } else {
+        RLEquivalence::OnUpdateControls(this);  // Stage 1.1: legal input vector, once per real (non-loading-screen) step
+
         Input* input = Input::Instance();
         Graphics* graphics = Graphics::Instance();
 
@@ -792,6 +802,86 @@ void Engine::UpdateControls(float timestep, bool loading_screen) {
         input->ignore_mouse_frame = false;
 
         Input::Instance()->ProcessControllers(timestep);
+        RLShmTransport::UpdateMatchOverlayInput(this);
+        // Stage 5.4: publishes this step's observation over shm and blocks for
+        // the next action, staging it into RLAction -- must run before Apply()
+        // so the action it just received is the one applied this step. No-op
+        // unless --rl-shm-name was passed.
+        if (!RLShmTransport::Step(this)) {
+            // Python requested a graceful shutdown. Input::RequestQuit() is
+            // deliberately NOT used here -- its consumer (further down this
+            // function) can gate quitting on a save-changes dialog, which
+            // needs rendering to resolve and never will in headless/benchmark
+            // mode, hanging the process forever. Set quitting_ directly,
+            // exactly like RLBenchmark::ManualStepCount does when it reaches
+            // its own step target (rl_benchmark.cpp) -- the same
+            // headless-safe exit path, not a new one.
+            quitting_ = true;
+        }
+        RLReplaySeed::MaybeApply(this);  // OGRL-20260817-030: one-time reseed+respawn for deterministic tape replay -- no-op unless --rl-replay-seed was passed; must run before Apply() below so the first scripted action lands on the post-reseed state
+        RLAction::Apply(this);  // Stage 5.3: overrides the real (empty, headless) input with the current RL action
+        // OGRL-20260819-039: staged end-of-replay handling -- settle, freeze,
+        // then quit. The previous version simulated for the ENTIRE hold, which
+        // meant a ~2s recording was followed by ~5s of the arena's own round
+        // logic running on stale held input (agent stands still, gets killed,
+        // fresh round starts). Viewers reasonably read that as "the replay" and
+        // it contradicted the tape's recorded outcome.
+        const int64_t rl_since_script = RLAction::TicksSinceScriptFinished();
+        if (rl_since_script >= 0) {
+            if (rl_since_script >= RLAction::SettleTicks()) {
+                // FREEZE. paused=true skips game_timer.Update() and
+                // scenegraph_->Update() (physics + the AngelScript level
+                // logic), while the else-branch there still updates the camera
+                // object and rendering continues -- so the final frame stays on
+                // screen, live, and the arena can no longer start a new round.
+                paused = true;
+                // Because scenegraph_->Update() is skipped while paused, the
+                // script's own chase-camera code is NOT running, so C++ can
+                // position the camera here without fighting it. Frame BOTH
+                // characters: a knockout flings the loser several metres (12+
+                // observed), and a camera locked to the agent loses the victim
+                // off-screen exactly when the decisive moment happens.
+                if (scenegraph_ != NULL) {
+                    vec3 self_pos, other_pos;
+                    bool have_self = false, have_other = false;
+                    for (Object* object : scenegraph_->movement_objects_) {
+                        MovementObject* mo = static_cast<MovementObject*>(object);
+                        if (mo->controller_id == RLAction::ControllerId() && !have_self) {
+                            self_pos = mo->position;
+                            have_self = true;
+                        } else if (!have_other) {
+                            other_pos = mo->position;
+                            have_other = true;
+                        }
+                    }
+                    if (have_self) {
+                        const vec3 mid = have_other ? (self_pos + other_pos) * 0.5f : self_pos;
+                        const float separation = have_other ? length(self_pos - other_pos) : 4.0f;
+                        // Pull back far enough that both bodies stay in frame
+                        // even after a long knockback, with a floor so a
+                        // close-quarters finish is not shoved into the camera.
+                        const float dist = max(7.0f, separation * 1.1f + 5.0f);
+                        Camera* cam = ActiveCameras::Get();
+                        if (cam != NULL) {
+                            vec3 dir = cam->GetFlatFacing();
+                            if (length(dir) < 0.01f) {
+                                dir = vec3(0.0f, 0.0f, 1.0f);
+                            }
+                            dir = normalize(dir);
+                            cam->SetPos(mid - dir * dist + vec3(0.0f, dist * 0.40f, 0.0f));
+                            cam->LookAt(mid);
+                        }
+                    }
+                }
+            }
+            if (RLAction::ReadyToQuit()) {
+                // quitting_ (not Input::RequestQuit(), see the comment a few
+                // lines up) is the same headless-safe exit path already
+                // established here for exactly this class of risk.
+                quitting_ = true;
+            }
+        }
+        RLObsTest::Step(this);  // Stage 5.1/5.5: opt-in, no-op unless --rl-obs-period was passed
         PlayerInput* controller = Input::Instance()->GetController(0);
         static const std::string kSlow = "slow";
         if (Input::Instance()->debug_keys && current_engine_state_.type == kEngineEditorLevelState) {
@@ -2233,6 +2323,7 @@ void Engine::Update() {
                 }
                 {
                     PROFILER_ZONE(g_profiler_ctx, "Level update");
+                    RL_SUBSYSTEM_ZONE(kZoneLevelScript);
                     scenegraph_->level->Update(paused);
                 }
                 HandleRabbotToggleControls();
@@ -2246,6 +2337,15 @@ void Engine::Update() {
 
                 for (auto active_context : active_contexts) {
                     active_context->profiler.Update();
+                }
+                RLEquivalence::OnTimestepComplete(this);
+                if (RLEquivalence::ReplayExhausted()) {
+                    // The native trace ends at a concrete post-tick state.
+                    // Freeze immediately after that state has been rendered;
+                    // simulating an unrecorded settle/round transition would
+                    // make a truthful replay appear to diverge after the
+                    // archived episode had already finished.
+                    paused = true;
                 }
                 if (RLBenchmark::OnTimestepComplete(this)) {
                     break;
@@ -3014,6 +3114,7 @@ void Engine::DrawScene(DrawingViewport drawing_viewport, Engine::PostEffectsType
             PROFILER_GPU_ZONE(g_profiler_ctx, "Draw debug geometry");
             GLenum buffers[] = {GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT};
             glDrawBuffers(2, buffers);
+            RLShmTransport::DrawMatchOverlay(this);
             DebugDraw::Instance()->Draw();
         }
     }
@@ -3044,7 +3145,7 @@ void Engine::DrawScene(DrawingViewport drawing_viewport, Engine::PostEffectsType
 }
 
 void Engine::LoadScreenLoop(bool loading_in_progress) {
-    if (RLBenchmark::Enabled()) {
+    if (RLBenchmark::Enabled() || RLReplaySeed::Enabled()) {
         return;
     }
     {
@@ -3066,7 +3167,7 @@ void Engine::LoadScreenLoop(bool loading_in_progress) {
 }
 
 void Engine::DrawLoadScreen(bool loading_in_progress) {
-    if (RLBenchmark::Enabled()) {
+    if (RLBenchmark::Enabled() || RLReplaySeed::Enabled()) {
         return;
     }
 #ifndef GLDEBUG
@@ -5591,6 +5692,91 @@ void Engine::LoadLevelData(const Path& level_path) {
     loading_mutex_.unlock();
 }
 
+// Stage 4 in-process reset (Approach B), ported from exp-011
+// (df786925 + local, .worktrees/optimize-overgrowth-training-throughput-exp-011).
+// Full production teardown (ClearLoadedLevel) and reload through the real
+// LoadLevel() path, so construction semantics are preserved exactly -- as
+// opposed to Approach C (snapshot/rewind), which is not implemented.
+bool Engine::ResetRLTrainingScenario(unsigned int seed) {
+    // Stage 5.4 extension: a live training run (RLShmTransport driving a
+    // Python policy over shm) needs episode reset just as much as the
+    // Stage 4 benchmark harness did, and reuses this exact same mechanism --
+    // not a second reset path -- so the two stay behaviorally identical by
+    // construction rather than by discipline.
+    if ((!RLBenchmark::Enabled() && !RLShmTransport::Enabled() && !RLReplaySeed::Enabled()) || !rl_training_reset_baseline_valid_ || rl_training_reset_in_progress_ ||
+        !level_loaded_ || scenegraph_ == NULL || !rl_training_scenario_path_.isValid()) {
+        return false;
+    }
+    // Campaign objects intentionally survive normal level transitions and may
+    // retain episode state. Training scenarios must remain standalone until a
+    // campaign-level reset contract is defined.
+    if (GetCurrentCampaign() != NULL || IsStateQueued()) {
+        return false;
+    }
+
+    const Path scenario_path = rl_training_scenario_path_;
+    ClearLoadedLevel();
+
+    // Dispose the old world before reseeding so cleanup cannot advance either
+    // RNG stream. LoadLevel's subsequent null-world clear matches the initial
+    // benchmark load path.
+    rand_ts_seed(seed);
+    srand(seed);
+    RngStreams::SeedEpisode(seed);
+    game_timer.ResetForRLTraining(rl_training_initial_game_time_,
+                                  rl_training_initial_time_scale_,
+                                  rl_training_initial_target_time_scale_);
+
+    rl_training_reset_in_progress_ = true;
+    LoadLevel(scenario_path);
+    rl_training_reset_in_progress_ = false;
+
+    return level_loaded_ && scenegraph_ != NULL &&
+           latest_level_path_.GetOriginalPathStr() == scenario_path.GetOriginalPathStr();
+}
+
+// OGRL-20260817-028 Sec1: soft reset -- added ALONGSIDE ResetRLTrainingScenario
+// above, not a replacement. The hard path stays as the reference/fallback and
+// the periodic safety valve (RLShmTransport forces it every --hard-reset-every
+// episodes on the Python side). Measured hard-reset cost is 575ms median,
+// almost entirely ClearLoadedLevel()+LoadLevel()'s terrain/navmesh/asset
+// reload; arena_level_1v1_unarmed.as's own post_reset handler already does a
+// complete character-level episode reset (DeleteObjectsInList + re-spawn) via
+// Level::Message with no level reload at all -- this function is exactly that
+// path, driven from the engine side with the same RNG/timer preamble as the
+// hard reset, so the two are behaviorally identical except for what gets
+// rebuilt underneath.
+bool Engine::SoftResetRLTrainingScenario(unsigned int seed) {
+    if ((!RLBenchmark::Enabled() && !RLShmTransport::Enabled() && !RLReplaySeed::Enabled()) || !rl_training_reset_baseline_valid_ || rl_training_reset_in_progress_ ||
+        !level_loaded_ || scenegraph_ == NULL || !rl_training_scenario_path_.isValid()) {
+        return false;
+    }
+    // Same standalone-scenario guard as the hard path -- see its comment.
+    if (GetCurrentCampaign() != NULL || IsStateQueued()) {
+        return false;
+    }
+
+    // Deliberately NOT called, unlike the hard path immediately above:
+    // ClearLoadedLevel() and LoadLevel(). Everything else in the preamble
+    // (seed streams, game timer) is copied exactly so a soft-reset episode's
+    // RNG/timer state is indistinguishable from a hard-reset one -- the
+    // production-equivalence validation this needs is in -028 Sec1.3, not
+    // this function; this function only needs to reproduce the hard path's
+    // *preamble*, not re-derive its own.
+    rand_ts_seed(seed);
+    srand(seed);
+    RngStreams::SeedEpisode(seed);
+    game_timer.ResetForRLTraining(rl_training_initial_game_time_,
+                                  rl_training_initial_time_scale_,
+                                  rl_training_initial_target_time_scale_);
+
+    rl_training_reset_in_progress_ = true;
+    scenegraph_->level->Message("post_reset");
+    rl_training_reset_in_progress_ = false;
+
+    return level_loaded_ && scenegraph_ != NULL;
+}
+
 void Engine::ClearLoadedLevel() {
     // We want music in menues now, levels have to clear their own sounds.
     sound.ClearTransient();
@@ -5669,9 +5855,9 @@ void Engine::LoadLevel(Path queued_level) {
                 FormatString(screenshot_path, kPathSize, "Data/LevelLoading/%s_loading.jpg", shortest_path_orig_folder);
             }
 
-            if (!RLBenchmark::Enabled() && FileExists(screenshot_path, kModPaths | kDataPaths)) {
+            if (!RLBenchmark::Enabled() && !RLReplaySeed::Enabled() && FileExists(screenshot_path, kModPaths | kDataPaths)) {
                 level_screenshot = Engine::Instance()->GetAssetManager()->LoadSync<TextureAsset>(screenshot_path, PX_NOCONVERT | PX_NOREDUCE | PX_NOMIPMAP, 0x0);
-            } else if (!RLBenchmark::Enabled() && Online::Instance()->IsActive()) {
+            } else if (!RLBenchmark::Enabled() && !RLReplaySeed::Enabled() && Online::Instance()->IsActive()) {
                 // Multiplayer needs an image for the "waiting for all clients" dialogue!
                 strscpy(screenshot_path, "Data/Images/full_fallback.png", kPathSize);
                 if (FileExists(screenshot_path, kModPaths | kDataPaths)) {
@@ -5740,7 +5926,7 @@ void Engine::LoadLevel(Path queued_level) {
 #if THREADED
             loading_in_progress_ = true;
             std::thread load_thread(std::bind(&Engine::LoadLevelData, this, level_path));
-            if (!RLBenchmark::Enabled()) {
+            if (!RLBenchmark::Enabled() && !RLReplaySeed::Enabled()) {
                 bool keep_looping = loading_in_progress_;
                 last_loading_input_time = SDL_TS_GetTicks();
                 while (keep_looping) {
@@ -5851,6 +6037,13 @@ void Engine::LoadLevel(Path queued_level) {
                 scenegraph_->level->loading_screen_.image = screenshot_path;
             }
             scenegraph_->map_editor->UpdateEnabledObjects();
+            if ((RLBenchmark::ResetAfterWarmup() || RLShmTransport::Enabled() || RLReplaySeed::Enabled()) && !rl_training_reset_in_progress_) {
+                rl_training_scenario_path_ = level_path;
+                rl_training_initial_game_time_ = game_timer.game_time;
+                rl_training_initial_time_scale_ = game_timer.time_scale;
+                rl_training_initial_target_time_scale_ = game_timer.target_time_scale;
+                rl_training_reset_baseline_valid_ = true;
+            }
             RLBenchmark::OnLevelLoaded();
             // level_screenshot.clear();
         } else {
@@ -6018,6 +6211,8 @@ void Engine::Initialize() {
     resize_event_frame_counter = -1;
     printed_rendering_error_message = false;
     forced_split_screen_mode = kForcedModeNone;
+    rl_training_reset_baseline_valid_ = false;
+    rl_training_reset_in_progress_ = false;
 
     active_screen_start = vec2(0.0f, 0.0f);
     active_screen_end = vec2(1.0f, 1.0f);

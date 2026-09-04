@@ -31,6 +31,33 @@
 #include <Objects/cameraobject.h>
 #include <Game/level.h>
 #include <Online/online.h>
+#include <Main/rl_shm_transport.h>
+#include <Scripting/scriptparams.h>
+
+#include <cstdlib>
+
+namespace {
+
+const char* kParticipantSlotParam = "OGRL Participant Slot";
+
+int ParticipantSlot(MovementObject* avatar, int fallback) {
+    if (avatar == nullptr || avatar->GetScriptParams() == nullptr) {
+        return fallback;
+    }
+    ScriptParams* params = avatar->GetScriptParams();
+    if (!params->HasParam(kParticipantSlotParam) || !params->IsParamString(kParticipantSlotParam)) {
+        return fallback;
+    }
+    const std::string& value = params->GetStringVal(kParticipantSlotParam);
+    char* end = nullptr;
+    const long parsed = std::strtol(value.c_str(), &end, 10);
+    if (end == value.c_str() || *end != '\0' || parsed < 0 || parsed > 32) {
+        return fallback;
+    }
+    return static_cast<int>(parsed);
+}
+
+}  // namespace
 
 std::vector<Possession> AvatarControlManager::GeneratePossessionList() {
     Engine* engine = Engine::Instance();
@@ -80,6 +107,34 @@ std::vector<Possession> AvatarControlManager::GeneratePossessionList() {
     }
 
     std::vector<ObjectID> unpossessed_avatars = GetUnpossessedAvatars();
+
+    // Human-vs-checkpoint runs have two player actors but only one physical
+    // local player. The level script tags the actors before possession is
+    // generated. Slot 0 is the run15-compatible checkpoint self and slot 1
+    // is the native human; using movement_objects_ order here would reverse
+    // the learned self/entity identity whenever the spawn implementation
+    // changes its allocation order.
+    const int external_controller = RLShmTransport::ControllerId();
+    if (external_controller > 0) {
+        for (int i = 0; i < static_cast<int>(unpossessed_avatars.size()); ++i) {
+            ObjectID avatar_id = unpossessed_avatars[i];
+            MovementObject* avatar = nullptr;
+            if (scenegraph_ != nullptr) {
+                Object* object = scenegraph_->GetObjectFromID(avatar_id);
+                if (object != nullptr && object->GetType() == EntityType::_movement_object) {
+                    avatar = static_cast<MovementObject*>(object);
+                }
+            }
+            const int slot = ParticipantSlot(avatar, i);
+            const bool checkpoint = slot == 0;
+            possessions.push_back(Possession(
+                avatar_id,
+                checkpoint ? external_controller : 0,
+                0,
+                !checkpoint));
+        }
+        return possessions;
+    }
 
     for (int i = 0; i < unpossessed_avatars.size(); i++) {
         int camera_id = 0;
@@ -163,7 +218,12 @@ void AvatarControlManager::Update() {
         if (online->IsActive()) {
             Input::Instance()->SetUpForXPlayers(1);
         } else {
-            Input::Instance()->SetUpForXPlayers(engine->num_avatars);
+            // A match may contain two player-controlled avatars but only one
+            // native human. The external checkpoint controller is written by
+            // RLShmTransport and must never receive a physical device.
+            const int external_controller = RLShmTransport::ControllerId();
+            const unsigned native_players = external_controller > 0 ? 1u : static_cast<unsigned>(engine->num_avatars);
+            Input::Instance()->SetUpForXPlayers(native_players);
         }
 
         bool focused_character_set = false;

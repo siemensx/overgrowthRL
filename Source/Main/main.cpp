@@ -36,6 +36,13 @@
 #include <Main/engine.h>
 #include <Main/altmain.h>
 #include <Main/rl_benchmark.h>
+#include <Main/rl_subsystem_timers.h>
+#include <Main/rl_equivalence.h>
+#include <Main/rl_action.h>
+#include <Main/rl_obs_test.h>
+#include <Main/rl_shm_transport.h>
+#include <Main/rl_replay_seed.h>
+#include <Math/rng_streams.h>
 
 #include <Threading/rand.h>
 #include <Threading/thread_sanity.h>
@@ -204,6 +211,7 @@ int GameMain(int argc, char* argv[]) {
     if (RLBenchmark::Enabled()) {
         rand_ts_seed(RLBenchmark::Seed());
         srand(RLBenchmark::Seed());
+        RngStreams::SeedEpisode(RLBenchmark::Seed());
         RLBenchmark::OnEngineInitialized();
     }
     Dialog::Initialize();
@@ -281,6 +289,7 @@ int GameMain(int argc, char* argv[]) {
     STIMING_FINALIZE();
 
     RLBenchmark::Report();
+    RLEquivalence::Finalize();
 
     LOGI << "Final check if savefile needs to be written..." << std::endl;
     Engine::Instance()->save_file_.ExecuteQueuedWrite();
@@ -357,11 +366,75 @@ int main(int argc, char* argv[]) {
         TCLAP::SwitchArg levelLoadStress("", "level-load-stress", "Load levels in a loop", cmd, false);
         TCLAP::SwitchArg benchmark("", "benchmark", "Run an exact production-timestep benchmark", cmd, false);
         TCLAP::ValueArg<int> benchmarkWarmupSteps("", "benchmark-warmup-steps", "Completed timesteps before measurement", false, 120, "integer");
-        TCLAP::ValueArg<int> benchmarkSteps("", "benchmark-steps", "Completed timesteps to measure", false, 600, "integer");
+        TCLAP::ValueArg<int> benchmarkSteps("", "benchmark-steps", "Completed timesteps to measure (safety cap when --benchmark-measure-seconds is set)", false, 600, "integer");
         TCLAP::ValueArg<int> benchmarkSeed("", "benchmark-seed", "Deterministic benchmark seed", false, 1, "integer");
+        TCLAP::ValueArg<double> benchmarkMeasureSeconds("", "benchmark-measure-seconds", "Measure for a fixed wall-clock duration instead of a fixed step count (Stage 0.3 overlapping-window concurrency measurement)", false, 0.0, "seconds");
+        TCLAP::ValueArg<std::string> benchmarkBarrierDir("", "benchmark-barrier-dir", "Directory used to synchronize the measurement start of concurrently-launched benchmark workers", false, "", "string");
+        TCLAP::ValueArg<int> benchmarkBarrierWorkers("", "benchmark-barrier-workers", "Number of concurrent workers to wait for at the readiness barrier before --benchmark-barrier-dir is used", false, 0, "integer");
+        TCLAP::SwitchArg benchmarkSubsystemTimers("", "benchmark-subsystem-timers", "Report opt-in per-subsystem timing breakdown alongside the benchmark result (Stage 0.5)", cmd, false);
+        TCLAP::ValueArg<double> benchmarkProgressSeconds("", "benchmark-progress-seconds", "Emit an RL_BENCHMARK_PROGRESS line every N seconds of measurement, for long sustained runs (Stage 0.8)", false, 0.0, "seconds");
+        TCLAP::ValueArg<std::string> equivalenceDigestPath("", "equivalence-digest", "Stage 1: record a per-step state digest (position/velocity/health/etc + hash chain) to this path", false, "", "string");
+        TCLAP::ValueArg<std::string> equivalenceTracePath("", "equivalence-trace", "Stage 1: record the legal-input trace (controller_id-addressed) to this path", false, "", "string");
+        TCLAP::ValueArg<std::string> equivalenceExpectedPath("", "equivalence-expected", "OGRL-20260820-048: compare each rendered replay tick against a native recorded digest", false, "", "string");
+        TCLAP::ValueArg<std::string> equivalenceReportPath("", "equivalence-report", "OGRL-20260820-048: write the rendered replay verification result to this path", false, "", "string");
+        TCLAP::SwitchArg benchmarkResetAfterWarmup("", "benchmark-reset-after-warmup", "Stage 4 Approach B: reload the training scenario in-process after warmup, then measure the immediately-following steps", cmd, false);
+        TCLAP::ValueArg<int> rlActionControllerId("", "rl-action-controller-id", "Stage 5.3: controller_id to drive with injected RL actions instead of real input", false, -1, "integer");
+        TCLAP::SwitchArg rlActionTestForward("", "rl-action-test-forward", "Stage 5.3 smoke test: drive the RL-action controller with a constant forward move axis, to verify the injection path end to end", cmd, false);
+        TCLAP::ValueArg<std::string> rlActionScriptPath("", "rl-action-script", "Stage 5.3: path to a sparse step-indexed action script (step,move_x,move_y,jump,crouch,attack,grab,drop,walk), for testing timing-sensitive combos", false, "", "string");
+        TCLAP::ValueArg<int> rlObsPeriod("", "rl-obs-period", "Stage 5.1/5.5: extract an observation for the --rl-action-controller-id character every N steps (1 = every step, matching Stage 6's obs_period ablation concept); 0 disables extraction entirely", false, 0, "integer");
+        TCLAP::ValueArg<int> rlObsDumpSteps("", "rl-obs-dump-steps", "Stage 5.1 smoke test: print this many extracted observations (schema version, LOS rule version, every named field), separate from --rl-obs-period's extraction cadence", false, 0, "integer");
+        TCLAP::ValueArg<std::string> rlShmName("", "rl-shm-name", "Stage 5.4: enable the shm observation/action transport for --rl-action-controller-id under this POSIX IPC name (must start with '/', stay short -- Darwin's name limit is ~31 bytes)", false, "", "string");
+        TCLAP::ValueArg<int> rlActPeriod("", "rl-act-period", "Stage 6 (OGRL-20260816-021): run the shm request/response handshake every N physics ticks instead of every tick (1 = every tick / 120Hz decisions, the original behavior; 4 = 30Hz decisions, matching vanilla AI's own control period and AGENTS.md's action contract). RLAction holds the last decision across the ticks in between.", false, 1, "integer");
+        TCLAP::SwitchArg rlObsFovNpcMatched("", "rl-obs-fov-npc-matched", "Stage 5.2: use the FOV-matched vision profile (approximates the vanilla AI's own FOV-cone + stochastic bone-raycast perception, Data/Scripts/aschar.as::GetVisibleCharacters) instead of the default omnidirectional geometric LOS, for --rl-obs-period", cmd, false);
+        // OGRL-20260817-030: deterministic tape replay (RLReplaySeed) -- reseeds
+        // RNG + re-applies the curriculum scenario axes once, right after the
+        // level's own natural initial load, so --rl-action-script replay
+        // (Tools/rl/replay_ghost.py) can reproduce the SAME opponent a tape was
+        // originally recorded against, not just the same button presses. See
+        // rl_replay_seed.h's module comment for why this doesn't need the shm
+        // transport at all. Unset (-1) is the default no-op for every axis
+        // except seed, which requires an explicit non-negative value to enable
+        // the feature at all.
+        TCLAP::ValueArg<int> rlReplaySeed("", "rl-replay-seed", "OGRL-20260817-030: deterministic seed to reproduce a recorded tape's opponent -- unset (-1, default) leaves replay unseeded exactly as before", false, -1, "integer");
+        TCLAP::ValueArg<double> rlReplayDifficulty("", "rl-replay-difficulty", "OGRL-20260817-030: curriculum difficulty (0..1) to apply alongside --rl-replay-seed, matching the tape's recorded difficulty -- unset (-1, default) leaves difficulty at the level's own default", false, -1.0, "float");
+        TCLAP::ValueArg<int> rlReplayOpponents("", "rl-replay-opponents", "OGRL-20260817-030: opponent count to apply alongside --rl-replay-seed -- unset (-1, default) leaves it at the level's own default", false, -1, "integer");
+        TCLAP::ValueArg<double> rlReplayWeapons("", "rl-replay-weapons", "OGRL-20260817-030: armed-round probability to apply alongside --rl-replay-seed -- unset (-1, default) leaves it at the level's own default", false, -1.0, "float");
+        TCLAP::ValueArg<int> rlReplaySpecies("", "rl-replay-species", "OGRL-20260817-030: opponent species mode to apply alongside --rl-replay-seed -- unset (-1, default) leaves it at the level's own default", false, -1, "integer");
+        TCLAP::ValueArg<int> rlReplayResetMode("", "rl-replay-reset-mode", "OGRL-20260820-048: recorded reset mode (0 hard, 1 soft)", false, 0, "integer");
+        TCLAP::ValueArg<int> rlReplayControlledCharacterId("", "rl-replay-controlled-character-id", "OGRL-20260820-048: recorded character object ID receiving controller 0", false, -1, "integer");
+        TCLAP::SwitchArg rlReplayScriptActions("", "rl-replay-script-actions", "OGRL-20260820-049: use the recorded decision-cadence script instead of the per-tick native action scheduler (diagnostic)", cmd, false);
+        // OGRL-20260817-033: a scripted replay's final recorded action is very
+        // often the decisive one (an attack connecting, a knockout) -- without
+        // this, the auto-quit added in OGRL-20260817-031 closes the window
+        // the instant that action is reached, before a human watching has any
+        // chance to see it resolve. 0 (default) preserves the -031 instant-quit
+        // behavior for any caller that doesn't set it.
+        TCLAP::ValueArg<double> rlActionScriptHoldSeconds("", "rl-action-script-hold-seconds", "OGRL-20260817-033: hold the final recorded action on screen this many seconds (real simulated time) after a --rl-action-script recording ends, before auto-quitting -- 0 (default) quits instantly", false, 0.0, "float");
+        cmd.add(rlActionControllerId);
+        cmd.add(rlActionScriptPath);
+        cmd.add(rlObsPeriod);
+        cmd.add(rlObsDumpSteps);
+        cmd.add(rlShmName);
+        cmd.add(rlActPeriod);
+        cmd.add(rlReplaySeed);
+        cmd.add(rlReplayDifficulty);
+        cmd.add(rlReplayOpponents);
+        cmd.add(rlReplayWeapons);
+        cmd.add(rlReplaySpecies);
+        cmd.add(rlReplayResetMode);
+        cmd.add(rlReplayControlledCharacterId);
+        cmd.add(rlActionScriptHoldSeconds);
         cmd.add(benchmarkWarmupSteps);
         cmd.add(benchmarkSteps);
         cmd.add(benchmarkSeed);
+        cmd.add(benchmarkMeasureSeconds);
+        cmd.add(benchmarkBarrierDir);
+        cmd.add(benchmarkBarrierWorkers);
+        cmd.add(benchmarkProgressSeconds);
+        cmd.add(equivalenceDigestPath);
+        cmd.add(equivalenceTracePath);
+        cmd.add(equivalenceExpectedPath);
+        cmd.add(equivalenceReportPath);
 #ifdef UNIT_TESTS
         TCLAP::SwitchArg runUnitTests("", "run-unit-tests", "Run all unit tests", cmd, false);
 #endif
@@ -391,7 +464,73 @@ int main(int argc, char* argv[]) {
             std::cerr << "benchmark warmup and seed must be non-negative, and benchmark steps must be positive" << std::endl;
             return 2;
         }
-        RLBenchmark::Configure(benchmark.getValue(), static_cast<uint64_t>(benchmarkWarmupSteps.getValue()), static_cast<uint64_t>(benchmarkSteps.getValue()), static_cast<unsigned int>(benchmarkSeed.getValue()));
+        if (benchmarkResetAfterWarmup.getValue() && (!benchmark.getValue() || benchmarkWarmupSteps.getValue() <= 0)) {
+            std::cerr << "benchmark reset requires --benchmark and at least one warmup step" << std::endl;
+            return 2;
+        }
+        if (!rlShmName.getValue().empty() && rlActionControllerId.getValue() < 0) {
+            std::cerr << "--rl-shm-name requires --rl-action-controller-id (selects which character it drives/observes)" << std::endl;
+            return 2;
+        }
+        if (rlActPeriod.getValue() < 1) {
+            std::cerr << "--rl-act-period must be at least 1" << std::endl;
+            return 2;
+        }
+        if (rlReplaySeed.getValue() >= 0) {
+            RLReplaySeed::Configure(static_cast<unsigned int>(rlReplaySeed.getValue()),
+                                     static_cast<float>(rlReplayDifficulty.getValue()),
+                                     rlReplayOpponents.getValue(),
+                                     static_cast<float>(rlReplayWeapons.getValue()),
+                                     rlReplaySpecies.getValue(),
+                                     rlReplayResetMode.getValue(),
+                                     rlReplayControlledCharacterId.getValue());
+        }
+        RLBenchmark::Configure(benchmark.getValue(), static_cast<uint64_t>(benchmarkWarmupSteps.getValue()), static_cast<uint64_t>(benchmarkSteps.getValue()), static_cast<unsigned int>(benchmarkSeed.getValue()),
+                               benchmarkMeasureSeconds.getValue(), benchmarkBarrierDir.getValue(), benchmarkBarrierWorkers.getValue(),
+                               benchmarkProgressSeconds.getValue(), benchmarkResetAfterWarmup.getValue());
+        RLSubsystemTimers::SetEnabled(benchmarkSubsystemTimers.getValue());
+        if (!equivalenceExpectedPath.getValue().empty()) {
+            RLEquivalence::ConfigureReplay(equivalenceExpectedPath.getValue(), equivalenceReportPath.getValue());
+        } else if (!equivalenceDigestPath.getValue().empty() || !equivalenceTracePath.getValue().empty()) {
+            RLEquivalence::Configure(RLEquivalence::Mode::kRecord, equivalenceDigestPath.getValue(), equivalenceTracePath.getValue(), static_cast<unsigned int>(benchmarkSeed.getValue()));
+        }
+        if (rlActionControllerId.getValue() >= 0) {
+            RLAction::Configure(true, rlActionControllerId.getValue());
+            if (rlActionTestForward.getValue()) {
+                RLAction::SetMoveAxes(0.0f, 1.0f);
+            }
+            if (!rlActionScriptPath.getValue().empty()) {
+                if (!RLAction::LoadScript(rlActionScriptPath.getValue())) {
+                    std::cerr << "failed to load --rl-action-script: " << rlActionScriptPath.getValue() << std::endl;
+                    return 2;
+                }
+                // OGRL-20260817-031: a script written by watch.py/tape.py's
+                // jsonl_to_ghost_csv (one row per DECISION, not per tick)
+                // needs --rl-act-period to match the act_period it was
+                // recorded at, or it replays act_period times too fast and
+                // never stops -- see rl_action.h's SetScriptPeriod comment.
+                RLAction::SetScriptPeriod(rlActPeriod.getValue());
+                RLAction::SetScriptHoldSeconds(static_cast<float>(rlActionScriptHoldSeconds.getValue()));
+                if (!equivalenceExpectedPath.getValue().empty() && !rlReplayScriptActions.getValue()) {
+                    RLAction::SetNativeReplayMode(true);
+                }
+            }
+            if (rlObsPeriod.getValue() > 0 || rlObsDumpSteps.getValue() > 0) {
+                // --rl-obs-dump-steps alone (no explicit --rl-obs-period) means
+                // "just show me some observations" -- default to extracting
+                // every step so the requested dumps actually get printed.
+                const int period = rlObsPeriod.getValue() > 0 ? rlObsPeriod.getValue() : 1;
+                const RLObservation::FovProfile fov_profile = rlObsFovNpcMatched.getValue() ? RLObservation::FovProfile::kNpcMatched : RLObservation::FovProfile::kOmnidirectional;
+                RLObsTest::Configure(rlActionControllerId.getValue(), period, rlObsDumpSteps.getValue(), fov_profile);
+            }
+            if (!rlShmName.getValue().empty()) {
+                RLObservation::ObservationConfig obs_config;  // default shape for v1; not yet CLI-configurable
+                if (!RLShmTransport::Configure(rlShmName.getValue(), rlActionControllerId.getValue(), obs_config, rlActPeriod.getValue())) {
+                    std::cerr << "failed to set up --rl-shm-name transport: " << rlShmName.getValue() << std::endl;
+                    return 2;
+                }
+            }
+        }
         if (RLBenchmark::Enabled()) {
             disable_rendering = true;
         }

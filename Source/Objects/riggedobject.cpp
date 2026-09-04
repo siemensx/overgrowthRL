@@ -22,6 +22,9 @@
 //-----------------------------------------------------------------------------
 #include "riggedobject.h"
 
+#include <Main/rl_subsystem_timers.h>
+#include <Math/rng_streams.h>
+
 #include <Graphics/graphics.h>
 #include <Graphics/particles.h>
 #include <Graphics/camera.h>
@@ -1220,6 +1223,7 @@ void UpdateAttachedItemRagdoll(AttachedItem& stuck_item, const Skeleton& skeleto
 
 void RiggedObject::Update(float timestep) {
     PROFILER_ZONE(g_profiler_ctx, "RiggedObject Update()");
+    RL_SUBSYSTEM_ZONE(kZoneAnimation);
 
     Model* model = &Models::Instance()->GetModel(model_id[0]);
     // blood_surface.CreateDripInTri(RangedRandomInt(0, model->faces.size()/3-1), vec3(1.0f/3.0f), 1.0f, 0.0f, true, SurfaceWalker::WATER);
@@ -2576,7 +2580,10 @@ void RiggedObject::UnRagdoll() {
         skeleton_.UnlinkFromBulletWorld();
         skeleton_.UpdateTwistBones(true);
 
-        time_until_next_anim_update = rand() % anim_update_period - anim_update_period;
+        // Stage 2: gameplay stream -- this phase-offsets RiggedObject::Update's
+        // cadence the same way movementobject.cpp:1439 phase-offsets AI script
+        // cadence, and animation phase is part of the Stage 1 state digest.
+        time_until_next_anim_update = static_cast<int>(RngStreams::NextUInt64(RngStreams::Stream::kGameplay) % anim_update_period) - anim_update_period;
     }
 }
 

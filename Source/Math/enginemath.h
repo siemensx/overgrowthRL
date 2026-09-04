@@ -48,8 +48,20 @@ const float EPSILON = 0.000001f;
 
 #define ISNAN(x) (x != x)
 
+// Stage 2 (research-log OGRL-20260815-036): these draw from RngStreams'
+// cosmetic stream by default -- the safe fallback for any call site not yet
+// individually classified and migrated (see Source/Math/rng_streams.h).
+// Gameplay-relevant call sites must be migrated explicitly to the
+// *Gameplay variants below, not left on this default.
 float RangedRandomFloat(float min, float max);
 int RangedRandomInt(int min, int max);
+
+// Explicit gameplay-stream variants. Use these at any call site whose result
+// can affect the physics/combat transition function (AI decision timing,
+// target/bone selection, damage/force rolls, etc.) -- see Data/Scripts/aschar.as
+// and Source/Objects/movementobject.cpp for the audited examples.
+float RangedRandomFloatGameplay(float min, float max);
+int RangedRandomIntGameplay(int min, int max);
 
 //-----------------------------------------------------------------------------
 // Function Prototypes

@@ -123,19 +123,19 @@ vec3 AttackScriptGetter::GetImpactDir() {
 }
 
 float AttackScriptGetter::GetBlockDamage() {
-    return attack_ref_.valid() ? RangedRandomFloat(attack_ref_->block_damage[0], attack_ref_->block_damage[1]) : 0.0f;
+    return attack_ref_.valid() ? RangedRandomFloatGameplay(attack_ref_->block_damage[0], attack_ref_->block_damage[1]) : 0.0f;
 }
 
 float AttackScriptGetter::GetSharpDamage() {
-    return attack_ref_.valid() ? RangedRandomFloat(attack_ref_->sharp_damage[0], attack_ref_->sharp_damage[1]) : 0.0f;
+    return attack_ref_.valid() ? RangedRandomFloatGameplay(attack_ref_->sharp_damage[0], attack_ref_->sharp_damage[1]) : 0.0f;
 }
 
 float AttackScriptGetter::GetDamage() {
-    return attack_ref_.valid() ? RangedRandomFloat(attack_ref_->damage[0], attack_ref_->damage[1]) : 0.0f;
+    return attack_ref_.valid() ? RangedRandomFloatGameplay(attack_ref_->damage[0], attack_ref_->damage[1]) : 0.0f;
 }
 
 float AttackScriptGetter::GetForce() {
-    return attack_ref_.valid() ? RangedRandomFloat(attack_ref_->force[0], attack_ref_->force[1]) : 0.0f;
+    return attack_ref_.valid() ? RangedRandomFloatGameplay(attack_ref_->force[0], attack_ref_->force[1]) : 0.0f;
 }
 
 std::string AttackScriptGetter::GetPath() {

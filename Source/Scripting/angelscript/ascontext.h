@@ -76,6 +76,14 @@ class ASContext {
    private:
     std::unordered_map<uint32_t, ASFunctionHandle> mpCallBacks;
 
+    // Stage 3c (research-log OGRL-20260815-037): CallScriptFunction(std::string)
+    // used to re-run module.GetFunctionID's by-declaration string lookup on
+    // every call. Level::QueryIntFunction("int NeedsAnimFrames()") alone does
+    // this twice per character per 120Hz step (level.as:483-487). Cached here,
+    // invalidated on Reload() since a recompiled module's asIScriptFunction*
+    // pointers are no longer valid.
+    std::unordered_map<std::string, asIScriptFunction*> function_lookup_cache_;
+
     SceneGraph* scenegraph;
 
     std::string context_name;

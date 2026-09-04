@@ -278,6 +278,10 @@ bool ASContext::LoadScript(const Path &path) {
         DisplayFormatError(_ok, true, "Error", "Could not compile script: %s", path.GetFullPath());
         return false;
     }
+    // Stage 3c: a fresh compile invalidates any asIScriptFunction* cached from
+    // whatever this ASContext previously had loaded (e.g. MovementObject::
+    // ChangeControlScript reusing the same context for a different script).
+    function_lookup_cache_.clear();
 
     if (LoadExpectedFunctions() == false) {
         std::stringstream ss;
@@ -333,6 +337,7 @@ bool ASContext::Reload() {
     PROFILER_ZONE(g_profiler_ctx, "Live update check");
     if (module.SourceChanged()) {
         module.Recompile();
+        function_lookup_cache_.clear();  // Stage 3c: old asIScriptFunction* pointers are no longer valid
 
         if (LoadExpectedFunctions() == false) {
             std::stringstream ss;
@@ -401,8 +406,19 @@ bool ASContext::HasFunction(const std::string &function_definition) {
 }
 
 bool ASContext::CallScriptFunction(const std::string &function_name, const ASArglist *args, ASArg *return_val, bool fail_message) {
-    // Find the function id for the function we want to execute.
-    asIScriptFunction *func = module.GetFunctionID(function_name);
+    // Stage 3c: cache the by-declaration lookup instead of re-running it every
+    // call (module.GetFunctionID does a string-keyed declaration parse plus a
+    // nested VM call per Appendix A). Safe as long as the cache is cleared
+    // whenever the module is recompiled (see Reload() below) -- a stale
+    // asIScriptFunction* from a prior compilation must never be reused.
+    asIScriptFunction *func;
+    auto cached = function_lookup_cache_.find(function_name);
+    if (cached != function_lookup_cache_.end()) {
+        func = cached->second;
+    } else {
+        func = module.GetFunctionID(function_name);
+        function_lookup_cache_[function_name] = func;
+    }
     if (!func) {
         if (fail_message) {
             ErrorResponse response =

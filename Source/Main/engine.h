@@ -180,6 +180,8 @@ class Engine : public ModLoadingCallback {
     void ClearArenaSession();
 
     void ClearLoadedLevel();
+    bool ResetRLTrainingScenario(unsigned int seed);
+    bool SoftResetRLTrainingScenario(unsigned int seed);  // OGRL-20260817-028 Sec1: no ClearLoadedLevel/LoadLevel, see engine.cpp
     static void StaticScriptableUICallback(void* instance, const std::string& level);
     void ScriptableUICallback(const std::string& level);
     static void NewLevel();
@@ -239,6 +241,14 @@ class Engine : public ModLoadingCallback {
    private:
     Path latest_level_path_;
     Path latest_menu_path_;
+
+    // Stage 4 in-process reset (Approach B, ported from exp-011).
+    Path rl_training_scenario_path_;
+    float rl_training_initial_game_time_;
+    float rl_training_initial_time_scale_;
+    float rl_training_initial_target_time_scale_;
+    bool rl_training_reset_baseline_valid_;
+    bool rl_training_reset_in_progress_;
 
     void QueueLevelToLoad(const Path& level);
 
