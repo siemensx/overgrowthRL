@@ -607,14 +607,20 @@ void Engine::Dispose() {
     IMrefCountTracker.logSanityCheck();
     Online::Instance()->Dispose();
 #if ENABLE_STEAMWORKS
-    Steamworks::Instance()->Dispose();
+    if (!RLBenchmark::Enabled()) {
+        Steamworks::Instance()->Dispose();
+    }
 #endif
-    as_network.Dispose();
+    if (!RLBenchmark::Enabled()) {
+        as_network.Dispose();
+    }
     if (!RLBenchmark::Enabled()) {
         DisposeImGui();
     }
 
-    SDLNet_Quit();
+    if (!RLBenchmark::Enabled()) {
+        SDLNet_Quit();
+    }
     SDL_Quit();
 
     // Save config on shutdown, in case we have some global data stored in the configuration.
@@ -1760,7 +1766,7 @@ void Engine::Update() {
 #endif
 
 #if ENABLE_STEAMWORKS
-    {
+    if (!RLBenchmark::Enabled()) {
         PROFILER_ZONE(g_profiler_ctx, "Steam update");
         Steamworks::Instance()->Update(current_engine_state_.type != kEngineLevelState && current_engine_state_.type != kEngineEditorLevelState);
     }
@@ -2081,12 +2087,14 @@ void Engine::Update() {
     sound.UpdateGameTimestep(game_timer.timestep);
     sound.Update();
 
-    if (Online::Instance()->IsAwaitingShutdown()) {
-        Online::Instance()->StopMultiplayer();
-    }
+    if (!RLBenchmark::Enabled()) {
+        if (Online::Instance()->IsAwaitingShutdown()) {
+            Online::Instance()->StopMultiplayer();
+        }
 
-    if (Online::Instance()->IsActive()) {
-        Online::Instance()->CheckPendingMessages();
+        if (Online::Instance()->IsActive()) {
+            Online::Instance()->CheckPendingMessages();
+        }
     }
 
     if (!level_loaded_ || waiting_for_input_) {
@@ -2205,11 +2213,11 @@ void Engine::Update() {
 
                 // if host, go over all changes and send over socket.
                 // client, go over all updates for env objects
-                if (Online::Instance()->IsActive()) {
+                if (!RLBenchmark::Enabled() && Online::Instance()->IsActive()) {
                     Online::Instance()->UpdateObjects(scenegraph_);
                 }
 
-                if (Online::Instance()->IsActive()) {
+                if (!RLBenchmark::Enabled() && Online::Instance()->IsActive()) {
                     for (auto eo : scenegraph_->visible_static_meshes_) {
                         eo->Update(game_timer.timestep);
                     }
@@ -2271,12 +2279,14 @@ void Engine::Update() {
     }
 
     asset_manager.Update();
-    as_network.Update();
+    if (!RLBenchmark::Enabled()) {
+        as_network.Update();
+    }
 
     if (!RLBenchmark::Enabled()) {
         UpdateImGui();
     }
-    if (Online::Instance() != nullptr) {
+    if (!RLBenchmark::Enabled() && Online::Instance() != nullptr) {
         Online::Instance()->LateUpdate(GetSceneGraph());
     }
 
@@ -5998,7 +6008,9 @@ void Engine::Initialize() {
 #endif
     AssetPreload::Instance().Initialize();
 #if ENABLE_STEAMWORKS
-    Steamworks::Instance()->Initialize();
+    if (!rl_headless) {
+        Steamworks::Instance()->Initialize();
+    }
 #endif
     // multiplayer.Initialize();
 
@@ -6049,10 +6061,11 @@ void Engine::Initialize() {
         LOGE << "Failed when initializing SDL timer subsystem" << std::endl;
     }
 
-    LOGI << "Initializing SDL_net" << std::endl;
-    SDLNet_Init();
-
-    as_network.Initialize();
+    if (!rl_headless) {
+        LOGI << "Initializing SDL_net" << std::endl;
+        SDLNet_Init();
+        as_network.Initialize();
+    }
     asset_manager.Initialize();
 
     KeyCommand::Initialize();
