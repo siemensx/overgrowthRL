@@ -14,6 +14,7 @@ route through wrap_command() rather than invoking the binary directly.
 from __future__ import annotations
 
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -51,6 +52,15 @@ def ensure_launcher_built() -> Path:
 def wrap_command(command: list[str]) -> list[str]:
     """Prepends the ASLR-disabling launcher to an engine invocation.
     `command[0]` must be the engine binary path; the rest are its arguments.
+
+    No-op on Windows. There is no exec-wrapper equivalent there, and none is
+    needed: the trainer build disables ASLR at LINK time with /DYNAMICBASE:NO,
+    which gives the same fixed address layout for every launch without paying
+    an extra process per engine spawn. The same-seed bit-identical gate must
+    still be re-established on that build before any Windows number is
+    trusted (AGENTS.md, "Windows is a third numeric regime").
     """
+    if sys.platform == "win32":
+        return command
     launcher = ensure_launcher_built()
     return [str(launcher)] + command
