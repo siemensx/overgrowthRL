@@ -18,6 +18,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import paths
+
 import noaslr
 from ogreplay import ReplayReader, runtime_fingerprint
 
@@ -49,7 +51,7 @@ def main() -> int:
     repo_root = Path(args.repo_root).resolve()
     replay_path = Path(args.replay).resolve()
     report_path = Path(args.report).resolve()
-    binary = Path(args.binary_path).resolve() if args.binary_path else repo_root / "BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth"
+    binary = paths.engine_binary(repo_root, args.binary_path).resolve()
     reader = ReplayReader(replay_path)
     summary = reader.summary()
     manifest = reader.manifest

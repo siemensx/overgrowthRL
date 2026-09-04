@@ -25,6 +25,7 @@ from pathlib import Path
 import numpy as np
 
 import noaslr
+import paths
 from obs_schema import ObsLayout, DEFAULT_LAYOUT, SCHEMA_VERSION
 from reward import RewardComputer, RewardConfig
 from shm_env import ShmEnv
@@ -140,7 +141,7 @@ class OvergrowthEnv:
         # needs the actual current/previous readings, not a flattened window.
         self.frame_stack = max(1, frame_stack)
         self._frame_stack_buffer: deque = deque(maxlen=self.frame_stack)
-        self.binary_path = Path(binary_path) if binary_path else self.repo_root / "BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth"
+        self.binary_path = paths.engine_binary(self.repo_root, binary_path)
         self._launch_timeout = launch_timeout_seconds
 
         write_dir_parent = Path(write_dir_parent) if write_dir_parent else self.repo_root / ".rl_write_dirs"

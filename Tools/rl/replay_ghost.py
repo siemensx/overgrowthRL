@@ -62,6 +62,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import paths
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import noaslr
 
@@ -96,7 +98,7 @@ def parse_args():
 def main():
     args = parse_args()
     repo_root = Path(args.repo_root)
-    binary_path = Path(args.binary_path) if args.binary_path else repo_root / "BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth"
+    binary_path = paths.engine_binary(repo_root, args.binary_path)
 
     write_dir_parent = repo_root / ".rl_write_dirs"
     write_dir_parent.mkdir(parents=True, exist_ok=True)

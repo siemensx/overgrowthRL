@@ -7,7 +7,7 @@ the full loop end to end -- this is the reference client the C++ side
 (Source/Main/rl_shm_transport.{h,cpp}) was validated against.
 
 Usage: start the engine first, e.g.
-    BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth \\
+    $OGRL_BINARY \\
         --write-dir <isolated dir> --working-dir <repo_root> \\
         --disable-rendering --no-dialogues \\
         --benchmark --benchmark-warmup-steps 0 --benchmark-steps 500 --benchmark-seed 1 \\

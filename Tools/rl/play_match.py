@@ -19,6 +19,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import paths
+
 import numpy as np
 import torch
 
@@ -171,10 +173,7 @@ def main() -> int:
     session_dir.mkdir(parents=True, exist_ok=True)
     status = MatchStatus(Path(args.status_path), args.match_id, args.checkpoint_id or Path(args.checkpoint).name, args.policy_mode)
     log_path = session_dir / "rounds.jsonl"
-    data_root = Path(args.data_root).expanduser().resolve() if args.data_root else Path(
-        "/Users/pavlov/Library/Application Support/Steam/steamapps/common/"
-        "Overgrowth/Overgrowth.app/Contents/MacOS/Data"
-    )
+    data_root = Path(args.data_root).expanduser().resolve() if args.data_root else paths.data_dir()
     frame_stack = args.frame_stack
     checkpoint_probe = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     if frame_stack is None:

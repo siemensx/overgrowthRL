@@ -30,10 +30,9 @@ import difflib
 import sys
 from pathlib import Path
 
-DEFAULT_DATA = (
-    "/Users/pavlov/Library/Application Support/Steam/steamapps/common/"
-    "Overgrowth/Overgrowth.app/Contents/MacOS/Data"
-)
+import paths
+
+DEFAULT_DATA = str(paths.data_dir())
 
 
 def transform_script(stock: str) -> str:

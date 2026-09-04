@@ -13,10 +13,9 @@ import hashlib
 import sys
 from pathlib import Path
 
-DEFAULT_DATA = (
-    "/Users/pavlov/Library/Application Support/Steam/steamapps/common/"
-    "Overgrowth/Overgrowth.app/Contents/MacOS/Data"
-)
+import paths
+
+DEFAULT_DATA = str(paths.data_dir())
 
 # Keep the human match's gameplay script forked from the exact scenario used
 # by run15.  The training fork owns the deterministic 1v1 spawn selection,
