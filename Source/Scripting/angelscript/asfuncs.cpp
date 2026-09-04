@@ -2510,10 +2510,24 @@ EntityType ASGetType(Object* obj) {
     return obj->GetType();
 }
 
+namespace {
+char object_id_array_type_cache_key;
+
+asITypeInfo* GetObjectIDArrayScriptType(asIScriptEngine* engine) {
+    const asPWORD cache_key = reinterpret_cast<asPWORD>(&object_id_array_type_cache_key);
+    asITypeInfo* array_type = static_cast<asITypeInfo*>(engine->GetUserData(cache_key));
+    if (array_type == NULL) {
+        array_type = engine->GetTypeInfoById(engine->GetTypeIdByDecl("array<int>"));
+        engine->SetUserData(array_type, cache_key);
+    }
+    return array_type;
+}
+}  // namespace
+
 CScriptArray* ASGetObjectIDArrayType(int type) {
     asIScriptContext* ctx = asGetActiveContext();
     asIScriptEngine* engine = ctx->GetEngine();
-    asITypeInfo* arrayType = engine->GetTypeInfoById(engine->GetTypeIdByDecl("array<int>"));
+    asITypeInfo* arrayType = GetObjectIDArrayScriptType(engine);
     CScriptArray* array = CScriptArray::Create(arrayType, (asUINT)0);
     array->Reserve(the_scenegraph->objects_.size());
 
@@ -2532,7 +2546,7 @@ CScriptArray* ASGetObjectIDArrayType(int type) {
 CScriptArray* ASGetObjectIDArray() {
     asIScriptContext* ctx = asGetActiveContext();
     asIScriptEngine* engine = ctx->GetEngine();
-    asITypeInfo* arrayType = engine->GetTypeInfoById(engine->GetTypeIdByDecl("array<int>"));
+    asITypeInfo* arrayType = GetObjectIDArrayScriptType(engine);
     CScriptArray* array = CScriptArray::Create(arrayType, (asUINT)0);
     array->Reserve(the_scenegraph->objects_.size());
 
