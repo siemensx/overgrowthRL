@@ -194,6 +194,15 @@ def parse_args():
     p.add_argument("--gate-win-rate", type=float, default=0.75)
     p.add_argument("--opponents", type=int, default=1, help="Stage D/E axis; NOT wired to game_type in the level "
                                                                "script yet, see arena_level_1v1_unarmed.as -- keep at 1")
+    p.add_argument("--stall-target-weight", type=float, default=None,
+                    help="per-step stall tax once stall_grace_steps of zero combat contact have passed. "
+                         "Omit to keep the profile default (run8 pins it to 0.0). ~0.02 is the value the "
+                         "term was designed around. Outcome-based: it constrains WHETHER the agent engages, "
+                         "never HOW -- see reward.py on why distance shaping was rejected.")
+    p.add_argument("--stall-ramp-steps", type=int, default=None,
+                    help="decisions over which the stall tax ramps from 0 to --stall-target-weight, counted "
+                         "from this run's own resume point (stall_intro_step). Ramped, never stepped: run6 "
+                         "regressed on an abrupt introduction of this exact term.")
     p.add_argument("--species-mode", type=int, default=0, help="0=legacy random guard/raider (Stage A), 4=random of all 3 (Stage B)")
     p.add_argument("--weapons-prob", type=float, default=0.0, help="probability a round is armed (Stage C axis)")
     # --- OGRL-20260817-028 Sec8.1: Tier-1 tape recording ---
@@ -332,6 +341,20 @@ def main():
     if args.reward_profile == "run8":
         curriculum_kwargs["bootstrap_closing_weight"] = 0.0
         curriculum_kwargs["stall_target_weight"] = 0.0
+    # OGRL-20260904-058: the run8 profile pinned stall_target_weight to 0.0 on
+    # the reasoning that "a well-defined 1v1 needs no engagement bootstrap".
+    # That holds against an opponent that closes on its own and fails against
+    # one that does not -- run15 wins 3/3 against the stock expert and 0/3
+    # against an idle actor, never closing inside 2.8 m. The stall tax is the
+    # right lever for that (outcome-based: it fires after stall_grace_steps of
+    # zero combat contact and never dictates HOW to engage, unlike the
+    # distance shaping that was deliberately rejected). These flags make it
+    # settable without editing code; omitting them reproduces the pinned
+    # behaviour exactly.
+    if args.stall_target_weight is not None:
+        curriculum_kwargs["stall_target_weight"] = args.stall_target_weight
+    if args.stall_ramp_steps is not None:
+        curriculum_kwargs["stall_ramp_steps"] = args.stall_ramp_steps
     curriculum = Curriculum(**curriculum_kwargs)
 
     # OGRL-20260817-028 Sec3: environment-composition curriculum (separate
