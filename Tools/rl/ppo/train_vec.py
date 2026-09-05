@@ -606,6 +606,7 @@ def main():
                         "d": ended_difficulty, "opponents": ended_scenario.get("opponents"),
                         "species": ended_scenario.get("species"), "armed": (ended_scenario.get("weapons") or 0) > 0,
                         "soft_reset": ended_scenario.get("soft_reset"),
+                        "level": infos[i].get("level"),
                     })
                     if tape_recorder is not None:
                         sampled_worker0 = (i == 0 and args.tape_every > 0 and update % args.tape_every == 0)

@@ -341,6 +341,10 @@ class VecOvergrowthEnv:
             # for the next episode.
             info["scenario"] = self._episode_scenario[i]
             info["seed"] = self._episode_seed[i]
+            # Map axis: which level actually produced this episode. Recorded here
+            # rather than derived from the slot index, because a standby carries its
+            # own level and swaps between slots, so slot index alone is ambiguous.
+            info["level"] = self.envs[i].level
             info["native_trace_path"] = str(self.envs[i].equivalence_digest_path) if self.envs[i].equivalence_digest_path is not None else None
             if terminal or truncated:
                 self._episode_steps[i] = 0
