@@ -86,8 +86,12 @@ if _IS_WINDOWS:
         h = _k32.OpenSemaphoreW(_SEMAPHORE_ALL_ACCESS, False, _object_name(name))
         return h if h else None
 
-    def _sem_wait(sem) -> None:
-        _k32.WaitForSingleObject(sem, _INFINITE)
+    _WAIT_TIMEOUT = 0x00000102
+
+    def _sem_wait(sem, timeout_s: float | None = None) -> bool:
+        """True if acquired, False on timeout. None means wait forever."""
+        ms = _INFINITE if timeout_s is None else max(0, int(timeout_s * 1000))
+        return _k32.WaitForSingleObject(sem, ms) != _WAIT_TIMEOUT
 
     def _sem_post(sem) -> None:
         _k32.ReleaseSemaphore(sem, 1, None)
@@ -110,6 +114,8 @@ else:
     _libc.sem_open.restype = _SEM_T_P
     _libc.sem_open.argtypes = [ctypes.c_char_p, ctypes.c_int]  # only the O_RDWR-no-create form is used here
     _libc.sem_wait.argtypes = [_SEM_T_P]
+    _libc.sem_trywait.restype = ctypes.c_int
+    _libc.sem_trywait.argtypes = [_SEM_T_P]
     _libc.sem_post.argtypes = [_SEM_T_P]
     _libc.sem_close.argtypes = [_SEM_T_P]
 
@@ -135,8 +141,39 @@ else:
         s = _libc.sem_open(name.encode("utf-8"), 0)
         return None if s == _SEM_FAILED else s
 
-    def _sem_wait(sem) -> None:
-        _libc.sem_wait(sem)
+    def _sem_wait(sem, timeout_s: float | None = None) -> bool:
+        """True if acquired, False on timeout. None means wait forever.
+
+        macOS does not implement sem_timedwait (it is declared but always fails
+        with ENOSYS), so a bounded wait has to poll sem_trywait. The sleep is
+        short enough not to add meaningful latency to a ~1ms step and long
+        enough not to spin a core.
+        """
+        if timeout_s is None:
+            _libc.sem_wait(sem)
+            return True
+        # Adaptive backoff. A step normally completes in well under a
+        # millisecond, so sleeping a fixed 0.5ms per wait would dominate the
+        # step time and roughly halve throughput. Spin-yield first (covers the
+        # overwhelming majority of waits at no latency cost), then back off so a
+        # genuinely stalled engine costs no CPU while we count down to the
+        # deadline.
+        if _libc.sem_trywait(sem) == 0:
+            return True
+        deadline = time.monotonic() + timeout_s
+        spins = 0
+        while True:
+            if _libc.sem_trywait(sem) == 0:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            spins += 1
+            if spins < 2000:
+                time.sleep(0)          # yield, no timer
+            elif spins < 4000:
+                time.sleep(0.0002)
+            else:
+                time.sleep(0.005)
 
     def _sem_post(sem) -> None:
         _libc.sem_post(sem)
@@ -177,6 +214,22 @@ RESET_HARD = 0
 RESET_SOFT = 1
 
 _ACTION_FLOATS = 8  # move_x, move_y, jump, crouch, attack, grab, drop, walk
+
+
+# How long a worker may go silent before it is declared dead and rebuilt.
+# Generous by default: a hard reset with a cold navmesh bake legitimately takes
+# seconds, and a false positive costs a restarted episode. Override for tests.
+_DEFAULT_WAIT_TIMEOUT = float(os.environ.get("OGRL_SHM_WAIT_TIMEOUT", "120"))
+
+
+class ShmWaitTimeout(TimeoutError):
+    """The engine did not publish within the deadline.
+
+    Raised instead of blocking forever. On 2026-09-05 a run deadlocked with the
+    trainer parked in sem_wait and every engine idle at 0% CPU, waiting for an
+    action that could never arrive because the trainer was waiting for them --
+    an unbreakable cycle that a bounded wait turns into a recoverable error.
+    """
 
 
 def _unpack_header(raw: bytes) -> dict:
@@ -280,9 +333,23 @@ class ShmEnv:
         if self._obs_sem is None or self._action_sem is None:
             raise OSError(_last_error(), f"semaphore open failed for {self._name}")
 
-    def wait_for_observation(self) -> Observation:
-        """Blocks until the engine has published a new observation."""
-        _sem_wait(self._obs_sem)
+    def wait_for_observation(self, timeout_s: float | None = None) -> Observation:
+        """Wait for the engine to publish an observation.
+
+        Bounded by default. An unbounded wait here is what turned a single lost
+        wakeup into a permanent deadlock on 2026-09-05: the trainer sat in
+        sem_wait at 0% CPU for three hours and every health metric -- throughput,
+        win rate, engine count -- looked normal because nothing was crashing.
+        Pass timeout_s=None only where blocking forever is genuinely correct.
+        """
+        if timeout_s is None:
+            timeout_s = _DEFAULT_WAIT_TIMEOUT
+        if not _sem_wait(self._obs_sem, timeout_s):
+            raise ShmWaitTimeout(
+                f"engine {self._name} published no observation within {timeout_s}s. "
+                f"It is alive but silent, or has stopped stepping; the caller should "
+                f"restart this worker rather than wait."
+            )
         header = _unpack_header(self._mm[:_HEADER_SIZE])
         obs_bytes = self._mm[_HEADER_SIZE : _HEADER_SIZE + header["obs_floats"] * 4]
         values = list(struct.unpack(f"<{header['obs_floats']}f", obs_bytes))

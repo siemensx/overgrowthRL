@@ -55,6 +55,7 @@ from typing import Sequence, Callable
 
 import numpy as np
 
+from shm_env import ShmWaitTimeout
 from env import OvergrowthEnv, ACTION_DIM
 from obs_schema import ObsLayout, DEFAULT_LAYOUT
 from reward import RewardConfig
@@ -187,6 +188,14 @@ class VecOvergrowthEnv:
                 [(f"s{i}", base_seed + n_envs + i, _levels[(n_envs + i) % len(_levels)])
                  for i in range(self.k_standby)]
         self.levels = [sp[2] for sp in specs]
+        # Retain the maker so a worker that goes silent can be rebuilt in place
+        # (see _step_one's ShmWaitTimeout handler). Rebuilds always take a fresh
+        # shm suffix: a name whose previous owner was SIGKILLed leaves an orphaned
+        # semaphore behind, and re-opening it attaches to something no live engine
+        # will ever post to -- a hang that looks exactly like the original fault.
+        self._make_env = _make
+        self._recoveries = 0
+        self._shm_prefix = shm_prefix
         built = list(self._pool.map(lambda spec: _make(*spec), specs))
         self.envs: list[OvergrowthEnv] = built[:n_envs]
         standby_envs = built[n_envs:]
@@ -329,7 +338,41 @@ class VecOvergrowthEnv:
         def _step_one(i: int):
             worker_start = time.monotonic()
             blocking_reset_seconds = 0.0
-            obs, reward, done, info = self.envs[i].step(actions[i])
+            try:
+                obs, reward, done, info = self.envs[i].step(actions[i])
+            except ShmWaitTimeout as exc:
+                # A worker went silent. Before bounded waits existed this parked
+                # the trainer in sem_wait forever at 0% CPU with every health
+                # metric still reading green (OGRL-20260905-065). Rebuild the
+                # worker and carry on: one lost episode costs seconds, a hung run
+                # costs however long it takes a human to notice.
+                self._recoveries += 1
+                dead, self.envs[i] = self.envs[i], None
+                try:
+                    dead.close()
+                except Exception:
+                    pass
+                suffix = f"r{self._recoveries}_{i}"
+                self.envs[i] = self._make_env(suffix, dead.seed + 100000 + self._recoveries, dead.level)
+                obs, scenario = self._reset_env(self.envs[i])
+                self._episode_scenario[i] = scenario
+                self._episode_seed[i] = self.envs[i].last_reset_seed
+                self._episode_steps[i] = 0
+                self._episode_counts[i] += 1
+                # Must carry every key the normal path produces -- step() unpacks
+                # info["perf"] unconditionally, so a partial dict turns a recovered
+                # worker into a KeyError that kills the run anyway. Found by fault
+                # injection; a code read would not have caught it.
+                info = {"reward_components": {"opponent_knockout": 0.0},
+                        "worker_recovered": True, "recovery_reason": str(exc),
+                        "scenario": scenario, "seed": self._episode_seed[i],
+                        "level": self.envs[i].level, "native_trace_path": None,
+                        "perf": {"worker_step_seconds": time.monotonic() - worker_start,
+                                 "blocking_reset_seconds": 0.0}}
+                # truncated=True, not terminal: the episode did not really end,
+                # it was abandoned, so the caller bootstraps the value rather than
+                # treating this as a genuine outcome and polluting the win rate.
+                return obs, 0.0, False, True, info, obs
             self._episode_steps[i] += 1
             won = info["reward_components"]["opponent_knockout"] > 0
             terminal = bool(done or won)
