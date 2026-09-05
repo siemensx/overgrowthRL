@@ -97,6 +97,12 @@ def _git_sha(repo_root: str) -> str:
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[3]))
+    p.add_argument("--levels", default="",
+                   help="comma-separated level list for the map axis (C6). Workers are "
+                        "assigned round-robin and keep their level for the run, so every "
+                        "PPO batch mixes maps without any extra reset cost. Overrides "
+                        "--level when set. Hold maps back from this list to keep a "
+                        "genuine transfer test.")
     p.add_argument("--level", default="arenas/oval_arena.xml")
     p.add_argument("--shm-prefix", default="/ogrl_vec")
     p.add_argument("--n-envs", type=int, default=4,
@@ -314,7 +320,7 @@ def main():
         "replay": {"container": "ogreplay", "version": 1,
                    "authoritative_state_capture": "native-digest-v2" if not args.no_native_capture else "disabled",
                    "engine_launch": "native-action-and-digest" if not args.no_native_capture else "disabled"},
-                "env": {"level": args.level, "n_envs": args.n_envs, "max_episode_steps": args.max_episode_steps,
+                "env": {"level": args.levels or args.level, "n_envs": args.n_envs, "max_episode_steps": args.max_episode_steps,
                 "frame_stack": args.frame_stack, "act_period": args.act_period, "k_standby": args.k_standby},
         "algo": {k: v for k, v in vars(args).items() if k not in ("entropy_coef_start",)},
         "reward_profile": args.reward_profile,
@@ -367,7 +373,9 @@ def main():
         rng_seed=args.seed,
     )
     vec_env = VecOvergrowthEnv(
-        n_envs=args.n_envs, repo_root=args.repo_root, level=args.level, shm_prefix=args.shm_prefix,
+        n_envs=args.n_envs, repo_root=args.repo_root,
+        level=([x.strip() for x in args.levels.split(",") if x.strip()] or args.level),
+        shm_prefix=args.shm_prefix,
         base_seed=args.seed, layout=layout, reward_config=curriculum.reward_config_for_step(initial_global_step),
         frame_stack=args.frame_stack, max_episode_steps=args.max_episode_steps,
         k_standby=args.k_standby, act_period=args.act_period,

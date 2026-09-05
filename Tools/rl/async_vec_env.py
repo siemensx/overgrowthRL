@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import threading
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Sequence, Callable
 
 import numpy as np
 
@@ -64,7 +64,7 @@ class AsyncVecOvergrowthEnv:
         self,
         n_envs: int,
         repo_root: str,
-        level: str = "arenas/oval_arena.xml",
+        level: "str | Sequence[str]" = "arenas/oval_arena.xml",
         shm_prefix: str = "/ogrl_async",
         base_seed: int = 1,
         layout: ObsLayout = DEFAULT_LAYOUT,
@@ -80,6 +80,15 @@ class AsyncVecOvergrowthEnv:
         if n_envs < 1:
             raise ValueError("n_envs must be positive")
         self.n_envs = n_envs
+        # Map axis. A worker holds one level for its whole life: assigning per
+        # worker rather than per episode means every PPO batch mixes maps, while
+        # no episode ever pays a level reload it would not otherwise pay. Levels
+        # are dealt round-robin so the mix is deterministic given n_envs.
+        levels = [level] if isinstance(level, str) else list(level)
+        if not levels:
+            raise ValueError("at least one level is required")
+        self.levels = [levels[i % len(levels)] for i in range(n_envs)]
+        self.level = self.levels[0]
         self.layout = layout
         self.frame_stack = max(1, frame_stack)
         self.observation_dim = layout.total_floats * self.frame_stack
@@ -102,10 +111,10 @@ class AsyncVecOvergrowthEnv:
 
         self._pool = ThreadPoolExecutor(max_workers=n_envs, thread_name_prefix="ogrl-async-env")
 
-        def make(suffix: str, seed: int) -> OvergrowthEnv:
+        def make(suffix: str, seed: int, worker_level: str) -> OvergrowthEnv:
             return OvergrowthEnv(
                 repo_root=repo_root,
-                level=level,
+                level=worker_level,
                 shm_name=f"{shm_prefix}{suffix}",
                 controller_id=0,
                 seed=seed,
@@ -117,7 +126,7 @@ class AsyncVecOvergrowthEnv:
                 equivalence_trace_path=(self.native_trace_dir / f"{suffix}.input.jsonl") if self.native_trace_dir else None,
             )
 
-        specs = [(str(i), base_seed + i) for i in range(n_envs)]
+        specs = [(str(i), base_seed + i, self.levels[i]) for i in range(n_envs)]
         self.envs = list(self._pool.map(lambda spec: make(*spec), specs))
         self._current_obs: np.ndarray | None = None
         self._closed = False

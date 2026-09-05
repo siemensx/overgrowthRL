@@ -51,7 +51,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Sequence, Callable
 
 import numpy as np
 
@@ -72,7 +72,7 @@ class VecOvergrowthEnv:
         self,
         n_envs: int,
         repo_root: str,
-        level: str = "arenas/oval_arena.xml",
+        level: "str | Sequence[str]" = "arenas/oval_arena.xml",
         shm_prefix: str = "/ogrl_vec",
         base_seed: int = 1,
         layout: ObsLayout = DEFAULT_LAYOUT,
@@ -102,6 +102,17 @@ class VecOvergrowthEnv:
                                                             # (engine's own default difficulty, unarmed, 1 opponent).
     ):
         self.n_envs = n_envs
+        # Map axis (C6). A level belongs to a PHYSICAL engine for its lifetime,
+        # not to a vector slot: a standby carries its own level with it when it
+        # swaps into a slot, so slots see a changing map mix while no engine
+        # ever reloads a level it would not otherwise have loaded. Levels are
+        # dealt round-robin over actives + standbys, so the mix is deterministic
+        # given n_envs and k_standby. Holding maps back from this list is what
+        # makes a transfer test genuine.
+        _levels = [level] if isinstance(level, str) else list(level)
+        if not _levels:
+            raise ValueError("at least one level is required")
+        self.level_pool = _levels
         self.layout = layout
         self.frame_stack = frame_stack
         self.max_episode_steps = max_episode_steps
@@ -155,11 +166,11 @@ class VecOvergrowthEnv:
         self._reset_counter = 0
         self._reset_counter_lock = threading.Lock()
 
-        def _make(shm_suffix: str, seed: int) -> OvergrowthEnv:
+        def _make(shm_suffix: str, seed: int, worker_level: str) -> OvergrowthEnv:
             # Darwin's shm/sem name limit (~31 bytes) constrains shm_prefix +
             # suffix length -- see rl_shm_transport.h. Keep shm_prefix short.
             return OvergrowthEnv(
-                repo_root=repo_root, level=level, shm_name=f"{shm_prefix}{shm_suffix}",
+                repo_root=repo_root, level=worker_level, shm_name=f"{shm_prefix}{shm_suffix}",
                 controller_id=0, seed=seed, layout=layout,
                 reward_config=reward_config, frame_stack=frame_stack, act_period=act_period,
                 equivalence_digest_path=(self.native_trace_dir / f"{shm_suffix}.jsonl") if self.native_trace_dir is not None else None,
@@ -172,8 +183,10 @@ class VecOvergrowthEnv:
         # each other during their own independent startup. Actives and
         # standbys launch together, one batch, not two.
         n_total = n_envs + self.k_standby
-        specs = [(str(i), base_seed + i) for i in range(n_envs)] + \
-                [(f"s{i}", base_seed + n_envs + i) for i in range(self.k_standby)]
+        specs = [(str(i), base_seed + i, _levels[i % len(_levels)]) for i in range(n_envs)] + \
+                [(f"s{i}", base_seed + n_envs + i, _levels[(n_envs + i) % len(_levels)])
+                 for i in range(self.k_standby)]
+        self.levels = [sp[2] for sp in specs]
         built = list(self._pool.map(lambda spec: _make(*spec), specs))
         self.envs: list[OvergrowthEnv] = built[:n_envs]
         standby_envs = built[n_envs:]
