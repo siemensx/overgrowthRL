@@ -11,6 +11,7 @@ No third-party dependencies, no build step. Binds 127.0.0.1 only.
 from __future__ import annotations
 
 import json
+import re
 import hashlib
 import os
 import signal
@@ -703,6 +704,12 @@ class Handler(BaseHTTPRequestHandler):
         mode = payload.get("policy_mode", "deterministic")
         if mode not in ("deterministic", "sampled"):
             return self._send_error_json(400, "invalid policy mode")
+        # Duel level. Defaults to oval for backwards compatibility, but a
+        # corpus-trained checkpoint should be fought on a map it actually
+        # trained on -- see play_match.py's --level help.
+        level = payload.get("level") or "arenas/oval_arena_human_duel.xml"
+        if not re.fullmatch(r"arenas/[A-Za-z0-9_.-]+\.xml", level):
+            return self._send_error_json(400, "invalid level")
 
         with _match_lock:
             active_matches = [
@@ -729,7 +736,8 @@ class Handler(BaseHTTPRequestHandler):
                 "--status-path", str(status_path),
                 "--session-dir", str(session_dir),
                 "--match-id", match_id,
-                "--policy-mode", mode]
+                "--policy-mode", mode,
+                "--level", level]
         try:
             log_file = open(log_path, "w")
             proc = subprocess.Popen(argv, cwd=self.repo_root, stdout=log_file, stderr=subprocess.STDOUT,

@@ -157,6 +157,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--status-path", required=True)
     parser.add_argument("--session-dir", required=True)
     parser.add_argument("--match-id", required=True)
+    parser.add_argument("--level", default="arenas/oval_arena_human_duel.xml",
+                        help="duel level to fight on. Must be driven by "
+                             "arena_level_human_duel.as -- gen_arena_map.py --human-duel "
+                             "emits corpus maps in that form. The default is oval, which "
+                             "is NOT the right choice for a corpus-trained checkpoint: "
+                             "run17_mac scores 60%% there against 82%% on its own maps.")
     parser.add_argument("--policy-mode", choices=("deterministic", "sampled"), default="deterministic")
     parser.add_argument("--frame-stack", type=int, default=None)
     parser.add_argument("--act-period", type=int, default=4)
@@ -222,7 +228,12 @@ def main() -> int:
     signal.signal(signal.SIGTERM, stop_signal)
     signal.signal(signal.SIGINT, stop_signal)
     shm_name = "/ogrl_m" + args.match_id.replace("-", "")[-10:]
-    level = "arenas/oval_arena_human_duel.xml"
+    # The map matters for what this match actually tests. A checkpoint trained
+    # on the generated corpus has partly forgotten oval (OGRL-20260905-064:
+    # 82.5% -> 60.0% at band 0.9), so fighting it on oval measures the map it
+    # lost rather than the policy it has. Pick a map the checkpoint trained on
+    # to test its strength, or oval to reproduce the forgetting.
+    level = args.level
     env = None
     try:
         env = OvergrowthEnv(

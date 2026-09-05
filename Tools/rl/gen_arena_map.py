@@ -247,6 +247,12 @@ def main() -> int:
                     help="bare floor plus perimeter walls only -- no divider, cover or "
                          "ledges. The floor of achievable geometry cost, for throughput "
                          "baselines where map content is not the variable under test.")
+    ap.add_argument("--human-duel", action="store_true",
+                    help="emit the map driven by arena_level_human_duel.as, so "
+                         "play_match.py can fight a checkpoint on it. The duel "
+                         "script spawns both sides as player actors and owns the "
+                         "camera; its paths sidecar is keyed to the script name, "
+                         "so no per-level path file is needed.")
     ap.add_argument("--script", default="Data/Scripts/arena_level.as")
     ap.add_argument("--overgrowth-data", default=None)
     ap.add_argument("--dry-run", action="store_true")
@@ -262,7 +268,8 @@ def main() -> int:
     cols = math.ceil(math.sqrt(args.arenas))
     span = (cols - 1) * args.arena_spacing
     cam = (0.0, floor_top + 40.0, -span / 2 - 60.0)
-    lvl = Level(args.name, args.script, terrain=args.terrain, cam=cam)
+    script = "Data/Scripts/arena_level_human_duel.as" if args.human_duel else args.script
+    lvl = Level(args.name, script, terrain=args.terrain, cam=cam)
 
     sy = floor_top + 0.7
     for i in range(args.arenas):

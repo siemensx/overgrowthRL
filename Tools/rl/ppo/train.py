@@ -31,6 +31,8 @@ import time
 from pathlib import Path
 
 import numpy as np
+import os
+import shutil
 import torch
 import torch.nn as nn
 
@@ -339,8 +341,51 @@ def _explained_variance(values: np.ndarray, returns: np.ndarray) -> float:
     return float(1.0 - np.var(returns - values) / var_returns)
 
 
-def _save_checkpoint(path: str, policy, optimizer, obs_normalizer, reward_normalizer, global_step: int) -> None:
-    torch.save({
+def _checkpoint_step(path) -> int:
+    """global_step recorded in an existing checkpoint, or -1 if unreadable."""
+    try:
+        return int(torch.load(path, map_location="cpu", weights_only=False).get("global_step", -1))
+    except Exception:
+        return -1
+
+
+def _save_checkpoint(path: str, policy, optimizer, obs_normalizer, reward_normalizer, global_step: int,
+                     archive_every: int = 40) -> None:
+    """Write a checkpoint atomically, refusing to regress, keeping snapshots.
+
+    Three properties, each earned by a specific failure on 2026-09-05
+    (OGRL-20260905-065/-066), which together cost 25.4M steps:
+
+    1. ATOMIC. torch.save wrote straight to `path`, so any reader -- an scp, a
+       backup, an evaluation loading the live file -- could observe a partially
+       written checkpoint, and a crash mid-write left a corrupt one. Write to a
+       temp file in the same directory, fsync, then os.replace, which is atomic
+       on POSIX and Windows alike.
+
+    2. MONOTONIC. Refuse to overwrite a checkpoint that already records a HIGHER
+       global_step. The incident was a sync loop restoring a 4-hour-old copy over
+       live state every 15 minutes; every progress metric looked healthy because
+       none of them reads the checkpoint. A writer that cannot go backwards makes
+       that class of bug impossible at the point it matters, no matter which tool
+       misbehaves. Set OGRL_ALLOW_CHECKPOINT_REGRESSION=1 to override deliberately
+       (starting an unrelated run at a lower step over the same path).
+
+    3. ARCHIVED. Every `archive_every` saves, also drop an immutable
+       archive/<name>_<step>.pt. run16 peaked at 88% and was overwritten within the
+       hour with nothing to roll back to. Snapshots are ~6MB; a lost peak is hours.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and not os.environ.get("OGRL_ALLOW_CHECKPOINT_REGRESSION"):
+        existing = _checkpoint_step(path)
+        if existing > global_step:
+            raise RuntimeError(
+                f"refusing to overwrite {path} : it records global_step {existing:,}, "
+                f"newer than the {global_step:,} being written. Something is writing stale "
+                f"state over live progress -- check for a sync/copy job targeting this path. "
+                f"Set OGRL_ALLOW_CHECKPOINT_REGRESSION=1 only if this regression is intended."
+            )
+    payload = {
         "policy": policy.state_dict(),
         "optimizer": optimizer.state_dict(),
         "obs_normalizer": obs_normalizer.state_dict(),
@@ -357,7 +402,27 @@ def _save_checkpoint(path: str, policy, optimizer, obs_normalizer, reward_normal
         "layout_local_geometry_rays": policy.layout.local_geometry_rays,
         "layout_action_history_steps": policy.layout.action_history_steps,
         "frame_stack": policy.frame_stack,
-    }, path)
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp, "wb") as fh:
+        torch.save(payload, fh)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, path)
+
+    _save_checkpoint._n = getattr(_save_checkpoint, "_n", 0) + 1
+    if archive_every > 0 and _save_checkpoint._n % archive_every == 0:
+        arch = path.parent / "archive"
+        arch.mkdir(exist_ok=True)
+        snap = arch / f"{path.stem}_{global_step:012d}.pt"
+        if not snap.exists():
+            try:
+                shutil.copy2(path, snap)
+                keep = sorted(arch.glob(f"{path.stem}_*.pt"))[:-24]
+                for old in keep:
+                    old.unlink(missing_ok=True)
+            except OSError:
+                pass  # archiving is best-effort; never fail a training save over it
 
 
 if __name__ == "__main__":
