@@ -120,7 +120,10 @@ class Level:
     <DetailMaps>
         <DetailMap colorpath="Data/Textures/Terrain/DetailTextures/rubble.tga" normalpath="Data/Textures/Terrain/DetailTextures/rubble_normal.tga" materialpath="Data/Materials/default.xml" />
         <DetailMap colorpath="Data/Textures/Terrain/DetailTextures/black_rock.tga" normalpath="Data/Textures/Terrain/DetailTextures/black_rock_normal.tga" materialpath="Data/Materials/default.xml" />
+        <DetailMap colorpath="Data/Textures/Terrain/DetailTextures/dead_grass.tga" normalpath="Data/Textures/Terrain/DetailTextures/dead_grass_normal.tga" materialpath="Data/Materials/default.xml" />
+        <DetailMap colorpath="Data/Textures/Terrain/DetailTextures/pebbles.tga" normalpath="Data/Textures/Terrain/DetailTextures/pebbles_normal.tga" materialpath="Data/Materials/default.xml" />
     </DetailMaps>
+    <DetailObjects />
     <DetailObjects />
 </Terrain>
 """
@@ -161,7 +164,7 @@ class Level:
 
 
 def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
-                cx: float, cz: float, randomize: bool) -> None:
+                cx: float, cz: float, randomize: bool, minimal: bool = False) -> None:
     """One enclosed court: floor slab, perimeter walls, a divider with
     chokepoints, cover pillars and raised ledges.
 
@@ -170,7 +173,10 @@ def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
     ways there are through the middle, how wide they are, how much sight is
     broken, and how much high ground exists -- rather than cosmetic variety.
     """
-    if randomize:
+    if minimal:
+        n_gaps, gap_w, wall_h, div_h = 0, 0.0, 4.0, 0.0
+        n_pillars, ledge, ledge_h = 0, False, 0.0
+    elif randomize:
         n_gaps = rng.choice([1, 2, 2, 3])          # chokepoint count
         gap_w = rng.uniform(3.5, 8.0)              # chokepoint width
         wall_h = rng.uniform(3.0, 6.0)
@@ -194,7 +200,7 @@ def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
     # Divider across the middle, leaving n_gaps openings.
     n_seg = n_gaps + 1
     seg = (2 * half - n_gaps * gap_w) / n_seg
-    if seg > 0.5:
+    if n_gaps > 0 and seg > 0.5:
         left = cx - half
         for i in range(n_seg):
             c = left + seg / 2
@@ -218,68 +224,6 @@ def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
 
 
 
-def build_sky_temple(lvl: Level, rng: random.Random, floor_top: float,
-                     cx: float, cz: float) -> None:
-    """A ruined temple floating in open sky. Built for a human to enjoy
-    fighting in, not as an RL fixture.
-
-    The design intent, in Overgrowth's own terms -- it is a game about
-    momentum, leaps, wall-runs and throws, so a good arena should reward
-    moving rather than standing:
-
-      * a round central floor with a raised altar, so the strongest position
-        is visible, contested, and can be attacked from every side;
-      * a colonnade ringing it -- columns break line of sight, give something
-        to wall-run, and turn a straight charge into a read;
-      * four bridges out to satellite platforms, which are the flanking
-        routes and the retreat that costs you the high ground;
-      * nothing underneath. A ring-out is lethal, so every exchange near an
-        edge is a real decision. This is the cheapest source of drama the
-        engine offers and stock arenas mostly waste it.
-    """
-    R = 15.0          # main floor radius
-    ring_r = 11.5     # colonnade radius
-    col_h = 6.0
-    n_col = 10
-
-    # Main floor: a thick disk. soft_cylinder is 2x2x2 centred, so s=(R,h/2,R).
-    lvl.box(cx, floor_top - 0.75, cz, R, 0.75, R, 0.0, CYL)
-    # Altar: raised, and small enough that holding it is a commitment.
-    lvl.box(cx, floor_top + 0.6, cz, 5.0, 0.6, 5.0, 0.0, CYL)
-    lvl.box(cx, floor_top + 1.35, cz, 4.2, 0.15, 4.2, 0.0, DISK)
-
-    # Colonnade + arches spanning each pair.
-    for i in range(n_col):
-        a = 2 * math.pi * i / n_col
-        px, pz = cx + math.cos(a) * ring_r, cz + math.sin(a) * ring_r
-        lvl.box(px, floor_top + col_h / 2, pz, 0.7, col_h / 2, 0.7, 0.0, CYL)
-        # arch between this column and the next, tangent to the ring
-        a2 = 2 * math.pi * (i + 0.5) / n_col
-        ax, az = cx + math.cos(a2) * ring_r, cz + math.sin(a2) * ring_r
-        span = 2 * ring_r * math.sin(math.pi / n_col)
-        lvl.box(ax, floor_top + col_h - 0.4, az,
-                span / 2 / 0.98, 0.6, 0.35, -a2, ARCH)
-
-    # Four bridges out to satellites. Narrow: crossing one is a commitment.
-    for i in range(4):
-        a = math.pi / 2 * i + math.pi / 4
-        c, sn = math.cos(a), math.sin(a)
-        for t in (R + 5.0, R + 10.0):
-            lvl.box(cx + c * t, floor_top - 0.4, cz + sn * t, 2.6, 0.4, 1.6, -a)
-        sx, sz = cx + c * (R + 16.0), cz + sn * (R + 16.0)
-        lvl.box(sx, floor_top - 0.6, sz, 6.0, 0.6, 6.0, 0.0, CYL)   # satellite
-        lvl.box(sx, floor_top + 1.6, sz, 0.6, 1.6, 0.6, 0.0, POST)  # marker post
-
-    # Broken debris at mixed heights: stepping stones and ambush perches.
-    for i in range(7):
-        a = rng.uniform(0, 2 * math.pi)
-        d = rng.uniform(R + 3.0, R + 20.0)
-        h = rng.uniform(2.0, 9.0)
-        lvl.box(cx + math.cos(a) * d, floor_top + h, cz + math.sin(a) * d,
-                rng.uniform(1.2, 3.0), 0.35, rng.uniform(1.2, 3.0),
-                rng.uniform(0, math.pi))
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -299,9 +243,10 @@ def main() -> int:
                     help="include the dry_canyon heightmap. Off by default: the arena "
                          "then floats in open sky, which is both cheaper and avoids the "
                          "court intersecting terrain.")
-    ap.add_argument("--layout", choices=["court", "temple"], default="court",
-                    help="'court' is the RL test fixture (enclosed, chokepoints); "
-                         "'temple' is a hand-designed arena meant to be fun to play")
+    ap.add_argument("--minimal", action="store_true",
+                    help="bare floor plus perimeter walls only -- no divider, cover or "
+                         "ledges. The floor of achievable geometry cost, for throughput "
+                         "baselines where map content is not the variable under test.")
     ap.add_argument("--script", default="Data/Scripts/arena_level.as")
     ap.add_argument("--overgrowth-data", default=None)
     ap.add_argument("--dry-run", action="store_true")
@@ -323,12 +268,9 @@ def main() -> int:
     for i in range(args.arenas):
         cx = (i % cols) * args.arena_spacing - span / 2
         cz = (i // cols) * args.arena_spacing - span / 2
-        if args.layout == "temple":
-            build_sky_temple(lvl, rng, floor_top, cx, cz)
-            d = 9.0
-        else:
-            build_court(lvl, rng, args.half_size, floor_top, cx, cz, args.randomize)
-            d = args.half_size * 0.6
+        build_court(lvl, rng, args.half_size, floor_top, cx, cz,
+                    args.randomize, args.minimal)
+        d = args.half_size * 0.6
         # game_type 0 is the pair the RL fork uses; 1 and 2 are emitted for the
         # first arena only so normal play still works without spawning a crowd.
         lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)
