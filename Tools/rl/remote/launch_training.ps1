@@ -12,6 +12,7 @@ param(
   [int]    $NEnvs          = 8,
   [int]    $KStandby       = 3,
   [string] $RunId          = "run16",
+  [int]    $Seed           = 1,
   [double] $EntropyCoef    = 0.012,
   [double] $EntropyFinal   = 0.003,
   [int]    $EntropyAnneal  = 8000000,
@@ -37,7 +38,8 @@ cd /d $repo
   --entropy-coef $EntropyCoef --entropy-coef-final $EntropyFinal --entropy-anneal-steps $EntropyAnneal ^
   --stall-target-weight $StallWeight --stall-ramp-steps $StallRamp ^
   --act-period 4 --frame-stack 4 --soft-reset --hard-reset-every 50 ^
-  --device cpu --run-id $RunId ^
+  --device cpu --run-id $RunId --seed $Seed ^
+  --no-tapes --no-native-capture ^
   --purpose "Stage C: entropy revival + stall tax + map axis, resumed from run15" ^
   --checkpoint-path "$repo\Tools\rl\ppo\checkpoints\$RunId.pt" ^
   > "$log" 2>&1
