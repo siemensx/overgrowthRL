@@ -33,10 +33,18 @@ def engine_binary() -> Path:
 
 def run_once(exe: Path, level: str, write_dir: Path, steps: int, seed: int,
              warmup: int = 0) -> tuple[dict | None, int]:
+    # Launch the engine exactly as env.py does. skip_loading_pause and
+    # has_detected_settings are not cosmetic: without them the Windows engine
+    # exits during settings detection, after printing only its data paths.
+    config_str = "\n".join([
+        "global_time_scale_mult: 1.0",
+        "skip_loading_pause: true",
+        "has_detected_settings: true",
+    ])
     cmd = [str(exe), "--write-dir", str(write_dir), "--working-dir", str(HERE.parent.parent),
            "--disable-rendering", "--no-dialogues", "--benchmark",
            "--benchmark-warmup-steps", str(warmup), "--benchmark-steps", str(steps),
-           "--benchmark-seed", str(seed), "--level", level]
+           "--benchmark-seed", str(seed), "--level", level, "--config", config_str]
     p = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=900)
     out = p.stdout + p.stderr
     chars = len(CHAR_RE.findall(out))
