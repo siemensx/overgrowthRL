@@ -25,7 +25,17 @@ mkdir -p "$LOCAL_ROOT/Tools/rl/runs" "$LOCAL_ROOT/Tools/rl/ppo/checkpoints" "$LO
 
 # --- checkpoints (small, high value) ---
 echo "== checkpoints =="
-scp -q "$HOST:$REMOTE_ROOT/Tools/rl/ppo/checkpoints/*.pt" "$LOCAL_ROOT/Tools/rl/ppo/checkpoints/" 2>/dev/null || echo "  (none new)"
+# Pull ONLY the requested run's checkpoint. Pulling every *.pt clobbers local
+# checkpoints of runs training HERE with whatever stale copy happens to sit on
+# the trainer -- e.g. a snapshot uploaded earlier for an evaluation. That cost
+# 25.4M steps on 2026-09-05 (OGRL-20260905-065): a 15-minute sync loop kept
+# reverting a live checkpoint to a 4-hour-old copy of itself, and every progress
+# metric looked healthy throughout because none of them reads the checkpoint.
+if [ -n "$RUN_ID" ]; then
+  scp -q "$HOST:$REMOTE_ROOT/Tools/rl/ppo/checkpoints/$RUN_ID.pt" "$LOCAL_ROOT/Tools/rl/ppo/checkpoints/" 2>/dev/null || echo "  (no $RUN_ID.pt on trainer)"
+else
+  echo "  (skipped: pass a RUN_ID to sync a checkpoint; refusing to mirror every *.pt)"
+fi
 
 # --- learner CSVs ---
 echo "== learner csv =="
