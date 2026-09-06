@@ -21,7 +21,11 @@ RUN_ID=run21_mac
 LOG=/tmp/supervisor.log
 N_ENVS=${1:-8}
 K_STANDBY=${2:-2}
-MIN_ENVS=4
+# Last-resort floor, not a target. Measured 2026-09-06: the memory pressure on
+# this machine is dominated by the browser (7.99GB) not the run (1.73GB), so
+# shedding workers buys little -- but two envs still makes progress where a
+# paused run makes none.
+MIN_ENVS=2
 CKPT=Tools/rl/ppo/checkpoints/${RUN_ID}.pt
 LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,arenas/t_train_104.xml,arenas/t_train_105.xml,arenas/t_train_106.xml
 
