@@ -262,6 +262,10 @@ async function selectRun(runId) {
   state.selectedRunId = runId;
   state.metrics = [];
   state.episodes = [];
+
+  try {
+    state.moveStats = await (await fetch(`/api/runs/${state.selectedRunId}/move-stats`)).json();
+  } catch (e) { state.moveStats = { history: [] }; }
   state.events = [];
   state.metricsOffset = 0;
   state.episodesOffset = 0;
@@ -402,6 +406,67 @@ async function switchView(view) {
 
 // --- Training tab (everything that existed before, plus new panels) ---
 
+// Ground-truth move distribution (Tools/rl/move_stats.py). The engine's own
+// GetAttackPath resolution, not an inference from the action vector -- two
+// earlier context-based attempts at this were wrong about both the move mix and
+// about how often the agent attacks a downed opponent (that one was reading the
+// ragdoll a knockout itself produces).
+function renderMoveStatsPanel() {
+  const panel = document.createElement("div");
+  panel.className = "panel";
+  panel.innerHTML = `<h2>Moves actually thrown (engine-resolved)</h2>`;
+  const hist = (state.moveStats && state.moveStats.history) || [];
+  if (!hist.length) {
+    panel.innerHTML += `<div class="empty-state">No move telemetry yet. Produce it with:
+      <code>python3 Tools/rl/move_stats.py --opponents 3 --episodes 25</code></div>`;
+    return panel;
+  }
+  const last = hist[hist.length - 1];
+  const total = last.agent_attacks || 0;
+  const rows = Object.entries(last.agent_moves || {}).sort((a, b) => b[1] - a[1]);
+  const head = document.createElement("div");
+  head.className = "empty-state";
+  head.style.marginBottom = "8px";
+  head.innerHTML = `step ${Number(last.global_step).toLocaleString()} &middot;
+    ${last.opponents} opponent(s) &middot; difficulty ${last.difficulty} &middot;
+    ${total} attacks over ${last.episodes} episodes`;
+  panel.appendChild(head);
+  const row = document.createElement("div");
+  row.className = "band-bars";
+  rows.forEach(([mv, c], i) => {
+    const pct = total ? Math.round((c / total) * 100) : 0;
+    const downed = (last.agent_moves_vs_downed || {})[mv] || 0;
+    const bar = document.createElement("div");
+    bar.className = "band-bar";
+    bar.innerHTML = `
+      <div class="band-bar-label">${mv}</div>
+      <div class="band-bar-track"><div class="band-bar-fill" style="width:${pct}%; background:${COLORS[i % COLORS.length]}"></div></div>
+      <div class="band-bar-value">${pct}% &nbsp;<span style="opacity:.6">${c}${downed ? ` &middot; ${downed} vs downed` : ""}</span></div>`;
+    row.appendChild(bar);
+  });
+  panel.appendChild(row);
+  const note = document.createElement("div");
+  note.className = "empty-state";
+  note.style.marginTop = "8px";
+  const vd = last.vs_downed_share;
+  note.innerHTML = `attacks aimed at an opponent already down:
+    <b>${vd === null || vd === undefined ? "-" : (vd * 100).toFixed(1) + "%"}</b>
+    &mdash; taken from the engine's own ragdoll_enemy flag, evaluated BEFORE the blow.`;
+  panel.appendChild(note);
+
+  const opp = Object.entries(last.opponent_moves || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (opp.length) {
+    const oTot = opp.reduce((s, [, c]) => s + c, 0);
+    const oNote = document.createElement("div");
+    oNote.className = "empty-state";
+    oNote.style.marginTop = "6px";
+    oNote.innerHTML = "opponents, for comparison: " +
+      opp.map(([m, c]) => `${m} ${Math.round(100 * c / oTot)}%`).join(" &middot; ");
+    panel.appendChild(oNote);
+  }
+  return panel;
+}
+
 function renderTrainingView(el) {
   const m = state.manifest;
   const metrics = state.metrics;
@@ -443,6 +508,7 @@ function renderTrainingView(el) {
   el.appendChild(renderCurriculumSection(metrics));
   el.appendChild(renderEmergencePanel(metrics));
   el.appendChild(renderActionStatsPanel(metrics));
+  el.appendChild(renderMoveStatsPanel());
 
   el.appendChild(renderPipelinePanel(metrics));
 

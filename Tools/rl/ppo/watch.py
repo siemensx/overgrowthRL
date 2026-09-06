@@ -38,6 +38,7 @@ import argparse
 import csv
 import signal
 import sys
+import os
 import time
 from pathlib import Path
 
@@ -46,6 +47,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Tools/rl
 from env import OvergrowthEnv, ACTION_DIM
+from shm_env import ShmWaitTimeout
 from obs_schema import DEFAULT_LAYOUT
 from run_config import load_run_env_config
 
@@ -68,7 +70,10 @@ def parse_args():
                          "instead of the run's own manifest' bug before it existed.")
     p.add_argument("--runs-root", default=None, help="only used with --from-run; defaults to Tools/rl/runs under --repo-root")
     p.add_argument("--level", default=None, help="default: from --from-run's manifest, else arenas/oval_arena.xml")
-    p.add_argument("--shm-name", default="/ogrl_watch0")
+    p.add_argument("--shm-name", default=None,
+                   help="default: a fresh name per invocation. A FIXED name means a second watch "
+                        "run attaches to the shm segment the first one left behind, which hangs on "
+                        "the skybox or times out after 120s (DEAD_ENDS.md's orphaned-semaphore trap).")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--episodes", type=int, default=3)
     p.add_argument("--max-episode-real-seconds", type=float, default=20.0,
@@ -87,6 +92,11 @@ def parse_args():
     p.add_argument("--device", default="cpu", choices=["cpu", "mps"])
     p.add_argument("--ghost-dir", default=None, help="directory to write replayable action-trace CSVs (default: alongside the checkpoint)")
     p.add_argument("--no-ghost", action="store_true", help="skip writing ghost CSVs")
+    # Watching the agent fight ONE opponent tells you almost nothing about how it
+    # handles being outnumbered, which is the whole multi-opponent curriculum.
+    # These reach the level script through the same set_rl_* path training uses.
+    p.add_argument("--opponents", type=int, default=1, help="1, 2 or 3 -- needs a level with the generator's game_type 3/4 spawn groups (the t_train_* arenas have them; oval falls back to 1v1)")
+    p.add_argument("--difficulty", type=float, default=None, help="0..1 opponent skill; default: whatever the level script picks")
     args = p.parse_args()
     if args.from_run:
         cfg = load_run_env_config(args.repo_root, args.from_run, runs_root=args.runs_root)
@@ -152,18 +162,41 @@ def main():
     ghost_dir = Path(args.ghost_dir) if args.ghost_dir else Path(args.checkpoint).parent / "ghosts"
     ghost_dir.mkdir(parents=True, exist_ok=True)
 
+    if args.shm_name is None:
+        args.shm_name = f"/ogrl_w{os.getpid() % 100000:05d}"
+
     env = OvergrowthEnv(
         repo_root=args.repo_root, level=args.level, shm_name=args.shm_name, seed=args.seed,
         layout=layout, frame_stack=args.frame_stack, render=True, time_scale_mult=1, act_period=args.act_period,
     )
     try:
         for episode in range(args.episodes):
-            raw_obs = env.reset(seed=args.seed + episode)
+            kw = {"opponents": args.opponents}
+            if args.difficulty is not None:
+                kw["difficulty"] = args.difficulty
+            raw_obs = env.reset(seed=args.seed + episode, **kw)
+            if episode == 0:
+                # env.py's first reset() only consumes the engine's own initial
+                # observation and sends no scenario, so a single reset shows 1v1
+                # whatever was asked for. The second one is the real request --
+                # but under RENDER mode the level load is far slower than
+                # headless, and Engine::ResetRLTrainingScenario refuses until its
+                # baseline is captured. Retry rather than assume it is ready.
+                for attempt in range(12):
+                    try:
+                        raw_obs = env.reset(seed=args.seed + episode, **kw)
+                        break
+                    except (RuntimeError, ShmWaitTimeout) as exc:
+                        if attempt == 11:
+                            raise
+                        print(f"  scenario reset not ready yet ({exc.__class__.__name__}), retrying {attempt+1}/12")
+                        time.sleep(2.0)
             obs = obs_normalizer.normalize(raw_obs, update=False)  # frozen stats at watch time, not still-learning
             ghost_rows = []
             episode_reward = 0.0
             episode_start = time.monotonic()
             won = False
+            kos = 0
             done = False
             step = 0
             for step in range(args.max_episode_steps):
@@ -178,7 +211,10 @@ def main():
                 raw_obs, reward, done, info = env.step(action)
                 episode_reward += reward
                 obs = obs_normalizer.normalize(raw_obs, update=False)
-                won = info["reward_components"]["opponent_knockout"] > 0
+                rc = info["reward_components"]
+                _k = rc.get("hostile_kos_this_step")
+                kos += int(round(_k)) if _k is not None else (1 if rc.get("opponent_knockout", 0) > 0 else 0)
+                won = kos >= max(1, args.opponents)   # one KO of three is not a win
                 if done or won:
                     break
                 if time.monotonic() - episode_start > args.max_episode_real_seconds:

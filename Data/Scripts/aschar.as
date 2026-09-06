@@ -480,7 +480,16 @@ bool _debug_show_ai_state = false;
 
 float game_difficulty = 0.0;  // 0.0 is easiest, 1.0 is original
 
+// RL attack telemetry (OGRL-20260906). Off unless the run sets rl_log_attacks,
+// so a training run pays nothing. GetAttackPath below is the single place where
+// every attack resolves to a concrete move, and it already receives
+// ragdoll_enemy/ducking_enemy -- which makes "was this a finisher on a downed
+// opponent" ground truth rather than something inferred from button presses or
+// from the victim's post-hit state.
+bool g_rl_log_attacks = false;
+
 void UpdateMovementDebugSettings() {
+    g_rl_log_attacks = GetConfigValueBool("rl_log_attacks");
     _draw_collision_spheres = GetConfigValueBool("debug_draw_collision_spheres");
     _draw_combat_debug = GetConfigValueBool("debug_draw_combat_debug");
     _draw_stealth_debug = GetConfigValueBool("debug_draw_stealth_debug");
@@ -9470,6 +9479,14 @@ void GetAttackPath(string &in attack_str, string &out attack_path_str, bool orig
     } else if(attack_str == "air") {
         attack_path_str = character_getter.GetAttackPath("air");
         AchievementEvent("attack_air");
+    }
+
+    if(g_rl_log_attacks) {
+        Log(info, "RLATK id=" + this_mo.GetID() + " kind=" + attack_str +
+                  " path=" + attack_path_str +
+                  " ragdoll=" + (ragdoll_enemy ? 1 : 0) +
+                  " ducking=" + (ducking_enemy ? 1 : 0) +
+                  " dist=" + attack_distance);
     }
 }
 

@@ -102,6 +102,7 @@ class OvergrowthEnv:
         act_period: int = 1,
         equivalence_digest_path: str | Path | None = None,
         equivalence_trace_path: str | Path | None = None,
+        log_attacks: bool = False,
     ):
         # act_period (OGRL-20260816-021 Sec 1.3(a)/2.2(a), Stage 6): decision
         # rate divisor -- 1 = every physics tick is a decision (120Hz, the
@@ -109,6 +110,7 @@ class OvergrowthEnv:
         # own control period). See rl_shm_transport.cpp's Step() for what
         # actually happens on the engine side; this is just the CLI plumbing.
         self.act_period = act_period
+        self.log_attacks = log_attacks
         # render=True is "watch mode" (Tools/rl/ppo/watch.py): a real window,
         # no --benchmark fast-forward, so wall-clock time and in-game time
         # match -- letting a human actually watch the character move at
@@ -183,11 +185,17 @@ class OvergrowthEnv:
     # --- lifecycle ---
 
     def _launch(self) -> None:
-        config_str = "\n".join([
+        config_lines = [
             f"global_time_scale_mult: {self.time_scale_mult}",
             "skip_loading_pause: true",
             "has_detected_settings: true",
-        ])
+        ]
+        # Ground-truth attack telemetry (aschar.as's g_rl_log_attacks). Off for
+        # training -- it costs log volume and nothing reads it there -- and
+        # switched on only by the analysis tools that parse it.
+        if self.log_attacks:
+            config_lines.append("rl_log_attacks: true")
+        config_str = "\n".join(config_lines)
         command = [str(self.binary_path), "--write-dir", str(self._write_dir), "--working-dir", str(self.repo_root)]
         if self.render:
             # No --disable-rendering, no --benchmark: --benchmark forces

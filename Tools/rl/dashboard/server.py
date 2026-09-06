@@ -507,6 +507,19 @@ class Handler(BaseHTTPRequestHandler):
                 if not manifest_path.exists():
                     return self._send_error_json(404, "run.json missing")
                 return self._send_json(json.loads(manifest_path.read_text()))
+            if sub == "move-stats":
+                # Ground-truth move distribution from Tools/rl/move_stats.py,
+                # which reads aschar.as's own GetAttackPath resolution
+                # (rl_log_attacks). Not inferred from the action vector --
+                # earlier context-based estimates of the move mix, and of how
+                # often the agent hits a downed opponent, were both wrong.
+                f = run_dir / "eval" / "move_stats.json"
+                if not f.exists():
+                    return self._send_json({"history": []})
+                try:
+                    return self._send_json(json.loads(f.read_text()))
+                except Exception:
+                    return self._send_json({"history": []})
             if sub == "metrics":
                 offset = int(query.get("offset", ["0"])[0])
                 new_offset, lines = _read_jsonl_tail(run_dir / "metrics.jsonl", offset)
