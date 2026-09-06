@@ -34,6 +34,18 @@ say() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$LOG"; }
 free_gb() { df -k /System/Volumes/Data | tail -1 | awk '{printf "%.2f", $4/1048576}'; }
 
 launch() {
+  # Do not relaunch into a disk condition that will stop the run within seconds.
+  # Observed 2026-09-06: with the machine at ~0.39GB free the supervisor
+  # restarted, --stop-below-free-gb fired immediately, and it restarted again --
+  # a churn loop that spawns and kills ten engine processes every two minutes
+  # and makes the disk situation marginally worse. Wait for real headroom
+  # instead; the checkpoint is already safe and nothing is lost by waiting.
+  local waited=0
+  while awk "BEGIN{exit !($(free_gb) < 0.75)}"; do
+    if [ "$waited" -eq 0 ]; then say "free=$(free_gb)GB -- holding launch until >=0.75GB"; fi
+    waited=$((waited + 60)); sleep 60
+  done
+  [ "$waited" -gt 0 ] && say "space returned after ${waited}s (free=$(free_gb)GB)"
   local shm="/ogrl_s$(date +%H%M%S)"     # fresh every time -- see (3) above
   pkill -f "MacOS/Overgrowth" 2>/dev/null; sleep 3
   nohup env OGRL_ALLOW_NENVS_CHANGE=1 caffeinate -i python3 -u Tools/rl/ppo/train_vec.py \
