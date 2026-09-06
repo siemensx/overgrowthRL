@@ -71,6 +71,21 @@ pgrep -f "run-id $RUN_ID" >/dev/null || launch
 while true; do
   sleep 120
   free=$(free_gb)
+
+  # Proactive shed. macOS NEVER shrinks swapfiles once allocated, so disk lost
+  # to swap is gone until reboot -- waiting for the run to die and then
+  # stepping down means the space is already spent. Shed a worker pair while
+  # the run is still healthy instead.
+  if pgrep -f "run-id $RUN_ID" >/dev/null && awk "BEGIN{exit !($free < 0.9)}" && [ "$N_ENVS" -gt "$MIN_ENVS" ]; then
+    N_ENVS=$((N_ENVS - 2))
+    say "free=${free}GB while running -- shedding to n_envs=$N_ENVS before it stops us"
+    p=$(pgrep -f "run-id $RUN_ID" | head -1)
+    [ -n "$p" ] && kill -TERM "$p" 2>/dev/null
+    for _ in $(seq 1 60); do pgrep -f "run-id $RUN_ID" >/dev/null || break; sleep 1; done
+    launch
+    continue
+  fi
+
   if ! pgrep -f "run-id $RUN_ID" >/dev/null; then
     step=$(python3 -c "
 import torch;print(torch.load('$CKPT',map_location='cpu',weights_only=False)['global_step'])" 2>/dev/null || echo '?')
