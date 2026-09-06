@@ -12292,11 +12292,8 @@ START
 2026/09/05 18:51:16 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
 2026/09/05 18:51:16 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [e][__]: filesystem.cpp: 357: Unable to find "Data/LevelInfo/arenas/t_train_106_duel_linfo.xml" in any of the requested locations.
 2026/09/05 18:51:16 [w][__]:levelxmlparser.cpp: 135: Missing LoadingScreen element in level
 2026/09/05 18:51:16 [i][__]:  levelinfo.cpp:  54: Saving a cached version of LevelInfoAsset to .rl_view/Data/LevelInfo/arenas/t_train_106_duel_linfo.xml
@@ -12305,18 +12302,12 @@ START
 2026/09/05 18:51:16 [i][__]:     engine.cpp:1902: Performing a state queue request 
 2026/09/05 18:51:16 [i][__]:     engine.cpp:2022: Switching game state
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]:levelxmlparser.cpp: 129: Image sub element contents for LoadingScreen is null.
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]:     engine.cpp:5853: No loading screen image, loading normal.
 2026/09/05 18:51:16 [i][__]:     config.cpp: 489: Saving config to: .rl_view/Data/config.txt
 2026/09/05 18:51:16 [i][__]:assetmanager.cpp: 432: Dumping asset manager warning data to asset_manager_warnings.xml
@@ -12336,31 +12327,19 @@ START
 2026/09/05 18:51:16 [w][__]:   levelxml.cpp: 417: SpawnPoints is outdated
 2026/09/05 18:51:16 [w][__]:   levelxml.cpp: 436: Mismatch between navmesh build data and navmesh level parameters
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]:widgetframework.cpp:  36: Adding loaded objects to scene...
 2026/09/05 18:51:16 [i][__]:widgetframework.cpp:  36: Loading nav mesh...
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [e][__]:    navmesh.cpp: 682: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_train_106_duel.nav.xml
 2026/09/05 18:51:16 [i][__]:    navmesh.cpp: 689: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_train_106_duel.nav.obj
 2026/09/05 18:51:16 [e][__]:    navmesh.cpp: 704: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_train_106_duel.nav
@@ -12379,11 +12358,8 @@ START
 2026/09/05 18:51:16 [i][__]: scenegraph.cpp:1224: Saving NAVMESH.
 2026/09/05 18:51:16 [w][__]:    navmesh.cpp: 561: t_train_106_duel
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml that is Data/Levels/arenas/t_train_106_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:16 [i][__]:    navmesh.cpp: 579: Saving nav mesh to .rl_view/Data/LevelNavmeshes/arenas/t_train_106_duel.nav.zip
 2026/09/05 18:51:16 [i][__]:widgetframework.cpp:  36: Loading ambient sounds and music...
 2026/09/05 18:51:16 [i][__]:widgetframework.cpp:  36: Getting path set...
@@ -12392,7 +12368,6 @@ START
 2026/09/05 18:51:16 [i][__]:level_loader.cpp: 219: Finished loading path set
 2026/09/05 18:51:16 [i][__]:widgetframework.cpp:  36: Preloading assets...
 2026/09/05 18:51:16 [i][__]:     engine.cpp:5625: Starting Preloading for: "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml" (valid)
-
 2026/09/05 18:51:17 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
 2026/09/05 18:51:17 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
 2026/09/05 18:51:17 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
@@ -12401,7 +12376,6 @@ START
 2026/09/05 18:51:17 [i][us]:    dialogue.as: 423: Clearing editor
 2026/09/05 18:51:17 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
 2026/09/05 18:51:17 [i][__]: soundtrack.cpp:1218: Adding music sheet:"/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Music/lugaru_new.xml" (valid)
-
 2026/09/05 18:51:17 [i][__]:      error.cpp: 182: Displaying message: Error, Problem with ogg streaming (ov_open failed)
 2026/09/05 18:51:17 [i][__]:      error.cpp: 183: 0   Overgrowth                          0x0000000100538ac0 _Z18GenerateStacktracev + 64
 1   Overgrowth                          0x00000001005373d4 _Z12DisplayErrorPKcS0_9ErrorTypeb + 672
@@ -12412,7 +12386,6 @@ START
 6   Overgrowth                          0x000000010099dab8 _ZNSt3__114__thread_proxyB8ne200100INS_5tupleIJNS_10unique_ptrINS_15__thread_structENS_14default_deleteIS3_EEEEPFvvEEEEEEPvSA_ + 52
 7   libsystem_pthread.dylib             0x000000018bc7dc58 _pthread_start + 136
 8   libsystem_pthread.dylib             0x000000018bc78c1c thread_start + 8
-
 2026/09/05 18:51:17 [i][us]:      aschar.as: 831: Clearing shadow objects
 2026/09/05 18:51:17 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_turner.xml", trying to create a joint between bone 0 and itself.
 2026/09/05 18:51:17 [i][__]:   graphics.cpp: 342: Created framebuffer: 5 blood_framebuffer
@@ -12452,27 +12425,19 @@ START
 2026/09/05 18:51:17 [i][__]:widgetframework.cpp:  36: Preloading shaders...
 2026/09/05 18:51:17 [i][__]: scenegraph.cpp:3009: Preloading shaders...
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
-
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
 WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
-
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
 WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
-
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
 WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
-
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
 WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
-
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
 WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
-
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
 WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
-
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #SHADOW_CASCADE #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
-
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
@@ -12488,7 +12453,6 @@ WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #GPU_PARTICLE_FIELD #SNOW #SIMPLE_SHADOW #NO_REFLECTION_CAPTURE #UBO_BATCH_SIZE_4X #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'instance_id' not read by fragment shader
-
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
@@ -12505,7 +12469,6 @@ WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
 2026/09/05 18:51:17 [e][__]:    shaders.cpp: 829: Error(s) linking program "3d_color #FLIP_Y" WARNING: Could not find fragment shader output 'out_vel' to match FragDataBinding request.
-
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
@@ -12517,14 +12480,1138 @@ WARNING: Output of vertex shader 'concat_bone2' not read by fragment shader
 WARNING: Output of vertex shader 'morphed_tex_coord' not read by fragment shader
 WARNING: Output of vertex shader 'vel' not read by fragment shader
 WARNING: Output of vertex shader 'fur_tex_coord' not read by fragment shader
-
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/debug_fill.frag
 2026/09/05 18:51:17 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/flare.frag
 2026/09/05 18:51:18 [e][__]:    shaders.cpp: 829: Error(s) linking program "post #DOWNSAMPLE_DEPTH" WARNING: Output of vertex shader 'tex' not read by fragment shader
-
 2026/09/05 18:51:18 [i][__]: map_editor.cpp: 520: Requesting player-controlled mode...
 2026/09/05 18:51:18 [i][__]: map_editor.cpp: 523: Request successful...
 2026/09/05 18:51:18 [i][us]:      aschar.as:13411: FixDiscontinuity
 2026/09/05 18:51:18 [i][us]:      aschar.as:13411: FixDiscontinuity
 2026/09/05 18:51:18 [i][us]:arena_level_human_duel.as: 560: Telling characters 0 and 1 to notice each other.
 2026/09/05 18:51:20 [i][__]:   graphics.cpp: 342: Created framebuffer: 10 blood_framebuffer
+START
+2026/09/05 19:33:11 [i][__]:       main.cpp: 198: Starting program. Version f7796883_none 2026-09-04 22:38:44 UTC arm64 MacOSX
+2026/09/05 19:33:11 [i][__]:       main.cpp: 201: Deploy (Release)
+2026/09/05 19:33:11 [i][__]:     engine.cpp:6230: Initializing SDL
+2026/09/05 19:33:11 [i][__]:     engine.cpp:6232: SDL Initialized successfully
+2026/09/05 19:33:11 [i][__]:     engine.cpp:6247: Initializing SDL_net
+2026/09/05 19:33:11 [i][__]:      input.cpp: 230: Added 0 controller mappings.
+2026/09/05 19:33:11 [i][__]:      input.cpp:  72: Current controllers:
+2026/09/05 19:33:11 [e][__]:     engine.cpp:5602: No extra_data_path was specified.
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2515: Looking for mods in .rl_view/Data/Mods/
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_arena
+2026/09/05 19:33:11 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:11 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-arena"
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_drika
+2026/09/05 19:33:11 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:11 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-drika"
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_lugaru_campaign
+2026/09/05 19:33:11 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:11 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-lugaru-campaign"
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_machine_translations
+2026/09/05 19:33:11 [e][__]: filesystem.cpp: 357: Unable to find "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_machine_translations/Data/Images/wolfire_sandbox_levels/thumb.jpg" in any of the requested locations.
+2026/09/05 19:33:11 [e][__]: modloading.cpp: 842: Error when parsing mod.xml for mod com-wolfire-machine-translations error kValidityMissingThumbnailFile on row 8
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_overgrowth_campaign
+2026/09/05 19:33:11 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:11 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-overgrowth-campaign"
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_overgrowth_core
+2026/09/05 19:33:11 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:11 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-overgrowth-core"
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_sandbox_levels
+2026/09/05 19:33:11 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:11 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-sandbox-levels"
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_timbles_therium
+2026/09/05 19:33:11 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:11 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-timbles-therium"
+2026/09/05 19:33:11 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_versus
+2026/09/05 19:33:11 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:11 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-versus"
+2026/09/05 19:33:11 [w][__]:threaded_sound_wrapper.cpp: 561: Sound system isn't initialized yet, putting message into the queue.
+2026/09/05 19:33:11 [w][__]:threaded_sound_wrapper.cpp: 561: Sound system isn't initialized yet, putting message into the queue.
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 891: There are 2 available video drivers.
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 892: Video drivers are following:
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 895: Video driver 0: cocoa
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 895: Video driver 1: dummy
+2026/09/05 19:33:11 [i][al]:   al_audio.cpp: 245: ALC_ENUMERATION_EXT is not available, will open default device.
+2026/09/05 19:33:11 [i][al]:   al_audio.cpp: 254: Opened and using audio device: RL headless audio disabled
+2026/09/05 19:33:11 [i][al]:   al_audio.cpp: 278: We have 32 audio sources available.
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 902: Initialized video driver: cocoa
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 922: Attribute group 1 set
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1018: Created window
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1020: Set minimum size
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1032: Set display mode
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1035: Created OpenGL Context
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1047: RGBA bits, depth: 8 8 8 8 32
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1054: Anti-aliasing samples: 0
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1060: SDL OpenGL Context Result: 3.2 With a SDL_GL_CONTEXT_PROFILE_CORE profile context
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1066: GLAD loaded succesfully
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1075: OpenGL Self Reported version string: 4.1 Metal - 90.5
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1076: OpenGL Self Reported version values: 4.1
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1088: Context seems acceptable for running the application, continuing.
+2026/09/05 19:33:11 [i][__]:detect_settings.cpp:  37: Verified support for S3TC DXT5 compressed textures
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1104: Activating OpenGL callback errors, [opengl_callback_errors]
+2026/09/05 19:33:11 [i][__]:textureatlas.cpp:  40: Creating a decal texture atlas with dimensions ivec2(8192,8192)
+2026/09/05 19:33:11 [i][__]:textureatlas.cpp:  40: Creating a decal texture atlas with dimensions ivec2(8192,8192)
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 342: Created framebuffer: 1 generic
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 342: Created framebuffer: 2 post_effects
+2026/09/05 19:33:11 [i][__]:   graphics.cpp: 342: Created framebuffer: 3 static_shadow_fb
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1318: 80 texture units supported.
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1334: GL_MAX_VERTEX_UNIFORM_COMPONENTS: 4096
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
+2026/09/05 19:33:11 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
+2026/09/05 19:33:11 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]:levelxmlparser.cpp: 129: Image sub element contents for LoadingScreen is null.
+2026/09/05 19:33:11 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:11 [i][__]:     engine.cpp:1868: Checking if we actually allow any state changes
+2026/09/05 19:33:11 [i][__]:     engine.cpp:1902: Performing a state queue request 
+2026/09/05 19:33:11 [i][__]:     engine.cpp:2022: Switching game state
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]:levelxmlparser.cpp: 129: Image sub element contents for LoadingScreen is null.
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]:     engine.cpp:5853: No loading screen image, loading normal.
+2026/09/05 19:33:11 [i][__]:     config.cpp: 489: Saving config to: .rl_view/Data/config.txt
+2026/09/05 19:33:11 [i][__]:assetmanager.cpp: 432: Dumping asset manager warning data to asset_manager_warnings.xml
+2026/09/05 19:33:11 [i][__]:     engine.cpp:5801: Unloading all unreferenced assets after clearing level [full_level_unload: true]...
+2026/09/05 19:33:11 [i][__]:     engine.cpp:5807: 3 Assets were unloaded
+2026/09/05 19:33:11 [i][__]:     engine.cpp:5808: 0 Texture assets were unloaded
+2026/09/05 19:33:11 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:11 [i][us]:    dialogue.as: 423: Clearing editor
+2026/09/05 19:33:11 [i][as]:  ascontext.cpp: 843:  STATE: 1 is now connected to void OnDialogueNextState(array<uint8>& data) via expected function handle: 20
+2026/09/05 19:33:11 [i][as]:  ascontext.cpp: 843:  STATE: 2 is now connected to void OnDialogueSkipState(array<uint8>& data) via expected function handle: 21
+2026/09/05 19:33:11 [i][as]:  ascontext.cpp: 843:  STATE: 3 is now connected to void OnDialogueStartState(array<uint8>& data) via expected function handle: 22
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Starting to load "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml"
+2026/09/05 19:33:11 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:11 [i][__]:     engine.cpp:5638: Load Level: ""/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+"
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Loading level...
+2026/09/05 19:33:11 [w][__]:   levelxml.cpp: 417: SpawnPoints is outdated
+2026/09/05 19:33:11 [w][__]:   levelxml.cpp: 436: Mismatch between navmesh build data and navmesh level parameters
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Adding loaded objects to scene...
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Loading nav mesh...
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml that is Data/Levels/arenas/t_train_101.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:11 [i][__]:    navmesh.cpp: 685: Found:.rl_view/Data/LevelNavmeshes/arenas/t_train_101.nav.xml
+2026/09/05 19:33:11 [i][__]:    navmesh.cpp: 692: Found:.rl_view/Data/LevelNavmeshes/arenas/t_train_101.nav.obj
+2026/09/05 19:33:11 [i][__]:    navmesh.cpp: 699: Found Zip:.rl_view/Data/LevelNavmeshes/arenas/t_train_101.nav.zip
+2026/09/05 19:33:11 [i][__]:    navmesh.cpp: 841: Navmesh: Adding mesh to sample...
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Nav mesh loaded!
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Loading ambient sounds and music...
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Getting path set...
+2026/09/05 19:33:11 [e][__]:returnpathutil.cpp: 373: Found no match for the string font
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Loading all data in advance...
+2026/09/05 19:33:11 [i][__]:level_loader.cpp: 219: Finished loading path set
+2026/09/05 19:33:11 [i][__]:widgetframework.cpp:  36: Preloading assets...
+2026/09/05 19:33:11 [i][__]:     engine.cpp:5625: Starting Preloading for: "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml" (valid)
+2026/09/05 19:33:12 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
+2026/09/05 19:33:12 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
+2026/09/05 19:33:12 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
+2026/09/05 19:33:12 [i][__]:   graphics.cpp: 342: Created framebuffer: 4 light_probe_cube_map
+2026/09/05 19:33:12 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:12 [i][us]:    dialogue.as: 423: Clearing editor
+2026/09/05 19:33:12 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:12 [i][__]: soundtrack.cpp:1218: Adding music sheet:"/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Music/lugaru_new.xml" (valid)
+2026/09/05 19:33:12 [i][__]:      error.cpp: 182: Displaying message: Error, Problem with ogg streaming (ov_open failed)
+2026/09/05 19:33:12 [i][__]:      error.cpp: 183: 0   Overgrowth                          0x0000000104e54ac0 _Z18GenerateStacktracev + 64
+1   Overgrowth                          0x0000000104e533d4 _Z12DisplayErrorPKcS0_9ErrorTypeb + 672
+2   Overgrowth                          0x00000001052b9cfc _ZN9oggLoaderC2E4Path + 112
+3   Overgrowth                          0x00000001052a77ec _ZN10Soundtrack16PlayedSingleSongC2EPS_RKN14MusicXMLParser4SongE + 524
+4   Overgrowth                          0x00000001052ab1a4 _ZN10Soundtrack16TransitionPlayer16TransitionToSongERKN14MusicXMLParser4SongE + 620
+5   Overgrowth                          0x00000001052b3ad8 _ZL17ThreadedSoundLoopv + 2104
+6   Overgrowth                          0x00000001052b9ab8 _ZNSt3__114__thread_proxyB8ne200100INS_5tupleIJNS_10unique_ptrINS_15__thread_structENS_14default_deleteIS3_EEEEPFvvEEEEEEPvSA_ + 52
+7   libsystem_pthread.dylib             0x000000018bc7dc58 _pthread_start + 136
+8   libsystem_pthread.dylib             0x000000018bc78c1c thread_start + 8
+2026/09/05 19:33:12 [i][us]:      aschar.as: 831: Clearing shadow objects
+2026/09/05 19:33:12 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_turner.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:12 [i][__]:   graphics.cpp: 342: Created framebuffer: 5 blood_framebuffer
+2026/09/05 19:33:12 [i][__]:   graphics.cpp: 342: Created framebuffer: 6 blood_work_framebuffer
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:12 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 4 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 5 is now connected to void OnHitFlashTime(array<uint>& data) via expected function handle: 44
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 6 is now connected to void OnBloodFlashTime(array<uint>& data) via expected function handle: 45
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 7 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:12 [i][us]:      aschar.as: 831: Clearing shadow objects
+2026/09/05 19:33:12 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_rig.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:12 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 4 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 5 is now connected to void OnHitFlashTime(array<uint>& data) via expected function handle: 44
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 6 is now connected to void OnBloodFlashTime(array<uint>& data) via expected function handle: 45
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 7 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:12 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_rig.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:12 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:12 [i][us]:arena_level_1v1_unarmed.as: 560: Telling characters 0 and 1 to notice each other.
+2026/09/05 19:33:12 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:12 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 1 is now connected to void OnDialogueNextState(array<uint8>& data) via expected function handle: 20
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 2 is now connected to void OnDialogueSkipState(array<uint8>& data) via expected function handle: 21
+2026/09/05 19:33:12 [i][as]:  ascontext.cpp: 843:  STATE: 3 is now connected to void OnDialogueStartState(array<uint8>& data) via expected function handle: 22
+2026/09/05 19:33:12 [i][__]:widgetframework.cpp:  36: Loading sky...
+2026/09/05 19:33:12 [i][__]:   graphics.cpp: 342: Created framebuffer: 7 bake_sky_1
+2026/09/05 19:33:12 [i][__]:   graphics.cpp: 342: Created framebuffer: 8 bake_sky_2
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_tex_3d.frag
+2026/09/05 19:33:12 [i][__]:   graphics.cpp: 342: Created framebuffer: 9 cube_map_fbo
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/cubemapblur.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/fog.frag
+2026/09/05 19:33:12 [i][__]:widgetframework.cpp:  36: Reinitializing prefabs...
+2026/09/05 19:33:12 [i][__]:widgetframework.cpp:  36: Level load completed, initiating game...
+2026/09/05 19:33:12 [i][__]:widgetframework.cpp:  36: Preloading shaders...
+2026/09/05 19:33:12 [i][__]: scenegraph.cpp:3009: Preloading shaders...
+2026/09/05 19:33:12 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
+2026/09/05 19:33:12 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:12 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:12 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:12 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:12 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:12 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:12 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #SHADOW_CASCADE #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:12 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #GPU_PARTICLE_FIELD #SNOW #SIMPLE_SHADOW #NO_REFLECTION_CAPTURE #UBO_BATCH_SIZE_4X #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'instance_id' not read by fragment shader
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:13 [e][__]:    shaders.cpp: 829: Error(s) linking program "3d_color #FLIP_Y" WARNING: Could not find fragment shader output 'out_vel' to match FragDataBinding request.
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:13 [e][__]:    shaders.cpp: 829: Error(s) linking program "character_accumulate #WATER_CUBE" WARNING: Output of vertex shader 'concat_bone1' not read by fragment shader
+WARNING: Output of vertex shader 'orig_vert' not read by fragment shader
+WARNING: Output of vertex shader 'concat_bone2' not read by fragment shader
+WARNING: Output of vertex shader 'morphed_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'vel' not read by fragment shader
+WARNING: Output of vertex shader 'fur_tex_coord' not read by fragment shader
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/debug_fill.frag
+2026/09/05 19:33:13 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/flare.frag
+2026/09/05 19:33:13 [e][__]:    shaders.cpp: 829: Error(s) linking program "post #DOWNSAMPLE_DEPTH" WARNING: Output of vertex shader 'tex' not read by fragment shader
+2026/09/05 19:33:13 [i][__]: map_editor.cpp: 520: Requesting player-controlled mode...
+2026/09/05 19:33:13 [i][__]: map_editor.cpp: 523: Request successful...
+2026/09/05 19:33:13 [i][us]:      aschar.as:13411: FixDiscontinuity
+2026/09/05 19:33:13 [i][us]:      aschar.as:13411: FixDiscontinuity
+2026/09/05 19:33:13 [i][us]:arena_level_1v1_unarmed.as: 560: Telling characters 0 and 1 to notice each other.
+2026/09/05 19:33:13 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:14 [i][__]:   graphics.cpp: 342: Created framebuffer: 10 blood_framebuffer
+2026/09/05 19:33:14 [i][__]:   graphics.cpp: 342: Created framebuffer: 11 blood_work_framebuffer
+2026/09/05 19:33:18 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+2026/09/05 19:33:18 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+2026/09/05 19:33:19 [i][us]:arena_level_1v1_unarmed.as: 967: Player 0 was knocked over by player 1
+2026/09/05 19:33:20 [i][us]:arena_level_1v1_unarmed.as: 967: Player 0 was knocked over by player 1
+2026/09/05 19:33:21 [w][__]:bulletworld.cpp:1063: Tried to do a ray-cast with a zero-length ray, skipping test and returning null
+2026/09/05 19:33:21 [i][us]:arena_level_1v1_unarmed.as: 967: Player 0 was knocked over by player 1
+2026/09/05 19:33:22 [i][us]:arena_level_1v1_unarmed.as: 967: Player 0 was knocked over by player 1
+2026/09/05 19:33:24 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+START
+2026/09/05 19:33:27 [i][__]:       main.cpp: 198: Starting program. Version f7796883_none 2026-09-04 22:38:44 UTC arm64 MacOSX
+2026/09/05 19:33:27 [i][__]:       main.cpp: 201: Deploy (Release)
+2026/09/05 19:33:27 [i][__]:     engine.cpp:6230: Initializing SDL
+2026/09/05 19:33:27 [i][__]:     engine.cpp:6232: SDL Initialized successfully
+2026/09/05 19:33:27 [i][__]:     engine.cpp:6247: Initializing SDL_net
+2026/09/05 19:33:27 [i][__]:      input.cpp: 230: Added 0 controller mappings.
+2026/09/05 19:33:27 [i][__]:      input.cpp:  72: Current controllers:
+2026/09/05 19:33:27 [e][__]:     engine.cpp:5602: No extra_data_path was specified.
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2515: Looking for mods in .rl_view/Data/Mods/
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_arena
+2026/09/05 19:33:27 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:27 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-arena"
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_drika
+2026/09/05 19:33:27 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:27 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-drika"
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_lugaru_campaign
+2026/09/05 19:33:27 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:27 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-lugaru-campaign"
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_machine_translations
+2026/09/05 19:33:27 [e][__]: filesystem.cpp: 357: Unable to find "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_machine_translations/Data/Images/wolfire_sandbox_levels/thumb.jpg" in any of the requested locations.
+2026/09/05 19:33:27 [e][__]: modloading.cpp: 842: Error when parsing mod.xml for mod com-wolfire-machine-translations error kValidityMissingThumbnailFile on row 8
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_overgrowth_campaign
+2026/09/05 19:33:27 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:27 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-overgrowth-campaign"
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_overgrowth_core
+2026/09/05 19:33:27 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:27 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-overgrowth-core"
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_sandbox_levels
+2026/09/05 19:33:27 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:27 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-sandbox-levels"
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_timbles_therium
+2026/09/05 19:33:27 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:27 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-timbles-therium"
+2026/09/05 19:33:27 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_versus
+2026/09/05 19:33:27 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:27 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-versus"
+2026/09/05 19:33:27 [w][__]:threaded_sound_wrapper.cpp: 561: Sound system isn't initialized yet, putting message into the queue.
+2026/09/05 19:33:27 [w][__]:threaded_sound_wrapper.cpp: 561: Sound system isn't initialized yet, putting message into the queue.
+2026/09/05 19:33:27 [i][al]:   al_audio.cpp: 245: ALC_ENUMERATION_EXT is not available, will open default device.
+2026/09/05 19:33:27 [i][al]:   al_audio.cpp: 254: Opened and using audio device: RL headless audio disabled
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 891: There are 2 available video drivers.
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 892: Video drivers are following:
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 895: Video driver 0: cocoa
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 895: Video driver 1: dummy
+2026/09/05 19:33:27 [i][al]:   al_audio.cpp: 278: We have 32 audio sources available.
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 902: Initialized video driver: cocoa
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 922: Attribute group 1 set
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1018: Created window
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1020: Set minimum size
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1032: Set display mode
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1035: Created OpenGL Context
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1047: RGBA bits, depth: 8 8 8 8 32
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1054: Anti-aliasing samples: 0
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1060: SDL OpenGL Context Result: 3.2 With a SDL_GL_CONTEXT_PROFILE_CORE profile context
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1066: GLAD loaded succesfully
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1075: OpenGL Self Reported version string: 4.1 Metal - 90.5
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1076: OpenGL Self Reported version values: 4.1
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1088: Context seems acceptable for running the application, continuing.
+2026/09/05 19:33:27 [i][__]:detect_settings.cpp:  37: Verified support for S3TC DXT5 compressed textures
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1104: Activating OpenGL callback errors, [opengl_callback_errors]
+2026/09/05 19:33:27 [i][__]:textureatlas.cpp:  40: Creating a decal texture atlas with dimensions ivec2(8192,8192)
+2026/09/05 19:33:27 [i][__]:textureatlas.cpp:  40: Creating a decal texture atlas with dimensions ivec2(8192,8192)
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 342: Created framebuffer: 1 generic
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 342: Created framebuffer: 2 post_effects
+2026/09/05 19:33:27 [i][__]:   graphics.cpp: 342: Created framebuffer: 3 static_shadow_fb
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1318: 80 texture units supported.
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1334: GL_MAX_VERTEX_UNIFORM_COMPONENTS: 4096
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
+2026/09/05 19:33:27 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
+2026/09/05 19:33:27 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]:levelxmlparser.cpp: 129: Image sub element contents for LoadingScreen is null.
+2026/09/05 19:33:27 [w][__]:levelxmlparser.cpp: 135: Missing LoadingScreen element in level
+2026/09/05 19:33:27 [i][__]:  levelinfo.cpp:  54: Saving a cached version of LevelInfoAsset to .rl_view/Data/LevelInfo/arenas/t_train_105_linfo.xml
+2026/09/05 19:33:27 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:27 [i][__]:     engine.cpp:1868: Checking if we actually allow any state changes
+2026/09/05 19:33:27 [i][__]:     engine.cpp:1902: Performing a state queue request 
+2026/09/05 19:33:27 [i][__]:     engine.cpp:2022: Switching game state
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]:levelxmlparser.cpp: 129: Image sub element contents for LoadingScreen is null.
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]:     engine.cpp:5853: No loading screen image, loading normal.
+2026/09/05 19:33:27 [i][__]:     config.cpp: 489: Saving config to: .rl_view/Data/config.txt
+2026/09/05 19:33:27 [i][__]:assetmanager.cpp: 432: Dumping asset manager warning data to asset_manager_warnings.xml
+2026/09/05 19:33:27 [i][__]:     engine.cpp:5801: Unloading all unreferenced assets after clearing level [full_level_unload: true]...
+2026/09/05 19:33:27 [i][__]:     engine.cpp:5807: 3 Assets were unloaded
+2026/09/05 19:33:27 [i][__]:     engine.cpp:5808: 0 Texture assets were unloaded
+2026/09/05 19:33:27 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:27 [i][us]:    dialogue.as: 423: Clearing editor
+2026/09/05 19:33:27 [i][as]:  ascontext.cpp: 843:  STATE: 1 is now connected to void OnDialogueNextState(array<uint8>& data) via expected function handle: 20
+2026/09/05 19:33:27 [i][as]:  ascontext.cpp: 843:  STATE: 2 is now connected to void OnDialogueSkipState(array<uint8>& data) via expected function handle: 21
+2026/09/05 19:33:27 [i][as]:  ascontext.cpp: 843:  STATE: 3 is now connected to void OnDialogueStartState(array<uint8>& data) via expected function handle: 22
+2026/09/05 19:33:27 [i][__]:widgetframework.cpp:  36: Starting to load "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml"
+2026/09/05 19:33:27 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:27 [i][__]:     engine.cpp:5638: Load Level: ""/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+"
+2026/09/05 19:33:27 [i][__]:widgetframework.cpp:  36: Loading level...
+2026/09/05 19:33:27 [w][__]:   levelxml.cpp: 417: SpawnPoints is outdated
+2026/09/05 19:33:27 [w][__]:   levelxml.cpp: 436: Mismatch between navmesh build data and navmesh level parameters
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]:widgetframework.cpp:  36: Adding loaded objects to scene...
+2026/09/05 19:33:27 [i][__]:widgetframework.cpp:  36: Loading nav mesh...
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 685: Found:.rl_view/Data/LevelNavmeshes/arenas/t_train_105.nav.xml
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 692: Found:.rl_view/Data/LevelNavmeshes/arenas/t_train_105.nav.obj
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 699: Found Zip:.rl_view/Data/LevelNavmeshes/arenas/t_train_105.nav.zip
+2026/09/05 19:33:27 [w][__]:    navmesh.cpp: 814: Mismatching LevelHash in navmesh
+2026/09/05 19:33:27 [e][__]:    navmesh.cpp: 721: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_train_105.nav.xml
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 728: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_train_105.nav.obj
+2026/09/05 19:33:27 [e][__]:    navmesh.cpp: 743: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_train_105.nav
+2026/09/05 19:33:27 [i][__]:widgetframework.cpp:  36: Navmesh needs to be rebuilt for some reason
+2026/09/05 19:33:27 [i][__]:widgetframework.cpp:  36: Generating new nav mesh...
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 534: Navmesh: Writing out object...
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 541: Navmesh: Loading object into geom...
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 546: Navmesh: Adding mesh to sample...
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 551: Navmesh: Building sample...
+2026/09/05 19:33:27 [i][__]:   tilemesh.cpp: 477: Navmesh: tile dimensions are 2x2
+2026/09/05 19:33:27 [i][__]:widgetframework.cpp:  36: Navmesh: 0 seconds elapsed, 50.00% done
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 554: Navmesh: Done building sample...
+2026/09/05 19:33:27 [i][__]: scenegraph.cpp:1224: Saving NAVMESH.
+2026/09/05 19:33:27 [w][__]:    navmesh.cpp: 561: t_train_105
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml that is Data/Levels/arenas/t_train_105.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:27 [i][__]:    navmesh.cpp: 579: Saving nav mesh to .rl_view/Data/LevelNavmeshes/arenas/t_train_105.nav.zip
+2026/09/05 19:33:28 [i][__]:widgetframework.cpp:  36: Loading ambient sounds and music...
+2026/09/05 19:33:28 [i][__]:widgetframework.cpp:  36: Getting path set...
+2026/09/05 19:33:28 [e][__]:returnpathutil.cpp: 373: Found no match for the string font
+2026/09/05 19:33:28 [i][__]:widgetframework.cpp:  36: Loading all data in advance...
+2026/09/05 19:33:28 [i][__]:level_loader.cpp: 219: Finished loading path set
+2026/09/05 19:33:28 [i][__]:widgetframework.cpp:  36: Preloading assets...
+2026/09/05 19:33:28 [i][__]:     engine.cpp:5625: Starting Preloading for: "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml" (valid)
+2026/09/05 19:33:28 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
+2026/09/05 19:33:28 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
+2026/09/05 19:33:28 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
+2026/09/05 19:33:28 [i][__]:   graphics.cpp: 342: Created framebuffer: 4 light_probe_cube_map
+2026/09/05 19:33:28 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:28 [i][us]:    dialogue.as: 423: Clearing editor
+2026/09/05 19:33:28 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:28 [i][__]: soundtrack.cpp:1218: Adding music sheet:"/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Music/lugaru_new.xml" (valid)
+2026/09/05 19:33:28 [i][__]:      error.cpp: 182: Displaying message: Error, Problem with ogg streaming (ov_open failed)
+2026/09/05 19:33:28 [i][__]:      error.cpp: 183: 0   Overgrowth                          0x00000001029c4ac0 _Z18GenerateStacktracev + 64
+1   Overgrowth                          0x00000001029c33d4 _Z12DisplayErrorPKcS0_9ErrorTypeb + 672
+2   Overgrowth                          0x0000000102e29cfc _ZN9oggLoaderC2E4Path + 112
+3   Overgrowth                          0x0000000102e177ec _ZN10Soundtrack16PlayedSingleSongC2EPS_RKN14MusicXMLParser4SongE + 524
+4   Overgrowth                          0x0000000102e1b1a4 _ZN10Soundtrack16TransitionPlayer16TransitionToSongERKN14MusicXMLParser4SongE + 620
+5   Overgrowth                          0x0000000102e23ad8 _ZL17ThreadedSoundLoopv + 2104
+6   Overgrowth                          0x0000000102e29ab8 _ZNSt3__114__thread_proxyB8ne200100INS_5tupleIJNS_10unique_ptrINS_15__thread_structENS_14default_deleteIS3_EEEEPFvvEEEEEEPvSA_ + 52
+7   libsystem_pthread.dylib             0x000000018bc7dc58 _pthread_start + 136
+8   libsystem_pthread.dylib             0x000000018bc78c1c thread_start + 8
+2026/09/05 19:33:28 [i][us]:      aschar.as: 831: Clearing shadow objects
+2026/09/05 19:33:28 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_turner.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:28 [i][__]:   graphics.cpp: 342: Created framebuffer: 5 blood_framebuffer
+2026/09/05 19:33:28 [i][__]:   graphics.cpp: 342: Created framebuffer: 6 blood_work_framebuffer
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:28 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 4 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 5 is now connected to void OnHitFlashTime(array<uint>& data) via expected function handle: 44
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 6 is now connected to void OnBloodFlashTime(array<uint>& data) via expected function handle: 45
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 7 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:28 [i][us]:      aschar.as: 831: Clearing shadow objects
+2026/09/05 19:33:28 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_rig.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:28 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 4 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 5 is now connected to void OnHitFlashTime(array<uint>& data) via expected function handle: 44
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 6 is now connected to void OnBloodFlashTime(array<uint>& data) via expected function handle: 45
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 7 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:28 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_rig.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:28 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:28 [i][us]:arena_level_1v1_unarmed.as: 560: Telling characters 0 and 1 to notice each other.
+2026/09/05 19:33:28 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:28 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 1 is now connected to void OnDialogueNextState(array<uint8>& data) via expected function handle: 20
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 2 is now connected to void OnDialogueSkipState(array<uint8>& data) via expected function handle: 21
+2026/09/05 19:33:28 [i][as]:  ascontext.cpp: 843:  STATE: 3 is now connected to void OnDialogueStartState(array<uint8>& data) via expected function handle: 22
+2026/09/05 19:33:28 [i][__]:widgetframework.cpp:  36: Loading sky...
+2026/09/05 19:33:28 [i][__]:   graphics.cpp: 342: Created framebuffer: 7 bake_sky_1
+2026/09/05 19:33:28 [i][__]:   graphics.cpp: 342: Created framebuffer: 8 bake_sky_2
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_tex_3d.frag
+2026/09/05 19:33:28 [i][__]:   graphics.cpp: 342: Created framebuffer: 9 cube_map_fbo
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/cubemapblur.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/fog.frag
+2026/09/05 19:33:28 [i][__]:widgetframework.cpp:  36: Reinitializing prefabs...
+2026/09/05 19:33:28 [i][__]:widgetframework.cpp:  36: Level load completed, initiating game...
+2026/09/05 19:33:28 [i][__]:widgetframework.cpp:  36: Preloading shaders...
+2026/09/05 19:33:28 [i][__]: scenegraph.cpp:3009: Preloading shaders...
+2026/09/05 19:33:28 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
+2026/09/05 19:33:28 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:28 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:28 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:28 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:28 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:28 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:28 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #SHADOW_CASCADE #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:28 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #GPU_PARTICLE_FIELD #SNOW #SIMPLE_SHADOW #NO_REFLECTION_CAPTURE #UBO_BATCH_SIZE_4X #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'instance_id' not read by fragment shader
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:29 [e][__]:    shaders.cpp: 829: Error(s) linking program "3d_color #FLIP_Y" WARNING: Could not find fragment shader output 'out_vel' to match FragDataBinding request.
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:29 [e][__]:    shaders.cpp: 829: Error(s) linking program "character_accumulate #WATER_CUBE" WARNING: Output of vertex shader 'concat_bone1' not read by fragment shader
+WARNING: Output of vertex shader 'orig_vert' not read by fragment shader
+WARNING: Output of vertex shader 'concat_bone2' not read by fragment shader
+WARNING: Output of vertex shader 'morphed_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'vel' not read by fragment shader
+WARNING: Output of vertex shader 'fur_tex_coord' not read by fragment shader
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/debug_fill.frag
+2026/09/05 19:33:29 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/flare.frag
+2026/09/05 19:33:29 [e][__]:    shaders.cpp: 829: Error(s) linking program "post #DOWNSAMPLE_DEPTH" WARNING: Output of vertex shader 'tex' not read by fragment shader
+2026/09/05 19:33:29 [i][__]: map_editor.cpp: 520: Requesting player-controlled mode...
+2026/09/05 19:33:29 [i][__]: map_editor.cpp: 523: Request successful...
+2026/09/05 19:33:29 [i][us]:      aschar.as:13411: FixDiscontinuity
+2026/09/05 19:33:29 [i][us]:      aschar.as:13411: FixDiscontinuity
+2026/09/05 19:33:29 [i][us]:arena_level_1v1_unarmed.as: 560: Telling characters 0 and 1 to notice each other.
+2026/09/05 19:33:29 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:32 [i][__]:   graphics.cpp: 342: Created framebuffer: 10 blood_framebuffer
+2026/09/05 19:33:32 [i][__]:   graphics.cpp: 342: Created framebuffer: 11 blood_work_framebuffer
+2026/09/05 19:33:33 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+2026/09/05 19:33:35 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+START
+2026/09/05 19:33:43 [i][__]:       main.cpp: 198: Starting program. Version f7796883_none 2026-09-04 22:38:44 UTC arm64 MacOSX
+2026/09/05 19:33:43 [i][__]:       main.cpp: 201: Deploy (Release)
+2026/09/05 19:33:43 [i][__]:     engine.cpp:6230: Initializing SDL
+2026/09/05 19:33:43 [i][__]:     engine.cpp:6232: SDL Initialized successfully
+2026/09/05 19:33:43 [i][__]:     engine.cpp:6247: Initializing SDL_net
+2026/09/05 19:33:43 [i][__]:      input.cpp: 230: Added 0 controller mappings.
+2026/09/05 19:33:43 [i][__]:      input.cpp:  72: Current controllers:
+2026/09/05 19:33:43 [e][__]:     engine.cpp:5602: No extra_data_path was specified.
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2515: Looking for mods in .rl_view/Data/Mods/
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_arena
+2026/09/05 19:33:43 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:43 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-arena"
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_drika
+2026/09/05 19:33:43 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:43 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-drika"
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_lugaru_campaign
+2026/09/05 19:33:43 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:43 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-lugaru-campaign"
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_machine_translations
+2026/09/05 19:33:43 [e][__]: filesystem.cpp: 357: Unable to find "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_machine_translations/Data/Images/wolfire_sandbox_levels/thumb.jpg" in any of the requested locations.
+2026/09/05 19:33:43 [e][__]: modloading.cpp: 842: Error when parsing mod.xml for mod com-wolfire-machine-translations error kValidityMissingThumbnailFile on row 8
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_overgrowth_campaign
+2026/09/05 19:33:43 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:43 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-overgrowth-campaign"
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_overgrowth_core
+2026/09/05 19:33:43 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:43 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-overgrowth-core"
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_sandbox_levels
+2026/09/05 19:33:43 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:43 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-sandbox-levels"
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_timbles_therium
+2026/09/05 19:33:43 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:43 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-timbles-therium"
+2026/09/05 19:33:43 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_versus
+2026/09/05 19:33:43 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:43 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-versus"
+2026/09/05 19:33:43 [w][__]:threaded_sound_wrapper.cpp: 561: Sound system isn't initialized yet, putting message into the queue.
+2026/09/05 19:33:43 [w][__]:threaded_sound_wrapper.cpp: 561: Sound system isn't initialized yet, putting message into the queue.
+2026/09/05 19:33:43 [i][al]:   al_audio.cpp: 245: ALC_ENUMERATION_EXT is not available, will open default device.
+2026/09/05 19:33:43 [i][al]:   al_audio.cpp: 254: Opened and using audio device: RL headless audio disabled
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 891: There are 2 available video drivers.
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 892: Video drivers are following:
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 895: Video driver 0: cocoa
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 895: Video driver 1: dummy
+2026/09/05 19:33:43 [i][al]:   al_audio.cpp: 278: We have 32 audio sources available.
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 902: Initialized video driver: cocoa
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 922: Attribute group 1 set
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1018: Created window
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1020: Set minimum size
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1032: Set display mode
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1035: Created OpenGL Context
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1047: RGBA bits, depth: 8 8 8 8 32
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1054: Anti-aliasing samples: 0
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1060: SDL OpenGL Context Result: 3.2 With a SDL_GL_CONTEXT_PROFILE_CORE profile context
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1066: GLAD loaded succesfully
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1075: OpenGL Self Reported version string: 4.1 Metal - 90.5
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1076: OpenGL Self Reported version values: 4.1
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1088: Context seems acceptable for running the application, continuing.
+2026/09/05 19:33:43 [i][__]:detect_settings.cpp:  37: Verified support for S3TC DXT5 compressed textures
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1104: Activating OpenGL callback errors, [opengl_callback_errors]
+2026/09/05 19:33:43 [i][__]:textureatlas.cpp:  40: Creating a decal texture atlas with dimensions ivec2(8192,8192)
+2026/09/05 19:33:43 [i][__]:textureatlas.cpp:  40: Creating a decal texture atlas with dimensions ivec2(8192,8192)
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 342: Created framebuffer: 1 generic
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 342: Created framebuffer: 2 post_effects
+2026/09/05 19:33:43 [i][__]:   graphics.cpp: 342: Created framebuffer: 3 static_shadow_fb
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1318: 80 texture units supported.
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1334: GL_MAX_VERTEX_UNIFORM_COMPONENTS: 4096
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
+2026/09/05 19:33:43 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
+2026/09/05 19:33:43 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [e][__]: filesystem.cpp: 357: Unable to find "Data/LevelInfo/arenas/t_held_203_linfo.xml" in any of the requested locations.
+2026/09/05 19:33:43 [w][__]:levelxmlparser.cpp: 135: Missing LoadingScreen element in level
+2026/09/05 19:33:43 [i][__]:  levelinfo.cpp:  54: Saving a cached version of LevelInfoAsset to .rl_view/Data/LevelInfo/arenas/t_held_203_linfo.xml
+2026/09/05 19:33:43 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:43 [i][__]:     engine.cpp:1868: Checking if we actually allow any state changes
+2026/09/05 19:33:43 [i][__]:     engine.cpp:1902: Performing a state queue request 
+2026/09/05 19:33:43 [i][__]:     engine.cpp:2022: Switching game state
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]:levelxmlparser.cpp: 129: Image sub element contents for LoadingScreen is null.
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]:     engine.cpp:5853: No loading screen image, loading normal.
+2026/09/05 19:33:43 [i][__]:     config.cpp: 489: Saving config to: .rl_view/Data/config.txt
+2026/09/05 19:33:43 [i][__]:assetmanager.cpp: 432: Dumping asset manager warning data to asset_manager_warnings.xml
+2026/09/05 19:33:43 [i][__]:     engine.cpp:5801: Unloading all unreferenced assets after clearing level [full_level_unload: true]...
+2026/09/05 19:33:43 [i][__]:     engine.cpp:5807: 3 Assets were unloaded
+2026/09/05 19:33:43 [i][__]:     engine.cpp:5808: 0 Texture assets were unloaded
+2026/09/05 19:33:43 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:43 [i][us]:    dialogue.as: 423: Clearing editor
+2026/09/05 19:33:43 [i][as]:  ascontext.cpp: 843:  STATE: 1 is now connected to void OnDialogueNextState(array<uint8>& data) via expected function handle: 20
+2026/09/05 19:33:43 [i][as]:  ascontext.cpp: 843:  STATE: 2 is now connected to void OnDialogueSkipState(array<uint8>& data) via expected function handle: 21
+2026/09/05 19:33:43 [i][as]:  ascontext.cpp: 843:  STATE: 3 is now connected to void OnDialogueStartState(array<uint8>& data) via expected function handle: 22
+2026/09/05 19:33:43 [i][__]:widgetframework.cpp:  36: Starting to load "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml"
+2026/09/05 19:33:43 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:43 [i][__]:     engine.cpp:5638: Load Level: ""/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+"
+2026/09/05 19:33:43 [i][__]:widgetframework.cpp:  36: Loading level...
+2026/09/05 19:33:43 [w][__]:   levelxml.cpp: 417: SpawnPoints is outdated
+2026/09/05 19:33:43 [w][__]:   levelxml.cpp: 436: Mismatch between navmesh build data and navmesh level parameters
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]:widgetframework.cpp:  36: Adding loaded objects to scene...
+2026/09/05 19:33:43 [i][__]:widgetframework.cpp:  36: Loading nav mesh...
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [e][__]:    navmesh.cpp: 682: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_held_203.nav.xml
+2026/09/05 19:33:43 [i][__]:    navmesh.cpp: 689: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_held_203.nav.obj
+2026/09/05 19:33:43 [e][__]:    navmesh.cpp: 704: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_held_203.nav
+2026/09/05 19:33:43 [e][__]:    navmesh.cpp: 721: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_held_203.nav.xml
+2026/09/05 19:33:43 [i][__]:    navmesh.cpp: 728: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_held_203.nav.obj
+2026/09/05 19:33:43 [e][__]:    navmesh.cpp: 743: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_held_203.nav
+2026/09/05 19:33:43 [i][__]:widgetframework.cpp:  36: Navmesh needs to be rebuilt for some reason
+2026/09/05 19:33:43 [i][__]:widgetframework.cpp:  36: Generating new nav mesh...
+2026/09/05 19:33:43 [i][__]:    navmesh.cpp: 534: Navmesh: Writing out object...
+2026/09/05 19:33:43 [i][__]:    navmesh.cpp: 541: Navmesh: Loading object into geom...
+2026/09/05 19:33:43 [i][__]:    navmesh.cpp: 546: Navmesh: Adding mesh to sample...
+2026/09/05 19:33:43 [i][__]:    navmesh.cpp: 551: Navmesh: Building sample...
+2026/09/05 19:33:43 [i][__]:   tilemesh.cpp: 477: Navmesh: tile dimensions are 2x2
+2026/09/05 19:33:43 [i][__]:widgetframework.cpp:  36: Navmesh: 0 seconds elapsed, 50.00% done
+2026/09/05 19:33:43 [i][__]:    navmesh.cpp: 554: Navmesh: Done building sample...
+2026/09/05 19:33:43 [i][__]: scenegraph.cpp:1224: Saving NAVMESH.
+2026/09/05 19:33:43 [w][__]:    navmesh.cpp: 561: t_held_203
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml that is Data/Levels/arenas/t_held_203.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:43 [i][__]:    navmesh.cpp: 579: Saving nav mesh to .rl_view/Data/LevelNavmeshes/arenas/t_held_203.nav.zip
+2026/09/05 19:33:44 [i][__]:widgetframework.cpp:  36: Loading ambient sounds and music...
+2026/09/05 19:33:44 [i][__]:widgetframework.cpp:  36: Getting path set...
+2026/09/05 19:33:44 [e][__]:returnpathutil.cpp: 373: Found no match for the string font
+2026/09/05 19:33:44 [i][__]:widgetframework.cpp:  36: Loading all data in advance...
+2026/09/05 19:33:44 [i][__]:level_loader.cpp: 219: Finished loading path set
+2026/09/05 19:33:44 [i][__]:widgetframework.cpp:  36: Preloading assets...
+2026/09/05 19:33:44 [i][__]:     engine.cpp:5625: Starting Preloading for: "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml" (valid)
+2026/09/05 19:33:44 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
+2026/09/05 19:33:44 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
+2026/09/05 19:33:44 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
+2026/09/05 19:33:44 [i][__]:   graphics.cpp: 342: Created framebuffer: 4 light_probe_cube_map
+2026/09/05 19:33:44 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:44 [i][us]:    dialogue.as: 423: Clearing editor
+2026/09/05 19:33:44 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:44 [i][__]: soundtrack.cpp:1218: Adding music sheet:"/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Music/lugaru_new.xml" (valid)
+2026/09/05 19:33:44 [i][__]:      error.cpp: 182: Displaying message: Error, Problem with ogg streaming (ov_open failed)
+2026/09/05 19:33:44 [i][__]:      error.cpp: 183: 0   Overgrowth                          0x000000010054cac0 _Z18GenerateStacktracev + 64
+1   Overgrowth                          0x000000010054b3d4 _Z12DisplayErrorPKcS0_9ErrorTypeb + 672
+2   Overgrowth                          0x00000001009b1cfc _ZN9oggLoaderC2E4Path + 112
+3   Overgrowth                          0x000000010099f7ec _ZN10Soundtrack16PlayedSingleSongC2EPS_RKN14MusicXMLParser4SongE + 524
+4   Overgrowth                          0x00000001009a31a4 _ZN10Soundtrack16TransitionPlayer16TransitionToSongERKN14MusicXMLParser4SongE + 620
+5   Overgrowth                          0x00000001009abad8 _ZL17ThreadedSoundLoopv + 2104
+6   Overgrowth                          0x00000001009b1ab8 _ZNSt3__114__thread_proxyB8ne200100INS_5tupleIJNS_10unique_ptrINS_15__thread_structENS_14default_deleteIS3_EEEEPFvvEEEEEEPvSA_ + 52
+7   libsystem_pthread.dylib             0x000000018bc7dc58 _pthread_start + 136
+8   libsystem_pthread.dylib             0x000000018bc78c1c thread_start + 8
+2026/09/05 19:33:44 [i][us]:      aschar.as: 831: Clearing shadow objects
+2026/09/05 19:33:44 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_turner.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:44 [i][__]:   graphics.cpp: 342: Created framebuffer: 5 blood_framebuffer
+2026/09/05 19:33:44 [i][__]:   graphics.cpp: 342: Created framebuffer: 6 blood_work_framebuffer
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:44 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 4 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 5 is now connected to void OnHitFlashTime(array<uint>& data) via expected function handle: 44
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 6 is now connected to void OnBloodFlashTime(array<uint>& data) via expected function handle: 45
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 7 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:44 [i][us]:      aschar.as: 831: Clearing shadow objects
+2026/09/05 19:33:44 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_rig.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:44 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 4 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 5 is now connected to void OnHitFlashTime(array<uint>& data) via expected function handle: 44
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 6 is now connected to void OnBloodFlashTime(array<uint>& data) via expected function handle: 45
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 7 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:33:44 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_rig.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:33:44 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:33:44 [i][us]:arena_level_1v1_unarmed.as: 560: Telling characters 0 and 1 to notice each other.
+2026/09/05 19:33:44 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:44 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 1 is now connected to void OnDialogueNextState(array<uint8>& data) via expected function handle: 20
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 2 is now connected to void OnDialogueSkipState(array<uint8>& data) via expected function handle: 21
+2026/09/05 19:33:44 [i][as]:  ascontext.cpp: 843:  STATE: 3 is now connected to void OnDialogueStartState(array<uint8>& data) via expected function handle: 22
+2026/09/05 19:33:44 [i][__]:widgetframework.cpp:  36: Loading sky...
+2026/09/05 19:33:44 [i][__]:   graphics.cpp: 342: Created framebuffer: 7 bake_sky_1
+2026/09/05 19:33:44 [i][__]:   graphics.cpp: 342: Created framebuffer: 8 bake_sky_2
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_tex_3d.frag
+2026/09/05 19:33:44 [i][__]:   graphics.cpp: 342: Created framebuffer: 9 cube_map_fbo
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/cubemapblur.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/fog.frag
+2026/09/05 19:33:44 [i][__]:widgetframework.cpp:  36: Reinitializing prefabs...
+2026/09/05 19:33:44 [i][__]:widgetframework.cpp:  36: Level load completed, initiating game...
+2026/09/05 19:33:44 [i][__]:widgetframework.cpp:  36: Preloading shaders...
+2026/09/05 19:33:44 [i][__]: scenegraph.cpp:3009: Preloading shaders...
+2026/09/05 19:33:44 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
+2026/09/05 19:33:44 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:44 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:44 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:44 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:44 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:44 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+2026/09/05 19:33:44 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #SHADOW_CASCADE #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:44 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #GPU_PARTICLE_FIELD #SNOW #SIMPLE_SHADOW #NO_REFLECTION_CAPTURE #UBO_BATCH_SIZE_4X #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'instance_id' not read by fragment shader
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:45 [e][__]:    shaders.cpp: 829: Error(s) linking program "3d_color #FLIP_Y" WARNING: Could not find fragment shader output 'out_vel' to match FragDataBinding request.
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:33:45 [e][__]:    shaders.cpp: 829: Error(s) linking program "character_accumulate #WATER_CUBE" WARNING: Output of vertex shader 'concat_bone1' not read by fragment shader
+WARNING: Output of vertex shader 'orig_vert' not read by fragment shader
+WARNING: Output of vertex shader 'concat_bone2' not read by fragment shader
+WARNING: Output of vertex shader 'morphed_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'vel' not read by fragment shader
+WARNING: Output of vertex shader 'fur_tex_coord' not read by fragment shader
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/debug_fill.frag
+2026/09/05 19:33:45 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/flare.frag
+2026/09/05 19:33:45 [e][__]:    shaders.cpp: 829: Error(s) linking program "post #DOWNSAMPLE_DEPTH" WARNING: Output of vertex shader 'tex' not read by fragment shader
+2026/09/05 19:33:45 [i][__]: map_editor.cpp: 520: Requesting player-controlled mode...
+2026/09/05 19:33:45 [i][__]: map_editor.cpp: 523: Request successful...
+2026/09/05 19:33:45 [i][us]:      aschar.as:13411: FixDiscontinuity
+2026/09/05 19:33:45 [i][us]:      aschar.as:13411: FixDiscontinuity
+2026/09/05 19:33:45 [i][us]:arena_level_1v1_unarmed.as: 560: Telling characters 0 and 1 to notice each other.
+2026/09/05 19:33:45 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:33:48 [i][__]:   graphics.cpp: 342: Created framebuffer: 10 blood_framebuffer
+2026/09/05 19:33:48 [i][__]:   graphics.cpp: 342: Created framebuffer: 11 blood_work_framebuffer
+2026/09/05 19:33:49 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+2026/09/05 19:33:50 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+2026/09/05 19:33:51 [i][us]:arena_level_1v1_unarmed.as: 967: Player 0 was knocked over by player 1
+2026/09/05 19:33:51 [i][us]:arena_level_1v1_unarmed.as: 986: Player 1 missed an attack aimed at 0
+2026/09/05 19:33:52 [w][__]:bulletworld.cpp:1063: Tried to do a ray-cast with a zero-length ray, skipping test and returning null
+2026/09/05 19:33:54 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+2026/09/05 19:33:55 [i][us]:arena_level_1v1_unarmed.as: 967: Player 0 was knocked over by player 1
+2026/09/05 19:33:58 [i][us]:arena_level_1v1_unarmed.as: 971: Player 0 passive-blocked an attack by player 1
+START
+2026/09/05 19:33:59 [i][__]:       main.cpp: 198: Starting program. Version f7796883_none 2026-09-04 22:38:44 UTC arm64 MacOSX
+2026/09/05 19:33:59 [i][__]:       main.cpp: 201: Deploy (Release)
+2026/09/05 19:33:59 [i][__]:     engine.cpp:6230: Initializing SDL
+2026/09/05 19:33:59 [i][__]:     engine.cpp:6232: SDL Initialized successfully
+2026/09/05 19:33:59 [i][__]:     engine.cpp:6247: Initializing SDL_net
+2026/09/05 19:33:59 [i][__]:      input.cpp: 230: Added 0 controller mappings.
+2026/09/05 19:33:59 [i][__]:      input.cpp:  72: Current controllers:
+2026/09/05 19:33:59 [e][__]:     engine.cpp:5602: No extra_data_path was specified.
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2515: Looking for mods in .rl_view/Data/Mods/
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_arena
+2026/09/05 19:33:59 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:59 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-arena"
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_drika
+2026/09/05 19:33:59 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:59 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-drika"
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_lugaru_campaign
+2026/09/05 19:33:59 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:59 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-lugaru-campaign"
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_machine_translations
+2026/09/05 19:33:59 [e][__]: filesystem.cpp: 357: Unable to find "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_machine_translations/Data/Images/wolfire_sandbox_levels/thumb.jpg" in any of the requested locations.
+2026/09/05 19:33:59 [e][__]: modloading.cpp: 842: Error when parsing mod.xml for mod com-wolfire-machine-translations error kValidityMissingThumbnailFile on row 8
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_overgrowth_campaign
+2026/09/05 19:33:59 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:59 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-overgrowth-campaign"
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_overgrowth_core
+2026/09/05 19:33:59 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:59 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-overgrowth-core"
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_sandbox_levels
+2026/09/05 19:33:59 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:59 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-sandbox-levels"
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_timbles_therium
+2026/09/05 19:33:59 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:59 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-timbles-therium"
+2026/09/05 19:33:59 [i][__]: modloading.cpp:2438: Added mod: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Mods/wolfire_versus
+2026/09/05 19:33:59 [i][__]: modloading.cpp:1429: Added mod path to filesystem
+2026/09/05 19:33:59 [w][__]: modloading.cpp:1351: FAILED ACTIVATING CORE MOD "com-wolfire-versus"
+2026/09/05 19:33:59 [w][__]:threaded_sound_wrapper.cpp: 561: Sound system isn't initialized yet, putting message into the queue.
+2026/09/05 19:33:59 [w][__]:threaded_sound_wrapper.cpp: 561: Sound system isn't initialized yet, putting message into the queue.
+2026/09/05 19:33:59 [i][al]:   al_audio.cpp: 245: ALC_ENUMERATION_EXT is not available, will open default device.
+2026/09/05 19:33:59 [i][al]:   al_audio.cpp: 254: Opened and using audio device: RL headless audio disabled
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 891: There are 2 available video drivers.
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 892: Video drivers are following:
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 895: Video driver 0: cocoa
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 895: Video driver 1: dummy
+2026/09/05 19:33:59 [i][al]:   al_audio.cpp: 278: We have 32 audio sources available.
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 902: Initialized video driver: cocoa
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 922: Attribute group 1 set
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1018: Created window
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1020: Set minimum size
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1032: Set display mode
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1035: Created OpenGL Context
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1047: RGBA bits, depth: 8 8 8 8 32
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1054: Anti-aliasing samples: 0
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1060: SDL OpenGL Context Result: 3.2 With a SDL_GL_CONTEXT_PROFILE_CORE profile context
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1066: GLAD loaded succesfully
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1075: OpenGL Self Reported version string: 4.1 Metal - 90.5
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1076: OpenGL Self Reported version values: 4.1
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1088: Context seems acceptable for running the application, continuing.
+2026/09/05 19:33:59 [i][__]:detect_settings.cpp:  37: Verified support for S3TC DXT5 compressed textures
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1104: Activating OpenGL callback errors, [opengl_callback_errors]
+2026/09/05 19:33:59 [i][__]:textureatlas.cpp:  40: Creating a decal texture atlas with dimensions ivec2(8192,8192)
+2026/09/05 19:33:59 [i][__]:textureatlas.cpp:  40: Creating a decal texture atlas with dimensions ivec2(8192,8192)
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 342: Created framebuffer: 1 generic
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 342: Created framebuffer: 2 post_effects
+2026/09/05 19:33:59 [i][__]:   graphics.cpp: 342: Created framebuffer: 3 static_shadow_fb
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1318: 80 texture units supported.
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1334: GL_MAX_VERTEX_UNIFORM_COMPONENTS: 4096
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
+2026/09/05 19:33:59 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
+2026/09/05 19:33:59 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [e][__]: filesystem.cpp: 357: Unable to find "Data/LevelInfo/arenas/t_train_105_duel_linfo.xml" in any of the requested locations.
+2026/09/05 19:33:59 [w][__]:levelxmlparser.cpp: 135: Missing LoadingScreen element in level
+2026/09/05 19:33:59 [i][__]:  levelinfo.cpp:  54: Saving a cached version of LevelInfoAsset to .rl_view/Data/LevelInfo/arenas/t_train_105_duel_linfo.xml
+2026/09/05 19:33:59 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:59 [i][__]:     engine.cpp:1868: Checking if we actually allow any state changes
+2026/09/05 19:33:59 [i][__]:     engine.cpp:1902: Performing a state queue request 
+2026/09/05 19:33:59 [i][__]:     engine.cpp:2022: Switching game state
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]:levelxmlparser.cpp: 129: Image sub element contents for LoadingScreen is null.
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]:     engine.cpp:5853: No loading screen image, loading normal.
+2026/09/05 19:33:59 [i][__]:     config.cpp: 489: Saving config to: .rl_view/Data/config.txt
+2026/09/05 19:33:59 [i][__]:assetmanager.cpp: 432: Dumping asset manager warning data to asset_manager_warnings.xml
+2026/09/05 19:33:59 [i][__]:     engine.cpp:5801: Unloading all unreferenced assets after clearing level [full_level_unload: true]...
+2026/09/05 19:33:59 [i][__]:     engine.cpp:5807: 3 Assets were unloaded
+2026/09/05 19:33:59 [i][__]:     engine.cpp:5808: 0 Texture assets were unloaded
+2026/09/05 19:33:59 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:33:59 [i][us]:    dialogue.as: 423: Clearing editor
+2026/09/05 19:33:59 [i][as]:  ascontext.cpp: 843:  STATE: 1 is now connected to void OnDialogueNextState(array<uint8>& data) via expected function handle: 20
+2026/09/05 19:33:59 [i][as]:  ascontext.cpp: 843:  STATE: 2 is now connected to void OnDialogueSkipState(array<uint8>& data) via expected function handle: 21
+2026/09/05 19:33:59 [i][as]:  ascontext.cpp: 843:  STATE: 3 is now connected to void OnDialogueStartState(array<uint8>& data) via expected function handle: 22
+2026/09/05 19:33:59 [i][__]:widgetframework.cpp:  36: Starting to load "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml"
+2026/09/05 19:33:59 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:33:59 [i][__]:     engine.cpp:5638: Load Level: ""/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+"
+2026/09/05 19:33:59 [i][__]:widgetframework.cpp:  36: Loading level...
+2026/09/05 19:33:59 [w][__]:   levelxml.cpp: 417: SpawnPoints is outdated
+2026/09/05 19:33:59 [w][__]:   levelxml.cpp: 436: Mismatch between navmesh build data and navmesh level parameters
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:33:59 [i][__]:widgetframework.cpp:  36: Adding loaded objects to scene...
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Loading nav mesh...
+2026/09/05 19:34:00 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:34:00 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:34:00 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:34:00 [e][__]:    navmesh.cpp: 682: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_train_105_duel.nav.xml
+2026/09/05 19:34:00 [i][__]:    navmesh.cpp: 689: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_train_105_duel.nav.obj
+2026/09/05 19:34:00 [e][__]:    navmesh.cpp: 704: Missing file for navmesh .rl_view/Data/LevelNavmeshes/arenas/t_train_105_duel.nav
+2026/09/05 19:34:00 [e][__]:    navmesh.cpp: 721: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_train_105_duel.nav.xml
+2026/09/05 19:34:00 [i][__]:    navmesh.cpp: 728: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_train_105_duel.nav.obj
+2026/09/05 19:34:00 [e][__]:    navmesh.cpp: 743: Missing file for navmesh /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/LevelNavmeshes/arenas/t_train_105_duel.nav
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Navmesh needs to be rebuilt for some reason
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Generating new nav mesh...
+2026/09/05 19:34:00 [i][__]:    navmesh.cpp: 534: Navmesh: Writing out object...
+2026/09/05 19:34:00 [i][__]:    navmesh.cpp: 541: Navmesh: Loading object into geom...
+2026/09/05 19:34:00 [i][__]:    navmesh.cpp: 546: Navmesh: Adding mesh to sample...
+2026/09/05 19:34:00 [i][__]:    navmesh.cpp: 551: Navmesh: Building sample...
+2026/09/05 19:34:00 [i][__]:   tilemesh.cpp: 477: Navmesh: tile dimensions are 2x2
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Navmesh: 0 seconds elapsed, 50.00% done
+2026/09/05 19:34:00 [i][__]:    navmesh.cpp: 554: Navmesh: Done building sample...
+2026/09/05 19:34:00 [i][__]: scenegraph.cpp:1224: Saving NAVMESH.
+2026/09/05 19:34:00 [w][__]:    navmesh.cpp: 561: t_train_105_duel
+2026/09/05 19:34:00 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:34:00 [i][__]: filesystem.cpp: 948: Found a match for /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml that is Data/Levels/arenas/t_train_105_duel.xml in "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:34:00 [i][__]: filesystem.cpp: 963: Chose "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:34:00 [i][__]:    navmesh.cpp: 579: Saving nav mesh to .rl_view/Data/LevelNavmeshes/arenas/t_train_105_duel.nav.zip
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Loading ambient sounds and music...
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Getting path set...
+2026/09/05 19:34:00 [e][__]:returnpathutil.cpp: 373: Found no match for the string font
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Loading all data in advance...
+2026/09/05 19:34:00 [i][__]:level_loader.cpp: 219: Finished loading path set
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Preloading assets...
+2026/09/05 19:34:00 [i][__]:     engine.cpp:5625: Starting Preloading for: "/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml" (valid)
+
+2026/09/05 19:34:00 [i][__]:   graphics.cpp:1356: GLAD_ARB_texture_cube_map_array is available
+2026/09/05 19:34:00 [w][__]:   graphics.cpp:1382: EXT_texture_sRGB is not advertised; sRGB is core in GL 3.0+, continuing
+2026/09/05 19:34:00 [i][__]:   graphics.cpp:1391: Unassuming that any EBO or VBO is bound
+2026/09/05 19:34:00 [i][__]:   graphics.cpp: 342: Created framebuffer: 4 light_probe_cube_map
+2026/09/05 19:34:00 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:34:00 [i][us]:    dialogue.as: 423: Clearing editor
+2026/09/05 19:34:00 [i][__]:      level.cpp: 251: Calling void Init(string level_name) for level hook file.
+2026/09/05 19:34:00 [i][__]: soundtrack.cpp:1218: Adding music sheet:"/Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Music/lugaru_new.xml" (valid)
+
+2026/09/05 19:34:00 [i][__]:      error.cpp: 182: Displaying message: Error, Problem with ogg streaming (ov_open failed)
+2026/09/05 19:34:00 [i][__]:      error.cpp: 183: 0   Overgrowth                          0x0000000100720ac0 _Z18GenerateStacktracev + 64
+1   Overgrowth                          0x000000010071f3d4 _Z12DisplayErrorPKcS0_9ErrorTypeb + 672
+2   Overgrowth                          0x0000000100b85cfc _ZN9oggLoaderC2E4Path + 112
+3   Overgrowth                          0x0000000100b737ec _ZN10Soundtrack16PlayedSingleSongC2EPS_RKN14MusicXMLParser4SongE + 524
+4   Overgrowth                          0x0000000100b771a4 _ZN10Soundtrack16TransitionPlayer16TransitionToSongERKN14MusicXMLParser4SongE + 620
+5   Overgrowth                          0x0000000100b7fad8 _ZL17ThreadedSoundLoopv + 2104
+6   Overgrowth                          0x0000000100b85ab8 _ZNSt3__114__thread_proxyB8ne200100INS_5tupleIJNS_10unique_ptrINS_15__thread_structENS_14default_deleteIS3_EEEEPFvvEEEEEEPvSA_ + 52
+7   libsystem_pthread.dylib             0x000000018bc7dc58 _pthread_start + 136
+8   libsystem_pthread.dylib             0x000000018bc78c1c thread_start + 8
+
+2026/09/05 19:34:00 [i][us]:      aschar.as: 831: Clearing shadow objects
+2026/09/05 19:34:00 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_turner.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:34:00 [i][__]:   graphics.cpp: 342: Created framebuffer: 5 blood_framebuffer
+2026/09/05 19:34:00 [i][__]:   graphics.cpp: 342: Created framebuffer: 6 blood_work_framebuffer
+2026/09/05 19:34:00 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:34:00 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_2d.frag
+2026/09/05 19:34:00 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:34:00 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:34:00 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:34:00 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 4 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 5 is now connected to void OnHitFlashTime(array<uint>& data) via expected function handle: 44
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 6 is now connected to void OnBloodFlashTime(array<uint>& data) via expected function handle: 45
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 7 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:34:00 [i][us]:      aschar.as: 831: Clearing shadow objects
+2026/09/05 19:34:00 [w][__]:   skeleton.cpp: 822: Error when setting up joints in skeleton from path "Data/Skeletons/r_turner.xml", trying to create a joint between bone 0 and itself.
+2026/09/05 19:34:00 [i][us]:      aschar.as:1842: Caching skeleton info
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 4 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 5 is now connected to void OnHitFlashTime(array<uint>& data) via expected function handle: 44
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 6 is now connected to void OnBloodFlashTime(array<uint>& data) via expected function handle: 45
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 7 is now connected to void OnDamageRecievedState(array<uint>& data) via expected function handle: 43
+2026/09/05 19:34:00 [i][us]:arena_level_human_duel.as: 560: Telling characters 0 and 1 to notice each other.
+2026/09/05 19:34:00 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:34:00 [i][us]:enemycontrol.as:1054: Received notice message
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 1 is now connected to void OnDialogueNextState(array<uint8>& data) via expected function handle: 20
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 2 is now connected to void OnDialogueSkipState(array<uint8>& data) via expected function handle: 21
+2026/09/05 19:34:00 [i][as]:  ascontext.cpp: 843:  STATE: 3 is now connected to void OnDialogueStartState(array<uint8>& data) via expected function handle: 22
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Loading sky...
+2026/09/05 19:34:00 [i][__]:   graphics.cpp: 342: Created framebuffer: 7 bake_sky_1
+2026/09/05 19:34:00 [i][__]:   graphics.cpp: 342: Created framebuffer: 8 bake_sky_2
+2026/09/05 19:34:00 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/simple_tex_3d.frag
+2026/09/05 19:34:00 [i][__]:   graphics.cpp: 342: Created framebuffer: 9 cube_map_fbo
+2026/09/05 19:34:00 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/cubemapblur.frag
+2026/09/05 19:34:00 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/fog.frag
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Reinitializing prefabs...
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Level load completed, initiating game...
+2026/09/05 19:34:00 [i][__]:widgetframework.cpp:  36: Preloading shaders...
+2026/09/05 19:34:00 [i][__]: scenegraph.cpp:3009: Preloading shaders...
+2026/09/05 19:34:00 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
+
+2026/09/05 19:34:00 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+
+2026/09/05 19:34:00 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+
+2026/09/05 19:34:00 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+
+2026/09/05 19:34:00 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+
+2026/09/05 19:34:00 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+
+2026/09/05 19:34:00 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAIL_OBJECT #TERRAIN #PLANT #LESS_PLANT_MOVEMENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'base_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'tangent_to_world' not read by fragment shader
+
+2026/09/05 19:34:01 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #DETAILMAP4 #TANGENT #BASE_TANGENT #UBO_BATCH_SIZE_4X #DEPTH_ONLY #NO_INSTANCE_ID #SHADOW_CASCADE #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'tan_to_obj' not read by fragment shader
+
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [e][__]:    shaders.cpp: 829: Error(s) linking program "envobject #GPU_PARTICLE_FIELD #SNOW #SIMPLE_SHADOW #NO_REFLECTION_CAPTURE #UBO_BATCH_SIZE_4X #NO_VELOCITY_BUF" WARNING: Output of vertex shader 'instance_id' not read by fragment shader
+
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/envobject.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 787: Binding out vel for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:34:01 [e][__]:    shaders.cpp: 829: Error(s) linking program "3d_color #FLIP_Y" WARNING: Could not find fragment shader output 'out_vel' to match FragDataBinding request.
+
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/3d_color.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/billboard.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/character_accumulate.frag
+2026/09/05 19:34:01 [e][__]:    shaders.cpp: 829: Error(s) linking program "character_accumulate #WATER_CUBE" WARNING: Output of vertex shader 'concat_bone1' not read by fragment shader
+WARNING: Output of vertex shader 'orig_vert' not read by fragment shader
+WARNING: Output of vertex shader 'concat_bone2' not read by fragment shader
+WARNING: Output of vertex shader 'morphed_tex_coord' not read by fragment shader
+WARNING: Output of vertex shader 'vel' not read by fragment shader
+WARNING: Output of vertex shader 'fur_tex_coord' not read by fragment shader
+
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/debug_fill.frag
+2026/09/05 19:34:01 [i][__]:    shaders.cpp: 781: Binding out color for /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL/Data/GLSL/flare.frag
+2026/09/05 19:34:01 [e][__]:    shaders.cpp: 829: Error(s) linking program "post #DOWNSAMPLE_DEPTH" WARNING: Output of vertex shader 'tex' not read by fragment shader
+
+2026/09/05 19:34:01 [i][__]: map_editor.cpp: 520: Requesting player-controlled mode...
+2026/09/05 19:34:01 [i][__]: map_editor.cpp: 523: Request successful...
+2026/09/05 19:34:01 [i][us]:      aschar.as:13411: FixDiscontinuity
+2026/09/05 19:34:01 [i][us]:      aschar.as:13411: FixDiscontinuity

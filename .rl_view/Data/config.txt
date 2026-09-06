@@ -1,19 +1,19 @@
 playername: Unknown Rabbit
 gamepad_3_look_sensitivity: 1.25
 gamepad_0_deadzone: 0.075
-level_history1: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml
-level_history10: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/cn_19.xml
-level_history2: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_103_duel.xml
-level_history3: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101_duel.xml
-level_history4: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106.xml
-level_history5: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml
+level_history1: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105_duel.xml
+level_history10: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_103.xml
+level_history2: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_held_203.xml
+level_history3: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_105.xml
+level_history4: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml
+level_history5: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106_duel.xml
 gamepad_2_look_sensitivity: 1.25
-level_history6: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_104.xml
-level_history7: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_103.xml
+level_history6: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_103_duel.xml
+level_history7: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101_duel.xml
 gamepad_2_deadzone: 0.075
 gamepad_1_look_sensitivity: 1.25
-level_history8: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_102.xml
-level_history9: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_101.xml
+level_history8: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_106.xml
+level_history9: /Users/pavlov/Library/Application Support/Steam/steamapps/common/Overgrowth/Overgrowth.app/Contents/MacOS/Data/Levels/arenas/t_train_104.xml
 gamepad_3_deadzone: 0.075
 gamepad_0_look_sensitivity: 1.25
 screenwidth: 800

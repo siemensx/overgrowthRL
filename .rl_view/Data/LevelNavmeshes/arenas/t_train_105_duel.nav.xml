@@ -1,8 +1,8 @@
 <?xml version="2.0" ?>
 <NavMeshMeta>
-    <Level>t_train_105</Level>
+    <Level>t_train_105_duel</Level>
     <IgnoreHash>false</IgnoreHash>
-    <LevelHash>ff86044c5848b8fcd97d682b892a1127</LevelHash>
+    <LevelHash>934fe107155bbc9dfa5e0948c67628c</LevelHash>
     <IgnoreVersion>false</IgnoreVersion>
     <Version>1</Version>
 </NavMeshMeta>
