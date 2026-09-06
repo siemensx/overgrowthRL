@@ -444,6 +444,8 @@ function renderTrainingView(el) {
   el.appendChild(renderEmergencePanel(metrics));
   el.appendChild(renderActionStatsPanel(metrics));
 
+  el.appendChild(renderPipelinePanel(metrics));
+
   const throughputChart = renderChart("Throughput (decisions/s)", metrics,
     [
       { key: d => d.perf && d.perf.steps_per_second_collection, label: "collection-only", color: COLORS[2] },
@@ -858,6 +860,63 @@ const EMERGENCE_SIGNATURES = [
   { key: "guard_pressure", label: "Guard pressure: P(atk | opp block broken) − P(atk | opp block healthy)", sampleKey: "opp_block_broken" },
   { key: "funnelling", label: "Funnelling: mean hostiles within 3m (steps with ≥2 hostiles visible)", sampleKey: "funnel_eligible" },
 ];
+
+// Where a training cycle's wall time actually goes. Every field here has been
+// logged since the vectorised trainer landed; nothing displayed it, so the
+// split had to be recomputed by hand every time the question came up -- and a
+// sampling-profiler guess at the same split was wrong by a factor of five
+// (DEAD_ENDS.md, "sample percentages are NOT trustworthy").
+//
+// barrier_idle_seconds is a SUM ACROSS WORKERS, not a wall-clock fraction.
+// Dividing it by cycle time without first dividing by active_workers produced a
+// confident "58% of wall time is barrier idle" that was wrong by 3x. It is
+// divided here so the panel cannot be misread the same way.
+function renderPipelinePanel(metrics) {
+  const panel = document.createElement("div");
+  panel.className = "panel";
+  panel.innerHTML = `<h2>Where cycle time goes (median of the last 60 updates)</h2>`;
+  const rows = metrics.filter(d => d.perf && d.perf.cycle_seconds && d.perf.active_workers).slice(-60);
+  if (rows.length < 5) {
+    panel.innerHTML += `<div class="empty-state">Not enough perf samples yet.</div>`;
+    return panel;
+  }
+  const med = (f) => {
+    const v = rows.map(f).filter(x => typeof x === "number" && isFinite(x)).sort((a, b) => a - b);
+    return v.length ? v[Math.floor(v.length / 2)] : 0;
+  };
+  const cycle = med(d => d.perf.cycle_seconds);
+  const collect = med(d => d.perf.collection_seconds);
+  const stepWall = med(d => d.perf.step_wall_seconds);
+  const workers = med(d => d.perf.active_workers) || 1;
+  const idlePer = med(d => d.perf.barrier_idle_seconds) / workers;
+  const parts = [
+    { label: "engine stepping (worker busy)", v: stepWall - idlePer, color: COLORS[0] },
+    { label: "policy forward + buffering + rewards", v: collect - stepWall, color: COLORS[1] },
+    { label: "barrier idle, per worker", v: idlePer, color: COLORS[3] },
+    { label: "PPO update (the learner)", v: cycle - collect, color: COLORS[4] },
+  ];
+  const row = document.createElement("div");
+  row.className = "band-bars";
+  for (const p of parts) {
+    const pct = cycle > 0 ? Math.max(0, Math.round((p.v / cycle) * 100)) : 0;
+    const bar = document.createElement("div");
+    bar.className = "band-bar";
+    bar.innerHTML = `
+      <div class="band-bar-label">${p.label}</div>
+      <div class="band-bar-track"><div class="band-bar-fill" style="width:${pct}%; background:${p.color}"></div></div>
+      <div class="band-bar-value">${pct}% &nbsp;<span style="opacity:.6">${p.v.toFixed(3)}s</span></div>`;
+    row.appendChild(bar);
+  }
+  panel.appendChild(row);
+  const note = document.createElement("div");
+  note.className = "empty-state";
+  note.style.marginTop = "8px";
+  note.innerHTML = `cycle ${cycle.toFixed(3)}s across ${workers} active workers.
+    Barrier idle is shown PER WORKER (barrier_idle_seconds is a sum across workers;
+    dividing it by cycle time directly overstates it by the worker count).`;
+  panel.appendChild(note);
+  return panel;
+}
 
 function renderEmergencePanel(metrics) {
   const panel = document.createElement("div");
