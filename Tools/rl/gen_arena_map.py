@@ -278,6 +278,13 @@ def main() -> int:
                     help="include the dry_canyon heightmap. Off by default: the arena "
                          "then floats in open sky, which is both cheaper and avoids the "
                          "court intersecting terrain.")
+    ap.add_argument("--tiers", type=int, default=0,
+                    help="build N raised platforms connected by ramps, and spawn the two "
+                         "fighters on DIFFERENT tiers. Measured 2026-09-05: every generated "
+                         "map had a 0.0 spawn height gap and 3.3 total vertical spread, while "
+                         "arena3_jam spawns its fighters 21.1 apart and run17_mac scores 0.287 "
+                         "there against 0.875 on the flat corpus. The agent has never fought "
+                         "an opponent on another storey.")
     ap.add_argument("--clutter", type=int, default=0,
                     help="scatter N extra small boxes around the arena. Tests whether "
                          "geometry DENSITY, not layout, is what makes oval (1,432 "
@@ -319,6 +326,23 @@ def main() -> int:
         cz = (i // cols) * args.arena_spacing - span / 2
         build_court(lvl, rng, args.half_size, floor_top, cx, cz,
                     args.randomize, args.minimal)
+        # Tiers: raised platforms plus ramps, so the arena has real verticality
+        # and the two fighters can start on different levels.
+        tier_h = 0.0
+        if args.tiers > 0:
+            half = args.half_size
+            for t in range(args.tiers):
+                th = (t + 1) * 3.5
+                side = -1 if t % 2 else 1
+                px = cx + side * half * 0.55
+                pz = cz + (half * 0.45 if t % 2 else -half * 0.45)
+                pw = half * 0.32
+                lvl.box(px, floor_top + th, pz, pw, 0.4, pw)          # platform deck
+                # ramp from the floor up to it, so the level is actually traversable
+                rl_len = th * 2.2
+                lvl.box(px - side * (pw + rl_len / 2), floor_top + th / 2,
+                        pz, rl_len / 2, th / 2, pw * 0.5)
+                tier_h = th
         for _ in range(args.clutter):
             bx = rng.uniform(-args.half_size * 0.92, args.half_size * 0.92)
             bz = rng.uniform(-args.half_size * 0.92, args.half_size * 0.92)
@@ -331,10 +355,20 @@ def main() -> int:
             print(f"  padded +{padded} pillars to clear the renderer crash band "
                   f"{CRASH_BAND[0]}-{CRASH_BAND[1]} EnvObjects")
         d = args.half_size * 0.6
+        # Vertical spawn separation: put one fighter on the top tier.
+        spawn_y_offset = (tier_h + 0.8) if args.tiers > 0 else 0.0
         # game_type 0 is the pair the RL fork uses; 1 and 2 are emitted for the
         # first arena only so normal play still works without spawning a crowd.
-        lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)
-        lvl.spawn(cx, sy, cz + d, math.pi, 0, 1)
+        if spawn_y_offset > 0.0:
+            half = args.half_size
+            side = -1 if (args.tiers - 1) % 2 else 1
+            tx = cx + side * half * 0.55
+            tz = cz + (half * 0.45 if (args.tiers - 1) % 2 else -half * 0.45)
+            lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)                       # ground floor
+            lvl.spawn(tx, sy + spawn_y_offset, tz, math.pi, 0, 1)      # top tier
+        else:
+            lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)
+            lvl.spawn(cx, sy, cz + d, math.pi, 0, 1)
         if i == 0:
             for ox, oz, team in [(-4, -d, 0), (4, -d, 0), (-4, d, 1), (4, d, 1)]:
                 lvl.spawn(cx + ox, sy, cz + oz, 0.0 if oz < 0 else math.pi, 1, team)
