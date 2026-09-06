@@ -21,11 +21,17 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 
-def one(py, ckpt, repo, level, opponents, episodes, bands, seed, shm, out):
+def one(py, ckpt, repo, level, opponents, episodes, bands, seed, shm, out, max_episode_steps):
+    # max_episode_steps MUST match the training run's, or the comparison is not
+    # apples-to-apples: a timeout counts as a loss on both sides, so giving the
+    # policy 900 steps here against the 1200 it trains with silently penalises
+    # exactly the long fights that multi-opponent scenarios produce.
+    # evaluate.py's own default is 900; this was never passed through.
     cmd = [py, str(HERE / "evaluate.py"), "--checkpoint", ckpt, "--repo-root", repo,
            "--level", level, "--frame-stack", "4", "--act-period", "4",
            "--episodes", str(episodes), "--seed-base", str(seed),
            "--difficulty-bands", bands, "--opponents", str(opponents),
+           "--max-episode-steps", str(max_episode_steps),
            "--shm-name", shm, "--device", "cpu", "--no-control", "--out", str(out)]
     subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=7200)
     if not Path(out).exists():
@@ -42,6 +48,11 @@ def main() -> int:
     ap.add_argument("--levels", nargs="+", default=["arenas/t_train_103.xml", "arenas/t_held_202.xml"])
     ap.add_argument("--opponents", nargs="+", type=int, default=[1, 2, 3])
     ap.add_argument("--episodes", type=int, default=40)
+    # Must match the training run's --max-episode-steps or the comparison is not
+    # apples-to-apples; evaluate.py's own default is 900 and was never passed
+    # through, so every eval so far gave the policy 300 fewer steps than it
+    # trains with, on exactly the long fights multi-opponent scenarios produce.
+    ap.add_argument("--max-episode-steps", type=int, default=1200)
     ap.add_argument("--difficulty-bands", default="0.4,0.8")
     ap.add_argument("--seed-base", type=int, default=8900000)
     ap.add_argument("--python", default=sys.executable)
@@ -66,7 +77,7 @@ def main() -> int:
                     # tool on its first run, silently voiding three of six cells.
                     a.difficulty_bands, a.seed_base,
                     f"/ogrl_m{os.getpid() % 1000:03d}{i:02d}",
-                    tmp / f"{Path(lv).stem}_{n}.json")
+                    tmp / f"{Path(lv).stem}_{n}.json", a.max_episode_steps)
             grid[(lv, n)] = r
             row.append("  --  " if r is None else f"{r:.3f}")
         print(f"  {Path(lv).stem:<24}" + "".join(f"{v:>9}" for v in row))
