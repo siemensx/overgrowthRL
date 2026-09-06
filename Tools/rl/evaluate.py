@@ -90,6 +90,15 @@ def run_episodes(
         obs = obs_normalizer.normalize(raw_obs, update=False) if obs_normalizer is not None else None
         ep_components = defaultdict(float)
         won = False
+        # Hostile knockouts accumulated this episode. A win is EVERY opponent
+        # down, not merely one: at N opponents "any knockout" makes being
+        # outnumbered measure as EASIER, because N opponents give N times the
+        # chances to land a KO. Observed live in run18 as win rates of
+        # 0.71/0.74/0.81 for 1/2/3 before the trainer was fixed; this evaluator
+        # carried exactly the same bug and would have reported the same
+        # inflated numbers for any multi-opponent checkpoint.
+        kos_this_episode = 0
+        need_kos = max(1, int(opponents or 1))
         done = False
         step = 0
         for step in range(max_episode_steps):
@@ -101,7 +110,13 @@ def run_episodes(
             for k, v in info["reward_components"].items():
                 ep_components[k] += v
             obs = obs_normalizer.normalize(raw_obs, update=False) if obs_normalizer is not None else None
-            won = info["reward_components"].get("opponent_knockout", 0.0) > 0.0
+            rc = info["reward_components"]
+            step_kos = rc.get("hostile_kos_this_step")
+            if step_kos is None:
+                won = rc.get("opponent_knockout", 0.0) > 0.0     # pre-instrumentation engines
+            else:
+                kos_this_episode += int(round(step_kos))
+                won = kos_this_episode >= need_kos
             if done or won:
                 break
         outcomes["won" if won else ("lost" if done else "timeout")] += 1
