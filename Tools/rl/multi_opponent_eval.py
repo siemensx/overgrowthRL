@@ -15,6 +15,7 @@ outnumbered as easier than fighting alone.
 """
 from __future__ import annotations
 import argparse, json, statistics, subprocess, sys
+import os, time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -58,7 +59,13 @@ def main() -> int:
         for n in a.opponents:
             i += 1
             r = one(a.python, a.checkpoint, a.repo_root, lv, n, a.episodes,
-                    a.difficulty_bands, a.seed_base, f"/ogrl_mo{i}",
+                    # Unique per invocation AND per cell: a name whose previous
+                    # owner has just exited can still hold an orphaned semaphore,
+                    # and re-opening it hangs until the bounded wait fires. This
+                    # is the trap recorded in DEAD_ENDS.md -- and it bit this very
+                    # tool on its first run, silently voiding three of six cells.
+                    a.difficulty_bands, a.seed_base,
+                    f"/ogrl_m{os.getpid() % 1000:03d}{i:02d}",
                     tmp / f"{Path(lv).stem}_{n}.json")
             grid[(lv, n)] = r
             row.append("  --  " if r is None else f"{r:.3f}")

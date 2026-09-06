@@ -1,0 +1,64 @@
+{
+  "global_step": 102427544,
+  "checkpoint": "Tools/rl/ppo/checkpoints/run17_mac.pt",
+  "episodes": 30,
+  "seed_base": 8900000,
+  "stochastic": false,
+  "level": "arenas/t_held_202.xml",
+  "frame_stack": 4,
+  "act_period": 4,
+  "bands": [
+    {
+      "band": 0.5,
+      "policy": {
+        "episodes": 30,
+        "outcomes": {
+          "won": 3,
+          "lost": 25,
+          "timeout": 2
+        },
+        "win_rate": 0.1,
+        "win_rate_ci95": [
+          0.03459925995971617,
+          0.2562144131526662
+        ],
+        "episode_length_mean": 494.96666666666664,
+        "episode_length_median": 476.0,
+        "reward_components_mean": {
+          "damage_taken": -2.0396390704011234,
+          "self_knockout": -8.333333333333334,
+          "damage_dealt": 2.510630689118989,
+          "opponent_knockout": 9.066666666666666,
+          "hostile_kos_this_step": 1.1333333333333333,
+          "friendly_fire": 0.0,
+          "time_cost": -4.949666666666605,
+          "stall_time": -0.5319999999999973,
+          "ragdoll_time": -1.638333333333333,
+          "closing_distance": 0.0
+        },
+        "emergence": {
+          "parry": 0.18421093096046193,
+          "punish": -0.41861404808404606,
+          "roll_recovery": -0.08620828445483109,
+          "guard_pressure": -0.07329938446280315,
+          "funnelling": 0.9129537057161486,
+          "samples": {
+            "opp_attacking": 1511,
+            "opp_hitreaction": 102,
+            "self_ragdoll": 983,
+            "opp_block_broken": 1254,
+            "opp_block_healthy": 11929,
+            "funnel_eligible": 9202
+          }
+        }
+      }
+    }
+  ],
+  "overall": {
+    "win_rate": 0.1,
+    "win_rate_ci95": [
+      0.03459925995971617,
+      0.2562144131526662
+    ]
+  }
+}
