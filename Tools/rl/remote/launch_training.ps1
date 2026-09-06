@@ -20,16 +20,24 @@ param(
   [int]    $StallRamp      = 4000000,
   [long]   $TotalTimesteps = 120000000,
   [string] $ResumeFrom     = "C:\ogrl\overgrowthRL\Tools\rl\ppo\checkpoints\run15.pt",
-  [string] $Levels         = "arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,arenas/t_train_104.xml,arenas/t_train_105.xml,arenas/t_train_106.xml"
+  [string] $Levels         = "arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,arenas/t_train_104.xml,arenas/t_train_105.xml,arenas/t_train_106.xml",
+  [int]    $OpponentsCap    = 1,
+  [double] $OppGateWinRate  = 0.60,
+  [int]    $OppGateWindow   = 400,
+  [int]    $OppGateMin      = 150,
+  [double] $OppKeepSolo     = 0.35,
+  [switch] $AllowNEnvsChange
 )
 
 $py   = "C:\Users\pavlov\AppData\Local\Programs\Python\Python312\python.exe"
 $repo = "C:\ogrl\overgrowthRL"
 $log  = "C:\ogrl\$RunId.log"
 
+$envline = if ($AllowNEnvsChange) { "set OGRL_ALLOW_NENVS_CHANGE=1" } else { "" }
 $bat = @"
 @echo off
 cd /d $repo
+$envline
 "$py" "$repo\Tools\rl\ppo\train_vec.py" ^
   --n-envs $NEnvs --k-standby $KStandby ^
   --levels $Levels ^
@@ -38,6 +46,8 @@ cd /d $repo
   --entropy-coef $EntropyCoef --entropy-coef-final $EntropyFinal --entropy-anneal-steps $EntropyAnneal ^
   --stall-target-weight $StallWeight --stall-ramp-steps $StallRamp ^
   --act-period 4 --frame-stack 4 --soft-reset --hard-reset-every 50 ^
+  --opponents-cap $OpponentsCap --opp-gate-win-rate $OppGateWinRate ^
+  --opp-gate-window $OppGateWindow --opp-gate-min-samples $OppGateMin --opp-keep-solo $OppKeepSolo ^
   --device cpu --run-id $RunId --seed $Seed ^
   --no-tapes --no-native-capture ^
   --purpose "Stage C: entropy revival + stall tax + map axis, resumed from run15" ^

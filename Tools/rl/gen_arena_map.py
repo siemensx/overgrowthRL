@@ -375,6 +375,23 @@ def main() -> int:
             for ox, oz, team in [(-d, -d, 1), (d, -d, 0), (d, d, 2), (-d, d, 3)]:
                 lvl.spawn(cx + ox, sy, cz + oz, 0.0, 2, team)
 
+            # --- Multi-opponent groups (game_type 3 and 4) ---
+            # The stock game types do not express "one agent versus N COOPERATING
+            # hostiles": game_type 1 is a 2v2 and game_type 2 puts every character
+            # on a distinct team (a free-for-all). arena_level_1v1_unarmed.as
+            # refused to wire the opponent-count curriculum for exactly that
+            # reason. Since the generator owns the spawns, define the shape
+            # explicitly instead: the agent alone on team 0, every hostile on
+            # team 1, so they are allies of each other and enemies of the agent.
+            #   game_type 3 -> 1v2   teams [0, 1, 1]
+            #   game_type 4 -> 1v3   teams [0, 1, 1, 1]
+            lvl.spawn(cx, sy, cz - d, 0.0, 3, 0)
+            for ang in (-0.45, 0.45):
+                lvl.spawn(cx + math.sin(ang) * d, sy, cz + math.cos(ang) * d, math.pi, 3, 1)
+            lvl.spawn(cx, sy, cz - d, 0.0, 4, 0)
+            for ang in (-0.7, 0.0, 0.7):
+                lvl.spawn(cx + math.sin(ang) * d, sy, cz + math.cos(ang) * d, math.pi, 4, 1)
+
     xml = lvl.render()
     out = data / "Levels" / "arenas" / f"{args.name}.xml"
     if args.dry_run:

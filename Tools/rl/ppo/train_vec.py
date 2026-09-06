@@ -198,6 +198,19 @@ def parse_args():
     p.add_argument("--gate-window", type=int, default=300, help="episodes considered for the d_max advance gate")
     p.add_argument("--gate-min-samples", type=int, default=50, help="minimum top-band episodes before the gate can fire")
     p.add_argument("--gate-win-rate", type=float, default=0.75)
+    p.add_argument("--opponents-cap", type=int, default=1,
+                   help="maximum opponents the curriculum may unlock (1 disables it). Needs maps "
+                        "carrying game_type 3 (1v2) and 4 (1v3); any level without them falls back "
+                        "to the 1v1 pair, so this is safe on oval and every stock arena.")
+    p.add_argument("--opp-gate-win-rate", type=float, default=0.60,
+                   help="win rate AT THE CURRENT MAX opponent count needed to unlock the next. "
+                        "Lower than the difficulty gate on purpose -- being outnumbered should stay hard.")
+    p.add_argument("--opp-gate-window", type=int, default=400)
+    p.add_argument("--opp-gate-min-samples", type=int, default=150)
+    p.add_argument("--opp-keep-solo", type=float, default=0.35,
+                   help="fraction of episodes held at 1v1 once the curriculum advances. This is the "
+                        "anti-forgetting term: without it the opponent axis is a distribution shift "
+                        "rather than an addition, and 1v1 competence can quietly decay.")
     p.add_argument("--opponents", type=int, default=1, help="Stage D/E axis; NOT wired to game_type in the level "
                                                                "script yet, see arena_level_1v1_unarmed.as -- keep at 1")
     p.add_argument("--stall-target-weight", type=float, default=None,
@@ -370,6 +383,9 @@ def main():
         d_max_start=args.d_max_start, d_max_cap=args.d_max_cap, d_step=args.d_step, d_min=args.d_min,
         gate_window=args.gate_window, gate_min_samples=args.gate_min_samples, gate_win_rate=args.gate_win_rate,
         opponents=args.opponents, species_mode=args.species_mode, weapons_prob=args.weapons_prob,
+        opponents_cap=args.opponents_cap, opp_gate_win_rate=args.opp_gate_win_rate,
+        opp_gate_window=args.opp_gate_window, opp_gate_min_samples=args.opp_gate_min_samples,
+        opp_keep_solo=args.opp_keep_solo,
         rng_seed=args.seed,
     )
     vec_env = VecOvergrowthEnv(
@@ -597,6 +613,9 @@ def main():
                     ended_difficulty = ended_scenario.get("difficulty")
                     if ended_difficulty is not None:
                         sampler.record_episode_outcome(ended_difficulty, won)
+                    # Opponent-count curriculum advances on its own gate, kept
+                    # separate from difficulty so neither can advance the other.
+                    sampler.record_opponent_outcome(ended_scenario.get("opponents", 1) or 1, won)
                     logger.log_episode({
                         "t": time.time(), "global_step": global_step, "worker": int(i),
                         "seed": ended_seed if ended_seed is not None else episode_seed_used[i],
@@ -732,6 +751,8 @@ def main():
                 # threshold anyone has to remember to check for.
                 "kl_spike": bool(stats["approx_kl"] > args.target_kl * 10),
                 "curriculum_live": {
+                        "opponents_max": sampler.opponents_max,
+                        "opponent_win_rates": {str(k): v for k, v in sampler.opponent_win_rates().items()},
                     # Reward-SHAPING curriculum (Curriculum, unchanged concern).
                     "closing_distance_weight": reward_config.closing_distance_weight,
                     "stall_penalty_weight": reward_config.stall_penalty_weight,

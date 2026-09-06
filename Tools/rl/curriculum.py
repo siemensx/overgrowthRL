@@ -190,8 +190,25 @@ class ScenarioSampler:
     # by hand (new kwargs), not by an internal auto-progression this class
     # would otherwise need its own separate, unvalidated gate logic for.
     stage: str = "A"
-    opponents: int = 1              # Stage D/E axis; NOT wired to game_type in the level script yet -- see
-                                     # arena_level_1v1_unarmed.as's SetUpLevel comment. Keep at 1 until that lands.
+    opponents: int = 1              # starting/minimum opponent count; see opponents_cap for the curriculum
+    # --- Opponent-count curriculum (OGRL-20260905) ---
+    # Now wired: gen_arena_map.py emits game_type 3 (1v2, teams [0,1,1]) and 4
+    # (1v3, teams [0,1,1,1]), and arena_level_1v1_unarmed.as maps rl_opponents
+    # onto them, falling back to the 1v1 pair on any level that lacks them.
+    #
+    # Growth mirrors the difficulty gate: unlock the next opponent count once the
+    # win rate AT THE CURRENT MAXIMUM clears opp_gate_win_rate over a window.
+    #
+    # opp_keep_solo is the anti-forgetting term and is the whole point of the
+    # mix: a fixed share of episodes stays 1v1 forever, so learning to survive a
+    # crowd cannot quietly cost the 1v1 competence that run15-run17 spent 100M
+    # decisions acquiring. Without it this axis is a distribution shift, not an
+    # addition.
+    opponents_cap: int = 1          # 1 disables the curriculum entirely (default = old behaviour)
+    opp_gate_win_rate: float = 0.60 # lower than the difficulty gate: outnumbered fights are meant to be hard
+    opp_gate_window: int = 400
+    opp_gate_min_samples: int = 150
+    opp_keep_solo: float = 0.35     # fraction of episodes held at 1v1 once the curriculum has advanced
     species_mode: int = 0           # rl_species value: 0 = legacy random guard/raider (Stage A default,
                                      # matches run8/run9's own opponent mix exactly), 4 = random of all 3 (Stage B)
     weapons_prob: float = 0.0       # probability a round is armed (Stage C axis)
@@ -204,11 +221,15 @@ class ScenarioSampler:
     _recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (d, won) pairs, most-recent-last;
                                                                                          # capped generously, gate only ever
                                                                                          # looks at the last gate_window
+    _opp_max: int = field(default=1, repr=False)
+    _opp_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (opponents, won)
+    _opp_advance_log: list = field(default_factory=list, repr=False)
     _advance_log: list = field(default_factory=list, repr=False)  # (episode_index, old_d_max, new_d_max) for the research log / events.jsonl
 
     def __post_init__(self):
         self._rng = random.Random(self.rng_seed)
         self._d_max = self.d_max_start
+        self._opp_max = max(1, min(self.opponents, self.opponents_cap))
 
     @property
     def d_max(self) -> float:
@@ -225,12 +246,53 @@ class ScenarioSampler:
             # an empty or inverted range.
             lo = min(self.d_min, self._d_max)
             d = self._rng.uniform(lo, self._d_max)
+            if self._opp_max <= 1:
+                opponents = 1
+            elif self._rng.random() < self.opp_keep_solo:
+                opponents = 1                       # anti-forgetting: keep fighting 1v1
+            else:
+                opponents = self._rng.randint(2, self._opp_max)
         return {
             "difficulty": d,
-            "opponents": self.opponents,
+            "opponents": opponents,
             "weapons": self.weapons_prob,
             "species": self.species_mode,
         }
+
+    @property
+    def opponents_max(self) -> int:
+        return self._opp_max
+
+    def record_opponent_outcome(self, opponents: int, won: bool) -> None:
+        """Advance the opponent-count curriculum. Separate from the difficulty
+        gate on purpose: they measure different things and must not be able to
+        advance each other."""
+        if self.opponents_cap <= 1:
+            return
+        with self._lock:
+            self._opp_recent.append((int(opponents), bool(won)))
+            if self._opp_max >= self.opponents_cap:
+                return
+            window = list(self._opp_recent)[-self.opp_gate_window:]
+            at_max = [w for o, w in window if o >= self._opp_max]
+            if len(at_max) < self.opp_gate_min_samples:
+                return
+            if sum(at_max) / len(at_max) >= self.opp_gate_win_rate:
+                old = self._opp_max
+                self._opp_max = min(self.opponents_cap, self._opp_max + 1)
+                self._opp_advance_log.append((len(self._opp_recent), old, self._opp_max))
+
+    def opponent_win_rates(self, window: int | None = None) -> dict:
+        """Win rate per opponent count over the last `window` episodes -- the
+        number that says whether 1v1 competence is being retained."""
+        w = window if window is not None else self.opp_gate_window
+        with self._lock:
+            recent = list(self._opp_recent)[-w:]
+        out = {}
+        for n in range(1, self.opponents_cap + 1):
+            sub = [won for o, won in recent if o == n]
+            out[n] = (sum(sub) / len(sub)) if sub else None
+        return out
 
     def record_episode_outcome(self, difficulty: float, won: bool) -> None:
         """Call once per completed episode with the difficulty it was
