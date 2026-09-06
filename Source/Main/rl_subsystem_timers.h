@@ -18,6 +18,7 @@ enum Zone {
     kZoneObjectUpdates,
     kZoneAnimation,
     kZoneObsExtraction,
+    kZoneCharacterScript,   // the AngelScript character Update() call itself
     kZoneCount,
 };
 

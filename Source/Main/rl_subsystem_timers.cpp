@@ -58,6 +58,10 @@ std::string ReportFragment(double total_step_seconds) {
     const double animation_seconds = SecondsFor(kZoneAnimation);
     const double obs_extraction_seconds = SecondsFor(kZoneObsExtraction);
     const double character_script_seconds = object_updates_seconds - animation_seconds;
+    // Directly measured AngelScript character Update(), vs the derived figure above.
+    // The script runs on a PERIOD: 1 for the controlled character, 4 for AI
+    // characters (movementobject.cpp:1445), so calls != ticks.
+    const double character_script_measured = SecondsFor(kZoneCharacterScript);
     const double accounted_seconds = level_script_seconds + bullet_seconds + object_updates_seconds + obs_extraction_seconds;
     const double other_seconds = total_step_seconds > accounted_seconds ? total_step_seconds - accounted_seconds : 0.0;
 
@@ -76,6 +80,8 @@ std::string ReportFragment(double total_step_seconds) {
         << "\"obs_extraction_seconds\":" << obs_extraction_seconds << ','
         << "\"obs_extraction_calls\":" << CallCountFor(kZoneObsExtraction) << ','
         << "\"other_seconds\":" << other_seconds;
+    out << ",\"character_script_measured_seconds\":" << character_script_measured
+        << ",\"character_script_calls\":" << CallCountFor(kZoneCharacterScript);
     return out.str();
 }
 

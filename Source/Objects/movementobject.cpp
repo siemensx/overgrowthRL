@@ -74,6 +74,8 @@
 
 #include <angelscript.h>
 #include <SDL.h>
+#include <Main/rl_subsystem_timers.h>
+#include <cstdlib>
 
 extern AnimationConfig animation_config;
 extern std::string script_dir_path;
@@ -939,7 +941,14 @@ void MovementObject::Update(float timestep) {
         {
             PROFILER_ZONE(g_profiler_ctx, "Angelscript Update()");
 
-            as_context->CallScriptFunction(as_funcs.update, &args);
+            {
+                // Direct measurement of the AngelScript character Update. The
+                // reported character_script_seconds was DERIVED (object_updates
+                // minus animation), which cannot say how much is the script VM
+                // versus everything else object updates do.
+                RL_SUBSYSTEM_ZONE(kZoneCharacterScript);
+                as_context->CallScriptFunction(as_funcs.update, &args);
+            }
             angle_script_ready = true;
         }
 
@@ -1435,7 +1444,35 @@ void MovementObject::CreateRiggedObject() {
 void MovementObject::RecreateRiggedObject(std::string _char_path) {
     character_path = _char_path;
     CreateRiggedObject();
-    update_script_period = (current_control_script_path == scenegraph_->level->GetPCScript(this)) ? 1 : 4;
+    // The player-controlled character's script runs EVERY tick; AI characters
+    // run every 4th. Under RL the controlled character is the agent, which only
+    // issues an action every act_period (4) ticks, so period 1 may be doing 4x
+    // the state-machine work per decision for nothing. Directly measured: the
+    // AngelScript character Update is 57.3% of engine step time, and ~80% of its
+    // calls are the controlled character.
+    //
+    // OGRL_PC_SCRIPT_PERIOD overrides it so the cost AND the behavioural effect
+    // can be measured. This is NOT free: the character state machine advancing
+    // less often can change movement and animation, so any speedup has to be
+    // weighed against an equivalence check, not just adopted.
+    int pc_period = 1;
+    if (const char* env = getenv("OGRL_PC_SCRIPT_PERIOD")) {
+        const int v = atoi(env);
+        if (v >= 1 && v <= 8) pc_period = v;
+    }
+    // MEASURED 2026-09-05: under RL BOTH characters report is_pc=0 and run
+    // enemycontrol.as at period 4 -- there is no player-controlled character at
+    // all. So the agent's own character executes the full enemy AI (target
+    // selection, pathing, aggression) every 4 ticks and the result is thrown
+    // away, because its actions arrive from the policy over shm. That redundant
+    // AI decision work is roughly half of all character-script calls, and the
+    // character script is 57.3% of engine step time.
+    //
+    // The saving is the DECISION portion only: the state machine still has to
+    // run for movement and animation. Capturing it means forking
+    // enemycontrol.as to early-out for the RL-controlled character, the way
+    // arena_level.as is already forked.
+    update_script_period = (current_control_script_path == scenegraph_->level->GetPCScript(this)) ? pc_period : 4;
     update_script_counter = rand() % update_script_period - update_script_period;
     rigged_object_->SetAnimUpdatePeriod(max(2, update_script_period));
     SetRotationFromEditorTransform();
