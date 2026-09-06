@@ -59,10 +59,49 @@ what any single frame's entity encoding means.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributions import Normal, Bernoulli
+
+# --- distribution math, written out ---------------------------------------
+# torch.distributions objects cost real time at this scale: the policy is tiny
+# (256 hidden) and the rollout batch is n_envs, so per-call object construction
+# is not amortised by any matmul. The functions below are the exact formulas
+# torch uses, applied directly to the raw parameters.
+#
+# Measured 2026-09-06 (batch=4, 1 thread, 3 interleaved rounds of 4000 calls):
+#   rollout act():  376 us -> 326 us   (1.15x)
+#   update path, batch=128 with autograd: 4351 us -> 4264 us  (1.02x)
+#
+# So this is worth ~13% of the rollout action call and almost nothing on the
+# update -- real, free, and much smaller than a first, WRONG reading of a
+# _features-vs-full-call comparison suggested (that gap is mostly the actor and
+# critic trunks, which are genuine math, not plumbing).
+#
+# `test_policy_fast_path.py` asserts these agree with torch.distributions to
+# float precision, including the gradient-carrying update path. That is why
+# Normal and Bernoulli are still imported.
+_HALF_LOG_2PI = 0.5 * math.log(2.0 * math.pi)
+
+
+def _normal_log_prob(value: torch.Tensor, mean: torch.Tensor, log_std: torch.Tensor) -> torch.Tensor:
+    return -0.5 * (((value - mean) / log_std.exp()) ** 2) - log_std - _HALF_LOG_2PI
+
+
+def _normal_entropy(log_std: torch.Tensor) -> torch.Tensor:
+    return 0.5 + _HALF_LOG_2PI + log_std
+
+
+def _bernoulli_log_prob(value: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:
+    return -F.binary_cross_entropy_with_logits(logits, value, reduction="none")
+
+
+def _bernoulli_entropy(logits: torch.Tensor) -> torch.Tensor:
+    return F.binary_cross_entropy_with_logits(logits, torch.sigmoid(logits), reduction="none")
 
 CONTINUOUS_DIM = 2
 DISCRETE_DIM = 6
@@ -212,6 +251,16 @@ class ActorCritic(nn.Module):
         prop_features = self.proprioception_branch(prop_flat)
         return torch.cat([prop_features, entity_embed_flat], dim=-1)
 
+    def _actor_params(self, features: torch.Tensor):
+        """Raw actor parameters: (continuous mean, clamped log_std, discrete logits).
+
+        The fast path below works from these directly instead of wrapping them
+        in Normal/Bernoulli -- see the module-level note on why."""
+        features = self.actor_trunk(features)
+        mean = self.continuous_mean(features)
+        log_std = torch.clamp(self.continuous_log_std, LOG_STD_MIN, LOG_STD_MAX)
+        return mean, log_std, self.discrete_logits(features)
+
     def _distributions_from_features(self, features: torch.Tensor):
         """Build the actor distributions from the shared trunk input.
 
@@ -244,12 +293,14 @@ class ActorCritic(nn.Module):
         # the largest part of this model's forward pass. Compute it once and
         # let the two independent trunks specialize from the same features.
         shared_features = self._features(obs)
-        continuous_dist, discrete_dist = self._distributions_from_features(shared_features)
+        mean, log_std, discrete_logits = self._actor_params(shared_features)
 
         if action is None:
-            raw_continuous = continuous_dist.rsample()
+            # Normal.rsample() is loc + eps*scale with eps ~ N(0,1); Bernoulli
+            # .sample() is torch.bernoulli(probs). Same draws, no objects.
+            raw_continuous = mean + torch.randn_like(mean) * log_std.exp()
             continuous_action = torch.tanh(raw_continuous)
-            discrete_action = discrete_dist.sample()
+            discrete_action = torch.bernoulli(torch.sigmoid(discrete_logits))
         else:
             continuous_action = action[..., :CONTINUOUS_DIM].clamp(-1.0 + _TANH_EPS, 1.0 - _TANH_EPS)
             raw_continuous = torch.atanh(continuous_action)
@@ -257,15 +308,15 @@ class ActorCritic(nn.Module):
 
         # Tanh-squash log-prob correction (SAC, Haarnoja et al. 2018 appendix C):
         # log pi(a) = log N(u) - sum(log(1 - tanh(u)^2 + eps)), u = atanh(a).
-        continuous_log_prob = continuous_dist.log_prob(raw_continuous) - torch.log(1.0 - continuous_action.pow(2) + _TANH_EPS)
+        continuous_log_prob = _normal_log_prob(raw_continuous, mean, log_std) - torch.log(1.0 - continuous_action.pow(2) + _TANH_EPS)
         continuous_log_prob = continuous_log_prob.sum(dim=-1)
-        discrete_log_prob = discrete_dist.log_prob(discrete_action).sum(dim=-1)
+        discrete_log_prob = _bernoulli_log_prob(discrete_action, discrete_logits).sum(dim=-1)
         log_prob = continuous_log_prob + discrete_log_prob
 
         # Entropy: exact for the discrete heads; the untransformed Gaussian's
         # entropy is used as an approximation for the continuous heads (see
         # module docstring -- the tanh transform has no simple closed form).
-        entropy = continuous_dist.entropy().sum(dim=-1) + discrete_dist.entropy().sum(dim=-1)
+        entropy = _normal_entropy(log_std).sum(dim=-1).expand(discrete_logits.shape[:-1]) + _bernoulli_entropy(discrete_logits).sum(dim=-1)
 
         joint_action = torch.cat([continuous_action, discrete_action], dim=-1)
         value = self.critic_out(self.critic_trunk(shared_features)).squeeze(-1)
