@@ -1,6 +1,6 @@
 {
-  "global_step": 102427544,
-  "checkpoint": "Tools/rl/ppo/checkpoints/run17_mac.pt",
+  "global_step": 103461784,
+  "checkpoint": "Tools/rl/ppo/checkpoints/run18.pt",
   "episodes": 30,
   "seed_base": 8900000,
   "stochastic": false,
@@ -13,52 +13,52 @@
       "policy": {
         "episodes": 30,
         "outcomes": {
-          "won": 3,
-          "lost": 25,
-          "timeout": 2
+          "won": 1,
+          "lost": 23,
+          "timeout": 6
         },
-        "win_rate": 0.1,
+        "win_rate": 0.03333333333333333,
         "win_rate_ci95": [
-          0.03459925995971617,
-          0.2562144131526662
+          0.005908437994857381,
+          0.16670751396958874
         ],
-        "episode_length_mean": 494.96666666666664,
-        "episode_length_median": 476.0,
+        "episode_length_mean": 496.43333333333334,
+        "episode_length_median": 430.5,
         "reward_components_mean": {
-          "damage_taken": -2.0396390704011234,
-          "self_knockout": -8.333333333333334,
-          "damage_dealt": 2.510630689118989,
-          "opponent_knockout": 9.066666666666666,
-          "hostile_kos_this_step": 1.1333333333333333,
+          "damage_taken": -1.8350696516048628,
+          "self_knockout": -7.666666666666667,
+          "damage_dealt": 2.3017434815876188,
+          "opponent_knockout": 7.2,
+          "hostile_kos_this_step": 0.9,
           "friendly_fire": 0.0,
-          "time_cost": -4.949666666666605,
-          "stall_time": -0.5319999999999973,
-          "ragdoll_time": -1.638333333333333,
+          "time_cost": -4.964333333333273,
+          "stall_time": -0.6973333333333275,
+          "ragdoll_time": -1.6699999999999995,
           "closing_distance": 0.0
         },
         "emergence": {
-          "parry": 0.18421093096046193,
-          "punish": -0.41861404808404606,
-          "roll_recovery": -0.08620828445483109,
-          "guard_pressure": -0.07329938446280315,
-          "funnelling": 0.9129537057161486,
+          "parry": 0.21133037988581782,
+          "punish": -0.36715235345464314,
+          "roll_recovery": -0.12370706113456292,
+          "guard_pressure": -0.20419441523542467,
+          "funnelling": 0.8807152557718425,
           "samples": {
-            "opp_attacking": 1511,
-            "opp_hitreaction": 102,
-            "self_ragdoll": 983,
-            "opp_block_broken": 1254,
-            "opp_block_healthy": 11929,
-            "funnel_eligible": 9202
+            "opp_attacking": 1398,
+            "opp_hitreaction": 202,
+            "self_ragdoll": 1002,
+            "opp_block_broken": 540,
+            "opp_block_healthy": 11729,
+            "funnel_eligible": 8836
           }
         }
       }
     }
   ],
   "overall": {
-    "win_rate": 0.1,
+    "win_rate": 0.03333333333333333,
     "win_rate_ci95": [
-      0.03459925995971617,
-      0.2562144131526662
+      0.005908437994857381,
+      0.16670751396958874
     ]
   }
 }
