@@ -278,6 +278,13 @@ def main() -> int:
                     help="include the dry_canyon heightmap. Off by default: the arena "
                          "then floats in open sky, which is both cheaper and avoids the "
                          "court intersecting terrain.")
+    ap.add_argument("--clutter", type=int, default=0,
+                    help="scatter N extra small boxes around the arena. Tests whether "
+                         "geometry DENSITY, not layout, is what makes oval (1,432 "
+                         "EnvObjects) play differently from a generated map (~19): the "
+                         "observation casts 16 geometry rays, which hit something on "
+                         "every step in a cluttered level and mostly nothing in a bare "
+                         "one -- a distribution the sparse-trained policy never saw.")
     ap.add_argument("--minimal", action="store_true",
                     help="bare floor plus perimeter walls only -- no divider, cover or "
                          "ledges. The floor of achievable geometry cost, for throughput "
@@ -312,6 +319,13 @@ def main() -> int:
         cz = (i // cols) * args.arena_spacing - span / 2
         build_court(lvl, rng, args.half_size, floor_top, cx, cz,
                     args.randomize, args.minimal)
+        for _ in range(args.clutter):
+            bx = rng.uniform(-args.half_size * 0.92, args.half_size * 0.92)
+            bz = rng.uniform(-args.half_size * 0.92, args.half_size * 0.92)
+            h = rng.uniform(0.15, 0.7)
+            lvl.box(cx + bx, floor_top + h, cz + bz,
+                    rng.uniform(0.2, 0.8), h, rng.uniform(0.2, 0.8),
+                    rng.uniform(0, math.pi))
         padded = pad_out_of_crash_band(lvl, args.half_size, floor_top, cx, cz)
         if padded:
             print(f"  padded +{padded} pillars to clear the renderer crash band "

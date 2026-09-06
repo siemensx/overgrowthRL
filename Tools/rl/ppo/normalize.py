@@ -12,6 +12,7 @@ standard practice, not an experimental addition.
 
 from __future__ import annotations
 
+import os
 import numpy as np
 
 
@@ -191,11 +192,35 @@ class RewardNormalizer:
         # WORKER (see __init__) -- it's meaningless to graft an 8-worker
         # checkpoint's per-worker state onto a differently-sized run.
         saved_n_envs = len(state["running_return"])
+        if saved_n_envs != self.n_envs and os.environ.get("OGRL_ALLOW_NENVS_CHANGE"):
+            # Elastic worker counts. running_return is a per-env discounted-return
+            # accumulator used ONLY to estimate reward scale; the statistics that
+            # actually matter (rms mean/var/count) are shared across workers and
+            # carry over untouched. Resizing therefore costs a few episodes of
+            # re-convergence per new slot, not correctness.
+            #
+            # This exists because a distributed collector cannot keep n_envs fixed:
+            # a synchronous vector step runs at its slowest worker, so attaching a
+            # ~3.4x slower machine to a FIXED env count lands below the fast machine
+            # alone. The env count has to grow when a worker joins, which is exactly
+            # the resume this guard used to forbid.
+            old = np.asarray(state["running_return"], dtype=np.float64)
+            new = np.zeros(self.n_envs, dtype=np.float64)
+            keep = min(saved_n_envs, self.n_envs)
+            new[:keep] = old[:keep]
+            if self.n_envs > saved_n_envs:
+                new[keep:] = float(old.mean()) if saved_n_envs else 0.0
+            print(f"reward_normalizer: resized running_return {saved_n_envs} -> {self.n_envs} "
+                  f"(OGRL_ALLOW_NENVS_CHANGE set); reward statistics carried over unchanged")
+            self.rms.mean = state["mean"]; self.rms.var = state["var"]; self.rms.count = state["count"]
+            self._running_return = new
+            return
         if saved_n_envs != self.n_envs:
             raise ValueError(
                 f"cannot resume: this checkpoint's reward_normalizer was saved with n_envs={saved_n_envs}, "
                 f"but this run was started with --n-envs {self.n_envs} -- running_return is one running "
-                f"accumulator per worker, so a resume must use the same worker count the checkpoint was saved with."
+                f"accumulator per worker, so a resume must use the same worker count the checkpoint was saved with. "
+                f"Set OGRL_ALLOW_NENVS_CHANGE=1 to resize it deliberately (needed for elastic/distributed workers)."
             )
         self.rms.mean = state["mean"]
         self.rms.var = state["var"]
