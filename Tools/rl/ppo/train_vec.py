@@ -198,6 +198,16 @@ def parse_args():
     p.add_argument("--gate-window", type=int, default=300, help="episodes considered for the d_max advance gate")
     p.add_argument("--gate-min-samples", type=int, default=50, help="minimum top-band episodes before the gate can fire")
     p.add_argument("--gate-win-rate", type=float, default=0.75)
+    p.add_argument("--remote-port", type=int, default=0,
+                   help="listen on this port for remote rollout workers (0 = disabled). Workers "
+                        "collect with the weights broadcast at the start of each update and the "
+                        "learner waits for all of them, so this stays exactly on-policy -- no "
+                        "staleness and no importance correction. The learner therefore runs at the "
+                        "SLOWEST participant's pace, so give each machine env slots proportional to "
+                        "its measured speed; an equal split across a fast and a slow machine is "
+                        "worse than running the fast one alone.")
+    p.add_argument("--remote-workers", type=int, default=0,
+                   help="number of remote workers to wait for before training starts")
     p.add_argument("--opponents-cap", type=int, default=1,
                    help="maximum opponents the curriculum may unlock (1 disables it). Needs maps "
                         "carrying game_type 3 (1v2) and 4 (1v3); any level without them falls back "
@@ -379,6 +389,18 @@ def main():
     # OGRL-20260817-028 Sec3: environment-composition curriculum (separate
     # concern from Curriculum above, which only shapes reward WEIGHTS on a
     # fixed scenario -- this samples the SCENARIO itself, per episode).
+    levels_list = [x.strip() for x in args.levels.split(",") if x.strip()] or args.level
+    if isinstance(levels_list, str):
+        levels_list = [levels_list]
+    sampler_kwargs = dict(
+        d_max_start=args.d_max_start, d_max_cap=args.d_max_cap, d_step=args.d_step, d_min=args.d_min,
+        gate_window=args.gate_window, gate_min_samples=args.gate_min_samples,
+        gate_win_rate=args.gate_win_rate, opponents=args.opponents,
+        species_mode=args.species_mode, weapons_prob=args.weapons_prob,
+        opponents_cap=args.opponents_cap, opp_gate_win_rate=args.opp_gate_win_rate,
+        opp_gate_window=args.opp_gate_window, opp_gate_min_samples=args.opp_gate_min_samples,
+        opp_keep_solo=args.opp_keep_solo, rng_seed=args.seed,
+    )
     sampler = ScenarioSampler(
         d_max_start=args.d_max_start, d_max_cap=args.d_max_cap, d_step=args.d_step, d_min=args.d_min,
         gate_window=args.gate_window, gate_min_samples=args.gate_min_samples, gate_win_rate=args.gate_win_rate,
@@ -390,7 +412,7 @@ def main():
     )
     vec_env = VecOvergrowthEnv(
         n_envs=args.n_envs, repo_root=args.repo_root,
-        level=([x.strip() for x in args.levels.split(",") if x.strip()] or args.level),
+        level=levels_list,
         shm_prefix=args.shm_prefix,
         base_seed=args.seed, layout=layout, reward_config=curriculum.reward_config_for_step(initial_global_step),
         frame_stack=args.frame_stack, max_episode_steps=args.max_episode_steps,
@@ -411,6 +433,38 @@ def main():
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.learning_rate, eps=1e-5)
     obs_normalizer = ObservationNormalizer(layout, frame_stack=args.frame_stack)
     reward_normalizer = RewardNormalizer(args.gamma, n_envs=args.n_envs)
+    # Remote rollout workers (optional). Accepted BEFORE the first update so the
+    # buffer width and the reward normaliser are sized to the real total.
+    remote_conns: list = []
+    remote_env_counts: list = []
+    if args.remote_port and args.remote_workers > 0:
+        import socket as _socket
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from remote_rollout import send_msg as _send, recv_msg as _recv, configure_socket as _cfgsock
+        srv = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        srv.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+        srv.bind(("0.0.0.0", args.remote_port))
+        srv.listen(args.remote_workers)
+        print(f"waiting for {args.remote_workers} remote worker(s) on port {args.remote_port} ...", flush=True)
+        for _ in range(args.remote_workers):
+            conn, addr = srv.accept()
+            _cfgsock(conn)
+            hello = _recv(conn)
+            n_remote = int(hello["n_envs"])
+            _send(conn, {"type": "config", "n_steps": args.n_steps, "levels": levels_list,
+                         "act_period": args.act_period, "frame_stack": args.frame_stack,
+                         "max_episode_steps": args.max_episode_steps,
+                         "hard_reset_every": args.hard_reset_every, "gamma": args.gamma,
+                         "sampler_kwargs": sampler_kwargs})
+            remote_conns.append(conn)
+            remote_env_counts.append(n_remote)
+            print(f"  worker {addr[0]} joined with {n_remote} envs", flush=True)
+        srv.close()
+    total_envs = args.n_envs + sum(remote_env_counts)
+    if remote_conns:
+        print(f"distributed: {args.n_envs} local + {sum(remote_env_counts)} remote = {total_envs} envs "
+              f"({args.n_steps * total_envs} transitions per update)", flush=True)
+
     buffer = VecRolloutBuffer(args.n_steps, args.n_envs, obs_dim, 8, device)
 
     if resumed_checkpoint:
@@ -547,6 +601,17 @@ def main():
             # immediately before ppo_update() below.
             torch.set_num_threads(args.collection_torch_threads)
 
+            # Broadcast the weights this rollout will be collected with. Sent
+            # BEFORE local collection so the workers collect in parallel with
+            # the learner rather than after it.
+            if remote_conns:
+                _payload = {"type": "weights",
+                            "policy": {k: v.cpu() for k, v in policy.state_dict().items()},
+                            "obs_normalizer": obs_normalizer.state_dict(),
+                            "reward_normalizer": reward_normalizer.state_dict()}
+                for _c in remote_conns:
+                    _send(_c, _payload)
+
             for _ in range(args.n_steps):
                 obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device)
                 with torch.no_grad():
@@ -670,7 +735,37 @@ def main():
 
             with torch.no_grad():
                 last_values = policy.get_value(torch.as_tensor(obs, dtype=torch.float32, device=device)).cpu().numpy()
-            batch = buffer.to_tensors(last_values, args.gamma, args.gae_lambda)
+
+            # Collect the remote rollouts. The learner blocks here until every
+            # worker has returned a full n_steps rollout collected with THIS
+            # update's weights -- that is what keeps the algorithm on-policy.
+            remote_rollouts = []
+            if remote_conns:
+                _rt0 = time.monotonic()
+                for _c in list(remote_conns):
+                    try:
+                        _msg = _recv(_c)
+                    except Exception as _exc:
+                        print(f"remote worker lost ({type(_exc).__name__}: {_exc}); "
+                              f"continuing with the remaining participants", flush=True)
+                        remote_conns.remove(_c)
+                        continue
+                    remote_rollouts.append(_msg)
+                    for _ep in _msg.get("episodes", []):
+                        if _ep.get("difficulty") is not None:
+                            sampler.record_episode_outcome(_ep["difficulty"], _ep["won"])
+                        sampler.record_opponent_outcome(_ep.get("opponents", 1) or 1, _ep["won"])
+                    global_step += args.n_steps * _msg["obs"].shape[1]
+                remote_wait_seconds = time.monotonic() - _rt0
+            else:
+                remote_wait_seconds = 0.0
+
+            if remote_rollouts:
+                merged = buffer.merged_with(remote_rollouts, device)
+                all_last = np.concatenate([last_values] + [r["last_values"] for r in remote_rollouts])
+                batch = merged.to_tensors(all_last, args.gamma, args.gae_lambda)
+            else:
+                batch = buffer.to_tensors(last_values, args.gamma, args.gae_lambda)
             buffer.reset()
 
             # Entropy anneal (OGRL-20260816-021 Sec 2.4/-023): mutate args.entropy_coef

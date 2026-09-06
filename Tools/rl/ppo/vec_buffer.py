@@ -59,6 +59,35 @@ class VecRolloutBuffer:
         returns = advantages + self.values
         return advantages, returns
 
+    def merged_with(self, remotes: list, device) -> "VecRolloutBuffer":
+        """A new buffer whose env columns are this buffer's followed by each
+        remote rollout's, concatenated along the ENV axis.
+
+        Exact, not an approximation: compute_gae runs its recursion over time
+        INDEPENDENTLY per env column, so appending columns adds trajectories
+        without any term crossing between them. No trajectory is split across
+        machines. Requires identical n_steps and obs/action dims, which the
+        learner enforces when a worker registers.
+        """
+        if not remotes:
+            return self
+        for r in remotes:
+            if r["obs"].shape[0] != self.n_steps:
+                raise ValueError(f"remote rollout has {r['obs'].shape[0]} steps, expected {self.n_steps}")
+        extra = sum(r["obs"].shape[1] for r in remotes)
+        out = VecRolloutBuffer(self.n_steps, self.n_envs + extra,
+                               self.obs.shape[2], self.actions.shape[2], device)
+        def cat(name, mine):
+            return np.concatenate([mine] + [r[name] for r in remotes], axis=1)
+        out.obs = cat("obs", self.obs)
+        out.actions = cat("actions", self.actions)
+        out.log_probs = cat("log_probs", self.log_probs)
+        out.values = cat("values", self.values)
+        out.rewards = cat("rewards", self.rewards)
+        out.terminals = cat("dones", self.terminals)
+        out.ptr = self.n_steps
+        return out
+
     def to_tensors(self, last_values: np.ndarray, gamma: float, gae_lambda: float) -> dict:
         """Flattens the (n_steps, n_envs, ...) storage into (n_steps*n_envs, ...)
         for minibatch sampling -- PPO doesn't care which worker a transition
