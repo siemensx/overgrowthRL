@@ -36,6 +36,11 @@ def main() -> int:
     ap.add_argument("--source", required=True, help="path to the workshop level .xml")
     ap.add_argument("--name", required=True, help="output level name (no extension)")
     ap.add_argument("--force", action="store_true", help="fork even if assets are missing")
+    ap.add_argument("--trim-1v1", action="store_true",
+                    help="keep only ONE game_type=0 spawn per team. Some hand-made arenas "
+                         "put several pairs in game_type 0 (desert arena has 4, i.e. a 2v2), "
+                         "which the RL fork would spawn all of -- a different scenario, not a "
+                         "harder map, and not comparable with the 1v1 corpus.")
     a = ap.parse_args()
 
     data = paths.data_dir()
@@ -54,16 +59,40 @@ def main() -> int:
 
     out = text
     replaced = False
+    # Five spellings seen in the wild, including a bare filename with no path
+    # (both hazard-free workshop arenas use that form).
     for old in ("data/scripts/arena_level.as", "Data/Scripts/arena_level.as",
-                "data/Scripts/arena_level.as", "Data/scripts/arena_level.as"):
+                "data/Scripts/arena_level.as", "Data/scripts/arena_level.as",
+                "arena_level.as"):
         if f"<Script>{old}</Script>" in out:
+            prefix = (old.rsplit("/", 1)[0] + "/") if "/" in old else ""
             out = out.replace(f"<Script>{old}</Script>",
-                              f"<Script>{old.rsplit('/', 1)[0]}/{FORK_SCRIPT}</Script>", 1)
+                              f"<Script>{prefix}{FORK_SCRIPT}</Script>", 1)
             replaced = True
             break
     if not replaced:
         print("refusing: no <Script>…arena_level.as</Script> tag found", file=sys.stderr)
         return 1
+
+    if a.trim_1v1:
+        kept, dropped = set(), 0
+        def _trim(mo):
+            nonlocal dropped
+            b = mo.group(0)
+            if 'val="character_spawn"' not in b:
+                return b
+            g = re.search(r'name="game_type"[^>]*val="(\d+)"', b)
+            t = re.search(r'name="team"[^>]*val="(\d+)"', b)
+            if not g or g.group(1) != "0":
+                return b
+            key = t.group(1) if t else "?"
+            if key in kept:
+                dropped += 1
+                return ""
+            kept.add(key)
+            return b
+        out = re.sub(r'[ \t]*<PlaceholderObject.*?</PlaceholderObject>\n?', _trim, out, flags=re.S)
+        print(f"  trimmed to 1v1: kept teams {sorted(kept)}, dropped {dropped} extra game_type=0 spawns")
 
     out = re.sub(r"<Name>[^<]*</Name>", f"<Name>{a.name}</Name>", out, count=1)
     dst = data / "Levels" / "arenas" / f"{a.name}.xml"
