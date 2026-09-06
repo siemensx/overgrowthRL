@@ -131,3 +131,41 @@ class TestCurriculumStatePersistence(unittest.TestCase):
         s = _sampler()
         state = s.curriculum_state()
         self.assertEqual(set(state.keys()), {"d_max", "opponents_max"})
+
+
+class TestGateWindowSizing(unittest.TestCase):
+    """The gate must window over SOLO episodes, then filter to the top band --
+    not window over all episodes and filter twice.
+
+    With opp_keep_solo=0.35 and d ~ U(0, d_max), only about
+    gate_window * 0.35 * 0.286 ~= 30 of a 300-episode mixed window are solo AND
+    in the top band, which is below gate_min_samples=50. The gate then never
+    fires however well the agent performs -- observed on run21_mac at a measured
+    solo win rate of 0.822 against a 0.75 threshold.
+    """
+
+    def test_gate_fires_under_a_realistic_episode_mix(self):
+        import random
+        rng = random.Random(0)
+        s = _sampler()
+        start = s.d_max
+        for _ in range(1200):
+            solo = rng.random() < 0.35                 # opp_keep_solo
+            d = rng.uniform(0.0, s.d_max)              # exactly how sample_episode draws
+            won = rng.random() < 0.82                  # the measured solo rate
+            s.record_episode_outcome(d, won, opponents=1 if solo else 3)
+        self.assertGreater(
+            s.d_max, start,
+            "gate never fired under a realistic mix despite an 0.82 solo win rate "
+            "against a 0.75 threshold -- the qualifying sample count is starved again")
+
+    def test_still_requires_genuine_solo_evidence(self):
+        import random
+        rng = random.Random(1)
+        s = _sampler()
+        for _ in range(1200):
+            solo = rng.random() < 0.35
+            d = rng.uniform(0.0, s.d_max)
+            won = (rng.random() < 0.40) if solo else True   # solo poor, multi perfect
+            s.record_episode_outcome(d, won, opponents=1 if solo else 3)
+        self.assertEqual(s.d_max, 0.15, "advanced without solo evidence")

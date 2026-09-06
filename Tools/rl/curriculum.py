@@ -218,6 +218,14 @@ class ScenarioSampler:
                                                                                  # are called concurrently from
                                                                                  # VecOvergrowthEnv's worker threads
     _d_max: float = field(default=0.0, repr=False)
+    # The difficulty gate windows over SOLO episodes only. Windowing over
+    # episodes of any kind and then filtering to solo makes the effective sample
+    # count a fraction of gate_window -- with opp_keep_solo=0.35 and d ~ U(0,
+    # d_max), only 300 x 0.35 x 0.286 ~= 30 of a 300-episode window qualify,
+    # below gate_min_samples=50, so the gate can never fire however well the
+    # agent performs. Measured on run21_mac: solo win rate 0.822 in the top band
+    # against a 0.75 threshold, and d_max still pinned with last_advance None.
+    _recent_solo: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (d, won) for opponents == 1
     _recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (d, won, opponents) triples, most-recent-last;
                                                                                          # capped generously, gate only ever
                                                                                          # looks at the last gate_window
@@ -343,11 +351,15 @@ class ScenarioSampler:
         reporting the full mix; only the gate is filtered."""
         with self._lock:
             self._recent.append((difficulty, won, int(opponents)))
+            if int(opponents) == 1:
+                self._recent_solo.append((difficulty, won))
             if self._d_max >= self.d_max_cap:
                 return
-            window = list(self._recent)[-self.gate_window:]
+            # Window over SOLO episodes, then filter to the top band -- not the
+            # other way round. See _recent_solo's comment for why.
+            window = list(self._recent_solo)[-self.gate_window:]
             top_band_lo = self._d_max - self.d_step
-            qualifying = [w for d, w, o in window if d >= top_band_lo and o == 1]
+            qualifying = [w for d, w in window if d >= top_band_lo]
             if len(qualifying) < self.gate_min_samples:
                 return
             win_rate = sum(qualifying) / len(qualifying)
