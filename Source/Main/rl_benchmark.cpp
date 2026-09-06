@@ -1,6 +1,7 @@
 // Lightweight, opt-in benchmark instrumentation for production engine steps.
 #include "rl_benchmark.h"
 
+#include <Logging/logdata.h>
 #include <Main/engine.h>
 #include <Main/rl_subsystem_timers.h>
 #include <Objects/object.h>
@@ -10,6 +11,7 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <thread>
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -374,7 +376,13 @@ void Report() {
     const double steps_per_second = state.measurement_seconds > 0.0
                                         ? static_cast<double>(state.measured_steps) / state.measurement_seconds
                                         : 0.0;
-    std::cout << std::fixed << std::setprecision(6)
+    // Emit to BOTH stdout and the engine log. On Windows the executable has no
+    // attached console, so std::cout is discarded while the logger still writes
+    // <write-dir>/logfile.txt -- which made every Windows benchmark look like it
+    // had failed when the run had actually completed normally (2026-09-05). The
+    // harness reads whichever it finds.
+    std::ostringstream rl_out;
+    rl_out << std::fixed << std::setprecision(6)
               << "RL_BENCHMARK_RESULT {"
               << "\"benchmark_completed\":" << (state.completed ? 1 : 0) << ','
               << "\"seed\":" << state.seed << ','
@@ -398,9 +406,13 @@ void Report() {
               << "\"reset_object_count\":" << state.reset_snapshot.object_count << ','
               << "\"shader_preload_seconds\":" << state.shader_preload_seconds;
     if (RLSubsystemTimers::Enabled()) {
-        std::cout << ',' << RLSubsystemTimers::ReportFragment(state.measurement_seconds);
+        rl_out << ',' << RLSubsystemTimers::ReportFragment(state.measurement_seconds);
     }
-    std::cout << "}" << std::endl;
+    rl_out << "}";
+    const std::string rl_line = rl_out.str();
+    std::cout << rl_line << std::endl;
+    std::cout.flush();
+    LOGI << rl_line << std::endl;
 }
 
 }  // namespace RLBenchmark
