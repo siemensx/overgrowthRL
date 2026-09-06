@@ -105,14 +105,18 @@ function renderLiveMatch() {
     // <select> while its menu is open immediately closes that menu.
     root.innerHTML = `<div class="live-match panel">
       <div class="live-match-heading"><div><div class="eyebrow">LIVE ARENA</div><h2>Fight a checkpoint</h2></div><span class="match-kicker">120 Hz · 30 Hz policy</span></div>
-      <div class="match-launch-row"><label for="checkpoint-select">Checkpoint</label><select id="checkpoint-select"></select><label for="policy-mode">Mode</label><select id="policy-mode"><option value="deterministic">Deterministic</option><option value="sampled">Sampled</option></select><button id="fight-checkpoint">Fight checkpoint</button></div>
+      <div class="match-launch-row"><label for="checkpoint-select">Checkpoint</label><select id="checkpoint-select"></select><label for="level-select">Map</label><select id="level-select"></select><label for="policy-mode">Mode</label><select id="policy-mode"><option value="deterministic">Deterministic</option><option value="sampled">Sampled</option></select><button id="fight-checkpoint">Fight checkpoint</button></div>
+      <div class="panel-caption" id="level-hint"></div>
       <div class="panel-caption match-overlay-hint">F8 toggles in-game diagnostics.</div>
       <div id="match-error" class="match-error"></div>
     </div>`;
     panel = root.querySelector(".live-match");
     const select = panel.querySelector("#checkpoint-select");
     select.addEventListener("change", () => { state.selectedMatchCheckpoint = select.value; });
-    panel.querySelector("#fight-checkpoint").onclick = () => startMatch(select.value, panel.querySelector("#policy-mode").value, panel.querySelector("#fight-checkpoint"));
+    const levelSelect = panel.querySelector("#level-select");
+    levelSelect.addEventListener("change", () => { state.selectedLevel = levelSelect.value; renderLevelHint(); });
+    panel.querySelector("#fight-checkpoint").onclick = () => startMatch(select.value, panel.querySelector("#policy-mode").value, panel.querySelector("#fight-checkpoint"), levelSelect.value);
+    populateLevels(levelSelect);
   }
   const select = panel.querySelector("#checkpoint-select");
   const catalogSignature = ready.map(item => `${item.id}:${item.global_step || 0}`).join("|");
@@ -158,13 +162,51 @@ async function loadMatchState() {
   }
 }
 
-async function startMatch(checkpointId, policyMode, button) {
+function renderLevelHint() {
+  const hint = document.getElementById("level-hint");
+  if (!hint) return;
+  const entry = (state.duelLevels || []).find(l => l.level === state.selectedLevel);
+  hint.textContent = entry && entry.warn
+    ? `F8 toggles in-game diagnostics. Note: ${entry.warn}.`
+    : "F8 toggles in-game diagnostics.";
+  hint.style.color = entry && entry.warn ? "var(--warn)" : "";
+}
+
+async function populateLevels(sel) {
+  if (!state.duelLevels || !state.duelLevels.length) {
+    try {
+      const data = await fetchJSON("/api/duel-levels");
+      state.duelLevels = data.levels || [];
+    } catch (e) { state.duelLevels = []; }
+  }
+  sel.replaceChildren();
+  if (!state.duelLevels.length) {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = "No duel maps found";
+    sel.appendChild(o); sel.disabled = true; return;
+  }
+  for (const l of state.duelLevels) {
+    const o = document.createElement("option");
+    o.value = l.level;
+    o.textContent = l.trained_on ? `${l.label} (trained)` : l.label;
+    sel.appendChild(o);
+  }
+  // Default to a map the checkpoint actually trained on, not oval.
+  const preferred = state.selectedLevel && state.duelLevels.some(l => l.level === state.selectedLevel)
+    ? state.selectedLevel
+    : (state.duelLevels.find(l => l.trained_on) || state.duelLevels[0]).level;
+  sel.value = preferred;
+  state.selectedLevel = preferred;
+  renderLevelHint();
+}
+
+async function startMatch(checkpointId, policyMode, button, level) {
   const error = document.getElementById("match-error");
   if (error) error.textContent = "";
   state.selectedMatchCheckpoint = checkpointId;
   if (button) button.disabled = true;
   try {
-    await fetchJSON("/api/matches", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({checkpoint_id: checkpointId, policy_mode: policyMode})});
+    await fetchJSON("/api/matches", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({checkpoint_id: checkpointId, policy_mode: policyMode, level: level || state.selectedLevel})});
     await loadMatchState();
   } catch (err) {
     if (error) error.textContent = err.message;

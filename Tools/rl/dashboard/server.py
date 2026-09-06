@@ -175,6 +175,40 @@ def _checkpoint_catalog() -> list[dict]:
     return out
 
 
+def _duel_levels() -> list[dict]:
+    """Levels playable in Fight-a-checkpoint, i.e. driven by the human-duel script.
+
+    Only these work: play_match spawns the human as a second player actor, which
+    arena_level.as does not do. gen_arena_map.py --human-duel emits corpus maps in
+    this form. oval is listed last and flagged, because a corpus-trained checkpoint
+    has partly forgotten it (OGRL-20260905-064: 82.5% -> 60.0% at band 0.9) and
+    fighting it there measures the map it lost rather than the policy it has.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        import paths as _paths
+        arenas = _paths.data_dir() / "Levels" / "arenas"
+    except Exception:
+        return []
+    out = []
+    for f in sorted(arenas.glob("*.xml")):
+        try:
+            head = f.read_text(errors="ignore")[:4096]
+        except OSError:
+            continue
+        if "arena_level_human_duel.as" not in head.lower():
+            continue
+        name = f.stem
+        out.append({
+            "level": f"arenas/{f.name}",
+            "label": name.replace("_duel", "").replace("oval_arena_human", "oval (stock)"),
+            "trained_on": name.startswith("t_train_"),
+            "warn": "forgotten by corpus-trained checkpoints" if name.startswith("oval") else "",
+        })
+    out.sort(key=lambda r: (r["level"].startswith("arenas/oval"), r["level"]))
+    return out
+
+
 def _match_dir(job_id: str) -> Path | None:
     if not _safe_filename_component(job_id):
         return None
@@ -440,6 +474,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/checkpoint-catalog":
             return self._send_json({"checkpoints": _checkpoint_catalog()})
+
+        if path == "/api/duel-levels":
+            return self._send_json({"levels": _duel_levels()})
 
         if path == "/api/matches":
             with _match_lock:
