@@ -126,6 +126,7 @@ class VecOvergrowthEnv:
         if self.native_trace_dir is not None:
             self.native_trace_dir.mkdir(parents=True, exist_ok=True)
         self._episode_steps = [0] * n_envs
+        self._episode_kos = [0] * n_envs   # hostile knockouts so far this episode, per slot
         # Per-worker episode counter, used to vary the reset seed episode to
         # episode -- see step()'s reset call for why this exists at all.
         self._episode_counts = [0] * n_envs
@@ -358,6 +359,7 @@ class VecOvergrowthEnv:
                 self._episode_scenario[i] = scenario
                 self._episode_seed[i] = self.envs[i].last_reset_seed
                 self._episode_steps[i] = 0
+                self._episode_kos[i] = 0
                 self._episode_counts[i] += 1
                 # Must carry every key the normal path produces -- step() unpacks
                 # info["perf"] unconditionally, so a partial dict turns a recovered
@@ -374,7 +376,23 @@ class VecOvergrowthEnv:
                 # treating this as a genuine outcome and polluting the win rate.
                 return obs, 0.0, False, True, info, obs
             self._episode_steps[i] += 1
-            won = info["reward_components"]["opponent_knockout"] > 0
+            # A win is EVERY hostile down, not merely one. At 1 opponent the two
+            # are identical, so 1v1 semantics are unchanged and comparability with
+            # run10-run17 is preserved; at N they are not, and the old rule made
+            # more opponents EASIER to "beat" (run18: 0.71/0.74/0.81 for 1/2/3).
+            rc = info["reward_components"]
+            kos = rc.get("hostile_kos_this_step")
+            if kos is None:
+                won = rc["opponent_knockout"] > 0          # pre-instrumentation fallback
+            else:
+                # Accumulate knockout EVENTS across the episode and require one
+                # per opponent. Counting events (rather than reading a live count
+                # off the observation) is visibility-independent: an entity that
+                # walks out of line of sight vanishes from the observation and
+                # would otherwise look like a knockout.
+                self._episode_kos[i] += int(round(kos))
+                need = max(1, int(self._episode_scenario[i].get("opponents", 1) or 1))
+                won = self._episode_kos[i] >= need
             terminal = bool(done or won)
             truncated = (not terminal) and self._episode_steps[i] >= self.max_episode_steps
             terminal_obs = obs  # pre-reset observation, for the truncation bootstrap / info parity
@@ -391,6 +409,7 @@ class VecOvergrowthEnv:
             info["native_trace_path"] = str(self.envs[i].equivalence_digest_path) if self.envs[i].equivalence_digest_path is not None else None
             if terminal or truncated:
                 self._episode_steps[i] = 0
+                self._episode_kos[i] = 0
                 self._episode_counts[i] += 1
                 standby = self._take_standby()
                 with self._perf_lock:

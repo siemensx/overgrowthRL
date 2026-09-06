@@ -199,6 +199,7 @@ class RewardComputer:
         damage_dealt = 0.0
         knockout_bonus = 0.0
         friendly_fire = 0.0
+        hostile_kos = 0
         for entity_id, curr in curr_entities.items():
             prev = prev_entities.get(entity_id)
             if prev is None:
@@ -230,8 +231,23 @@ class RewardComputer:
                 damage_dealt += health_lost
                 if target_knocked_out_this_step:
                     knockout_bonus += cfg.opponent_knockout_bonus
+                    hostile_kos += 1
         components["damage_dealt"] = cfg.damage_dealt_weight * damage_dealt
         components["opponent_knockout"] = knockout_bonus
+
+        # Knockout EVENT count this step, for the win condition (OGRL-20260905).
+        # Counting events and accumulating them over the episode is robust to
+        # visibility; inferring "live hostiles" from the current observation is
+        # NOT, because entities appear only while visible, so a hostile walking
+        # out of line of sight would look like a knockout and end the episode as
+        # a false win.
+        # `won` used to mean "knocked out any opponent this step", which is
+        # correct only at 1 opponent. At N it means "KO one of N and stop", and
+        # since N opponents give N times the chances to land a KO, the measured
+        # win rate RISES with opponent count -- observed live in run18 at
+        # 0.71 / 0.74 / 0.81 for 1 / 2 / 3, which advanced the curriculum to its
+        # cap on a meaningless signal. A win must mean every hostile is down.
+        components["hostile_kos_this_step"] = float(hostile_kos)
         components["friendly_fire"] = -cfg.friendly_fire_weight * friendly_fire
 
         # --- Time cost ---
