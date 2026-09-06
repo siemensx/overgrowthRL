@@ -31,6 +31,26 @@ def engine_binary() -> Path:
     return root / "BuildArm64" / "Overgrowth.app" / "Contents" / "MacOS" / "Overgrowth"
 
 
+
+def _engine_output(proc_out: str, write_dir) -> str:
+    """Engine output, wherever this platform put it.
+
+    Windows writes the engine log to <write-dir>/logfile.txt and leaves stdout
+    nearly empty; macOS emits it on stdout/stderr. Reading only the pipe made
+    every Windows benchmark report NO RESULT while the run had in fact
+    succeeded -- the level loaded, characters spawned and the result line was
+    sitting in the file. Concatenate both and stop caring which platform it is.
+    """
+    from pathlib import Path as _P
+    text = proc_out or ""
+    log = _P(write_dir) / "logfile.txt"
+    if log.exists():
+        try:
+            text += "\n" + log.read_text(errors="replace")
+        except OSError:
+            pass
+    return text
+
 def run_once(exe: Path, level: str, write_dir: Path, steps: int, seed: int,
              warmup: int = 0) -> tuple[dict | None, int]:
     # Launch the engine exactly as env.py does. skip_loading_pause and
@@ -45,8 +65,10 @@ def run_once(exe: Path, level: str, write_dir: Path, steps: int, seed: int,
            "--disable-rendering", "--no-dialogues", "--benchmark",
            "--benchmark-warmup-steps", str(warmup), "--benchmark-steps", str(steps),
            "--benchmark-seed", str(seed), "--level", level, "--config", config_str]
+    _log = Path(write_dir) / "logfile.txt"
+    _log.unlink(missing_ok=True)   # it accumulates across runs; a stale one double-counts characters
     p = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=900)
-    out = p.stdout + p.stderr
+    out = _engine_output(p.stdout + p.stderr, write_dir)
     chars = len(CHAR_RE.findall(out))
     m = RESULT_RE.search(out)
     return (json.loads(m.group(1)) if m else None), chars
