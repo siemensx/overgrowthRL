@@ -775,8 +775,18 @@ const std::string ThreadedSound::GetID(const unsigned long& handle) {
 }
 
 void ThreadedSound::SetPosition(const unsigned long& handle, const vec3& new_pos) {
+    // Headless RL runs on the null backend (Engine::Initialize's rl_headless
+    // branch). SetVelocity/SetOcclusionPosition already early-out here; these
+    // two did not, and each surviving call takes tsdb's mutex and does a
+    // std::map lookup -- TranslatePosition twice, including a full
+    // SoundInstanceDataCopy returned BY VALUE under the lock. MovementObject::
+    // Update runs both for every attached sound on every character every
+    // frame. Sampled on a live training engine (2026-09-06, two runs of 10s
+    // and 20s): ThreadedSoundDataBridge was 14.2% and 16.7% of the engine's
+    // ACTIVE compute -- with no audio device attached. Nothing reads the
+    // stored position back except the real audio backend and the editor, so
+    // under the null backend there is nothing to keep up to date.
     if (null_backend) {
-        tsdb.SetPosition(handle, new_pos);
         return;
     }
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFSetPosition);
@@ -786,8 +796,9 @@ void ThreadedSound::SetPosition(const unsigned long& handle, const vec3& new_pos
 }
 
 void ThreadedSound::TranslatePosition(const unsigned long& handle, const vec3& trans) {
+    // See SetPosition above: two locked map lookups per sound per frame to
+    // maintain a position no one reads when there is no audio device.
     if (null_backend) {
-        tsdb.SetPosition(handle, tsdb.GetHandleData(handle).position + trans);
         return;
     }
     ThreadedSoundMessage tsm(ThreadedSoundMessage::InFTranslatePosition);

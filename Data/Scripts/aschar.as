@@ -1838,11 +1838,32 @@ array<int> bone_children_index;
 array<vec3> convex_hull_points;
 array<int> convex_hull_points_index;
 
+// Memoisation key for CacheSkeletonInfo, below. Empty means "nothing cached".
+string cached_skeleton_key = "";
+string cached_topology_key = "";
+
 void CacheSkeletonInfo() {
-    Log(info, "Caching skeleton info");
     RiggedObject@ rigged_object = this_mo.rigged_object();
     Skeleton@ skeleton = rigged_object.skeleton();
     int num_bones = skeleton.NumBones();
+
+    // Everything below is a pure function of the skeleton -- bind matrices,
+    // IK chain membership, bone parents, convex hulls and bone masses -- yet
+    // PostReset() re-derives all of it on every episode reset, including an
+    // O(bones^2) parent walk with a script->C++ crossing per step. Measured
+    // with the AngelScript line profiler (OGRL_AS_PROFILE): 7.5% of every
+    // script bytecode line executed at 1 opponent and 11.3% at 3, the second
+    // hottest function in the game, and it fired 31 times over 5 episodes
+    // with 2 characters. Skip it when the skeleton is the one already cached.
+    string topology_key = this_mo.char_path + "|" + num_bones;
+    string skeleton_key = topology_key + "|" + rigged_object.GetRelativeCharScale();
+
+    if(skeleton_key == cached_skeleton_key) {
+        return;
+    }
+
+    cached_skeleton_key = skeleton_key;
+    Log(info, "Caching skeleton info");
     skeleton_bind_transforms.resize(num_bones);
     inv_skeleton_bind_transforms.resize(num_bones);
 
@@ -1850,6 +1871,15 @@ void CacheSkeletonInfo() {
         skeleton_bind_transforms[i] = BoneTransform(skeleton.GetBindMatrix(i));
         inv_skeleton_bind_transforms[i] = invert(skeleton_bind_transforms[i]);
     }
+
+    // Bone topology (parents, IK chain membership) does not depend on the
+    // character scale, but the scale IS randomised per character right after
+    // it is built -- so this whole function ran twice per character birth,
+    // once at scale 1.0 whose result is thrown away (probed 2026-09-06:
+    // "...|52|1" then "...|52|1.00739"). The scale-dependent values below
+    // must be redone; the O(bones^2) parent walk must not.
+    bool topology_cached = (cached_topology_key == topology_key);
+    cached_topology_key = topology_key;
 
     ik_chain_elements.resize(0);
     ik_chain_bone_lengths.resize(0);
@@ -1885,26 +1915,29 @@ void CacheSkeletonInfo() {
     }
 
     ik_chain_start_index.push_back(ik_chain_elements.size());
-    bone_children.resize(0);
-    bone_children_index.resize(num_bones);
 
-    for(int bone = 0; bone < num_bones; ++bone) {
-        bone_children_index[bone] = bone_children.size();
+    if(!topology_cached) {
+        bone_children.resize(0);
+        bone_children_index.resize(num_bones);
 
-        for(int i = 0; i < num_bones; ++i) {
-            int temp_bone = i;
+        for(int bone = 0; bone < num_bones; ++bone) {
+            bone_children_index[bone] = bone_children.size();
 
-            while(skeleton.GetParent(temp_bone) != -1 && skeleton.GetParent(temp_bone) != bone) {
-                temp_bone = skeleton.GetParent(temp_bone);
-            }
+            for(int i = 0; i < num_bones; ++i) {
+                int temp_bone = i;
 
-            if(skeleton.GetParent(temp_bone) == bone) {
-                bone_children.push_back(i);
+                while(skeleton.GetParent(temp_bone) != -1 && skeleton.GetParent(temp_bone) != bone) {
+                    temp_bone = skeleton.GetParent(temp_bone);
+                }
+
+                if(skeleton.GetParent(temp_bone) == bone) {
+                    bone_children.push_back(i);
+                }
             }
         }
-    }
 
-    bone_children_index.push_back(bone_children.size());
+        bone_children_index.push_back(bone_children.size());
+    }
 
     convex_hull_points.resize(0);
     convex_hull_points_index.resize(num_bones);
@@ -1922,6 +1955,23 @@ void CacheSkeletonInfo() {
 
     key_masses.resize(kNumKeys);
     root_bone.resize(kNumKeys);
+
+    // NOTE (2026-09-06): key_masses ACCUMULATES here. array::resize() to the
+    // size the array already has keeps its contents, so the "+=" accumulators
+    // below sum on top of the previous call's totals -- probed directly: leg
+    // 2.3 -> 4.38, chest 7 -> 13.34, head 2.5 -> 4.76 on the second call for
+    // the same character (CacheSkeletonInfo runs twice per character birth,
+    // once at scale 1.0 and again after the scale is randomised).
+    //
+    // This is a real bug in the shipped script. It is DELIBERATELY LEFT IN.
+    // These values feed CGetCenterOfMassEstimate -> IK -> bone matrices ->
+    // physics, so zeroing them changes the simulation: every checkpoint from
+    // run10 onward was trained against the accumulated values, and flipping
+    // it mid-run put run21 off-distribution (1v1 win rate 0.83 -> 0.46 and
+    // timeouts 8% -> 32% within one block). The scaling is near-uniform
+    // (~1.90x on every key) and the estimate is a mass-weighted average, so
+    // it very largely cancels. Fix it at a RUN BOUNDARY, with a fresh
+    // baseline, not inside a live run.
 
     for(int j = 0; j < 2; ++j) {
         int bone = skeleton.IKBoneStart(legs[j]);

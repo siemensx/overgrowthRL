@@ -160,6 +160,140 @@ int rl_species = 0;        // 0 = random guard/raider (legacy default), 1 = guar
     bool use_weapons = (rl_weapons > 0.0f) && (RangedRandomFloat(0.0f, 1.0f) < rl_weapons);
     if(use_weapons){''', 1)
 
+    # M. Opponent-count curriculum (OGRL-20260905-070). RESTORED into the
+    # generator on 2026-09-06: this wiring and the player_id fix below had only
+    # ever been hand-edited into the generated file, so regenerating the fork
+    # silently reverted the level to stock 1v1 while the curriculum went on
+    # requesting 2 and 3 opponents. Anything the fork needs belongs HERE.
+    #
+    # gen_arena_map.py emits game_type 3 = 1v2 (teams [0,1,1]) and game_type 4 =
+    # 1v3 (teams [0,1,1,1]): the agent alone on team 0, every hostile on team 1
+    # so they ally with each other and oppose it. The stock game types cannot
+    # express that -- 1 is a 2v2, 2 is a free-for-all -- which is why the shape
+    # is declared by the generator rather than reused.
+    #
+    # The whole stock spawn-collection block is replaced atomically (rather than
+    # patched around) so a partial match cannot leave unbalanced braces.
+    start_m = "    bool knife_test = false;\n"
+    end_m = ('            /*if("weapon_spawn" == name_str){\n'
+             '                Object@ weap_obj = SpawnObjectAtSpawnPoint(obj,"Data/Items/DogWeapons/DogBroadSword.xml");\n'
+             '            }*/\n        }\n    }\n')
+    if start_m not in out or end_m not in out:
+        raise RuntimeError("anchor M (spawn-collection block) not found -- stock script changed shape")
+    i = out.index(start_m)
+    j = out.index(end_m, i) + len(end_m)
+    out = out[:i] + """    bool knife_test = false;
+
+    // OGRL-20260905-070: map the requested opponent count onto the
+    // generator-authored spawn groups (see Tools/rl/gen_arena_map.py).
+    int game_type_int = 0;
+    if(rl_opponents == 2){
+        game_type_int = 3;
+    } else if(rl_opponents >= 3){
+        game_type_int = 4;
+    }
+    if(knife_test){
+        game_type_int = 0;
+    }
+
+    array<SpawnPoint> character_spawns;
+    CollectCharacterSpawns(game_type_int, character_spawns);
+
+    // Levels predating the multi-opponent groups (oval, every stock arena)
+    // do not define them. Fall back to the 1v1 pair rather than spawn nobody.
+    if(character_spawns.size() == 0 && game_type_int != 0){
+        Log(info, "RL: no game_type " + game_type_int + " spawns in this level, falling back to the 1v1 pair");
+        game_type_int = 0;
+        CollectCharacterSpawns(game_type_int, character_spawns);
+    }
+""" + out[j:]
+
+    # The collector, factored out so the fallback can re-run it.
+    anchor_helper = "void SetUpLevel("
+    if anchor_helper not in out:
+        raise RuntimeError("anchor M2 (SetUpLevel) not found -- stock script changed shape")
+    out = out.replace(anchor_helper, """// OGRL-20260905-070: factored out of SetUpLevel so the opponent-count groups
+// can fall back to the stock 1v1 pair on levels that do not define them.
+void CollectCharacterSpawns(int want_game_type, array<SpawnPoint>@ character_spawns) {
+    array<int> @object_ids = GetObjectIDs();
+    int num_objects = object_ids.length();
+    for(int i=0; i<num_objects; ++i){
+        Object @obj = ReadObjectFromID(object_ids[i]);
+        ScriptParams@ params = obj.GetScriptParams();
+        if(params.HasParam("Name")){
+            string name_str = params.GetString("Name");
+            if("character_spawn" == name_str){
+                bool correct_game_type = false;
+                if(params.HasParam("game_type")){
+                    string game_type = params.GetString("game_type");
+                    obj.SetEditorLabel("game type: " + game_type);
+                    if(game_type == ""+want_game_type){
+                        correct_game_type = true;
+                    }
+                }
+                if(correct_game_type){
+                    character_spawns.resize(character_spawns.size() + 1);
+                    SpawnPoint@ sp = character_spawns[character_spawns.size() - 1];
+                    sp.obj_id = object_ids[i];
+                    if(params.HasParam("team")){
+                        string team_str = params.GetString("team");
+                        sp.team = atoi(team_str);
+                    } else {
+                        sp.team = -1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void SetUpLevel(""", 1)
+
+    # P. player_id: stock picks the player at RANDOM among the spawn group. With
+    # N hostiles on team 1 that puts the policy on a hostile most of the time and
+    # silently inverts the scenario. Team 0 is the agent by construction in the
+    # RL groups. The stock 1v1 pair keeps the random pick, so run10-run17
+    # comparability is untouched.
+    anchor_pid = "    player_id = rand()%num_char_spawns;\n"
+    if anchor_pid not in out:
+        raise RuntimeError("anchor P (player_id selection) not found -- stock script changed shape")
+    out = out.replace(anchor_pid, """    player_id = rand()%num_char_spawns;
+    if(game_type_int != 0){
+        // OGRL-20260905-070: team 0 is the agent in the multi-opponent groups.
+        for(int i=0; i<num_char_spawns; ++i){
+            if(character_spawns[i].team == 0){
+                player_id = i;
+                break;
+            }
+        }
+    }
+""", 1)
+
+    # N. SetPlaceholderPreviews() is editor decoration -- it walks EVERY object
+    # in the level, reads its script params and string-compares "Name", then
+    # calls PlaceholderObject::SetPreview for each spawn point. The stock script
+    # runs it from Update(), i.e. every single tick, forever. Measured with the
+    # AngelScript line profiler (OGRL_AS_PROFILE, 2026-09-06) on the real
+    # training path it was 9.98% of every script bytecode line executed at one
+    # opponent and 7.35% at three -- with SetSpawnPointPreview on top of that,
+    # the largest single block of pure waste in the script layer. Spawn points
+    # do not move during a match, so once at Init is enough; keep the per-tick
+    # call only while the editor is open, where objects really can be added.
+    anchor_prev = "    global_time += uint64(time_step * 1000);\n\n    SetPlaceholderPreviews();\n"
+    if anchor_prev not in out:
+        raise RuntimeError("anchor N (SetPlaceholderPreviews in Update) not found -- stock script changed shape")
+    out = out.replace(anchor_prev, """    global_time += uint64(time_step * 1000);
+
+    if(EditorModeActive()){
+        SetPlaceholderPreviews();
+    }
+""", 1)
+
+    anchor_init = "    curr_difficulty = GetRandomDifficultyNearPlayerSkill();\n    audience_sound_handle = -1;\n"
+    if anchor_init not in out:
+        raise RuntimeError("anchor N2 (Init tail) not found -- stock script changed shape")
+    out = out.replace(anchor_init, anchor_init + "    SetPlaceholderPreviews();\n", 1)
+
     return out
 
 

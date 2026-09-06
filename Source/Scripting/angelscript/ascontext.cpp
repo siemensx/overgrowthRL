@@ -45,11 +45,151 @@
 #include <stack>
 #include <sstream>
 #include <cassert>
+#include <unordered_map>
+#include <map>
+#include <vector>
+#include <algorithm>
+#include <cstdlib>
+#include <cstdio>
 
 extern Timer game_timer;
 extern Timer ui_timer;
 bool asdebugger_enabled = false;
 bool asprofiler_enabled = false;
+
+// ---------------------------------------------------------------------------
+// Headless AngelScript line profiler (OGRL_AS_PROFILE=<output path>)
+//
+// The ImGui-based ASProfiler above can only be read from a rendered frame, and
+// its script-side telemetry zones cover 51 sites in a 15,599-line file. This
+// instead hooks AngelScript's line callback and counts EXECUTED BYTECODE LINES
+// per (script file, line, function). Counts -- not timings -- so the result is
+// immune to machine load, which timing-based benchmarks on this project are not.
+// Enabled only when the env var is set; zero cost otherwise.
+// ---------------------------------------------------------------------------
+namespace {
+
+struct ASProfKey {
+    const void* func;
+    int line;
+    bool operator==(const ASProfKey& o) const { return func == o.func && line == o.line; }
+};
+struct ASProfKeyHash {
+    size_t operator()(const ASProfKey& k) const {
+        return std::hash<const void*>()(k.func) * 1000003u + (size_t)k.line;
+    }
+};
+struct ASProfEntry {
+    uint64_t count;
+    std::string file;
+    std::string func;
+    unsigned line;
+};
+
+std::unordered_map<ASProfKey, ASProfEntry, ASProfKeyHash>* g_as_prof_lines = NULL;
+std::string g_as_prof_path;
+bool g_as_prof_dumped = false;
+
+}  // namespace
+
+bool as_script_profile_enabled = false;
+
+void ASDumpScriptProfile() {
+    if (!g_as_prof_lines || g_as_prof_dumped)
+        return;
+    g_as_prof_dumped = true;
+
+    std::vector<const ASProfEntry*> rows;
+    rows.reserve(g_as_prof_lines->size());
+    uint64_t total = 0;
+    for (const auto& kv : *g_as_prof_lines) {
+        rows.push_back(&kv.second);
+        total += kv.second.count;
+    }
+    if (total == 0)
+        return;
+    std::sort(rows.begin(), rows.end(),
+              [](const ASProfEntry* a, const ASProfEntry* b) { return a->count > b->count; });
+
+    // per-file and per-function rollups
+    std::map<std::string, uint64_t> by_file;
+    std::map<std::string, uint64_t> by_func;
+    for (const ASProfEntry* r : rows) {
+        by_file[r->file] += r->count;
+        by_func[r->file + "::" + r->func] += r->count;
+    }
+
+    FILE* out = fopen(g_as_prof_path.c_str(), "w");
+    if (!out) {
+        LOGE << "AS-PROFILE: cannot open " << g_as_prof_path << std::endl;
+        return;
+    }
+    fprintf(out, "AS-PROFILE executed_bytecode_lines=%llu distinct_lines=%llu\n\n",
+            (unsigned long long)total, (unsigned long long)rows.size());
+
+    fprintf(out, "== by script file ==\n");
+    std::vector<std::pair<std::string, uint64_t> > fv(by_file.begin(), by_file.end());
+    std::sort(fv.begin(), fv.end(), [](const std::pair<std::string, uint64_t>& a,
+                                       const std::pair<std::string, uint64_t>& b) { return a.second > b.second; });
+    for (const auto& p : fv)
+        fprintf(out, "%7.3f%%  %14llu  %s\n", 100.0 * p.second / total,
+                (unsigned long long)p.second, p.first.c_str());
+
+    fprintf(out, "\n== by function (top 60) ==\n");
+    std::vector<std::pair<std::string, uint64_t> > gv(by_func.begin(), by_func.end());
+    std::sort(gv.begin(), gv.end(), [](const std::pair<std::string, uint64_t>& a,
+                                       const std::pair<std::string, uint64_t>& b) { return a.second > b.second; });
+    for (size_t i = 0; i < gv.size() && i < 60; ++i)
+        fprintf(out, "%7.3f%%  %14llu  %s\n", 100.0 * gv[i].second / total,
+                (unsigned long long)gv[i].second, gv[i].first.c_str());
+
+    fprintf(out, "\n== hottest source lines (top 120) ==\n");
+    for (size_t i = 0; i < rows.size() && i < 120; ++i)
+        fprintf(out, "%7.3f%%  %14llu  %s:%u  (%s)\n", 100.0 * rows[i]->count / total,
+                (unsigned long long)rows[i]->count, rows[i]->file.c_str(), rows[i]->line,
+                rows[i]->func.c_str());
+    fclose(out);
+    LOGI << "AS-PROFILE wrote " << g_as_prof_path << " (" << total << " executed lines)" << std::endl;
+}
+
+static void ASScriptProfileLineCallback(asIScriptContext* ctx, ASModule* asmod) {
+    asIScriptFunction* func = ctx->GetFunction();
+    if (func == NULL)
+        return;
+    ASProfKey key;
+    key.func = (const void*)func;
+    key.line = ctx->GetLineNumber();
+    auto it = g_as_prof_lines->find(key);
+    if (it != g_as_prof_lines->end()) {
+        ++it->second.count;
+        return;
+    }
+    // First sighting: resolve the preprocessed line back to its real include file.
+    ASProfEntry e;
+    e.count = 1;
+    LineFile lf = asmod->GetCorrectedLine(key.line);
+    e.file = lf.file.GetOriginalPath() ? lf.file.GetOriginalPath() : "?";
+    e.line = lf.line_number;
+    const char* decl = func->GetDeclaration(false, false, false);
+    e.func = decl ? decl : "?";
+    (*g_as_prof_lines)[key] = e;
+}
+
+static void ASScriptProfileInit() {
+    static bool checked = false;
+    if (checked)
+        return;
+    checked = true;
+    const char* env = getenv("OGRL_AS_PROFILE");
+    if (env == NULL || env[0] == '\0')
+        return;
+    g_as_prof_path = env;
+    g_as_prof_lines = new std::unordered_map<ASProfKey, ASProfEntry, ASProfKeyHash>();
+    g_as_prof_lines->reserve(65536);
+    as_script_profile_enabled = true;
+    atexit(ASDumpScriptProfile);
+    LOGI << "AS-PROFILE enabled, will write " << g_as_prof_path << std::endl;
+}
 
 #ifdef _DEBUG
 const bool kDebugLineCallback = false;
@@ -66,6 +206,7 @@ int ASContext::CompileScriptFromText(const std::string &text) {
 }
 
 ASContext::ASContext(const char *name, const ASData &as_data) : scenegraph(as_data.scenegraph), gui(as_data.gui), activate_keyboard_events(false), context_name(name) {
+    ASScriptProfileInit();
     engine = asCreateScriptEngine(ANGELSCRIPT_VERSION);
     engine->SetEngineProperty(asEP_ALLOW_MULTILINE_STRINGS, true);
     engine->SetEngineProperty(asEP_ALLOW_UNSAFE_REFERENCES, true);
@@ -296,6 +437,8 @@ bool ASContext::LoadScript(const Path &path) {
 
     if (kDebugLineCallback) {
         ctx->SetLineCallback(asFUNCTION(DebugLineCallback), &module, asCALL_CDECL);
+    } else if (as_script_profile_enabled) {
+        ctx->SetLineCallback(asFUNCTION(ASScriptProfileLineCallback), &module, asCALL_CDECL);
     }
 
     current_script = path;
@@ -330,6 +473,8 @@ void ASContext::LoadScriptFromText(const std::string &text) {
 
     if (kDebugLineCallback) {
         ctx->SetLineCallback(asFUNCTION(DebugLineCallback), &module, asCALL_CDECL);
+    } else if (as_script_profile_enabled) {
+        ctx->SetLineCallback(asFUNCTION(ASScriptProfileLineCallback), &module, asCALL_CDECL);
     }
 }
 
