@@ -677,7 +677,7 @@ def main():
                     ended_seed = infos[i].get("seed")
                     ended_difficulty = ended_scenario.get("difficulty")
                     if ended_difficulty is not None:
-                        sampler.record_episode_outcome(ended_difficulty, won)
+                        sampler.record_episode_outcome(ended_difficulty, won, ended_scenario.get("opponents", 1) or 1)
                     # Opponent-count curriculum advances on its own gate, kept
                     # separate from difficulty so neither can advance the other.
                     sampler.record_opponent_outcome(ended_scenario.get("opponents", 1) or 1, won)
@@ -753,7 +753,7 @@ def main():
                     remote_rollouts.append(_msg)
                     for _ep in _msg.get("episodes", []):
                         if _ep.get("difficulty") is not None:
-                            sampler.record_episode_outcome(_ep["difficulty"], _ep["won"])
+                            sampler.record_episode_outcome(_ep["difficulty"], _ep["won"], _ep.get("opponents", 1) or 1)
                         sampler.record_opponent_outcome(_ep.get("opponents", 1) or 1, _ep["won"])
                     global_step += args.n_steps * _msg["obs"].shape[1]
                 remote_wait_seconds = time.monotonic() - _rt0

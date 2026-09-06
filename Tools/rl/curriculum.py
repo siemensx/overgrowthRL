@@ -218,7 +218,7 @@ class ScenarioSampler:
                                                                                  # are called concurrently from
                                                                                  # VecOvergrowthEnv's worker threads
     _d_max: float = field(default=0.0, repr=False)
-    _recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (d, won) pairs, most-recent-last;
+    _recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (d, won, opponents) triples, most-recent-last;
                                                                                          # capped generously, gate only ever
                                                                                          # looks at the last gate_window
     _opp_max: int = field(default=1, repr=False)
@@ -294,17 +294,36 @@ class ScenarioSampler:
             out[n] = (sum(sub) / len(sub)) if sub else None
         return out
 
-    def record_episode_outcome(self, difficulty: float, won: bool) -> None:
+    def record_episode_outcome(self, difficulty: float, won: bool, opponents: int = 1) -> None:
         """Call once per completed episode with the difficulty it was
-        actually sampled at (not the current d_max) and whether the RL agent
-        won. Advances d_max in place when the gate is satisfied."""
+        actually sampled at (not the current d_max), whether the RL agent won,
+        and how many opponents it faced. Advances d_max in place when the gate
+        is satisfied.
+
+        The gate counts SOLO episodes only. record_opponent_outcome's docstring
+        already states the intent -- "Separate from the difficulty gate on
+        purpose: they measure different things and must not be able to advance
+        each other" -- and it honours that by filtering to the current opponent
+        maximum. This gate did not filter at all, so outnumbered fights fed
+        straight into the difficulty signal. With opp_keep_solo=0.35 that means
+        ~65% of the samples came from 1v2/1v3 fights whose win rate is far below
+        gate_win_rate, dragging the pooled rate under the threshold forever.
+
+        Measured on run21_mac (2026-09-06): 4575 episodes recorded, `last_advance`
+        still None, d_max pinned at its 0.15 start and mean sampled difficulty
+        0.073 against a cap of 1.0 -- i.e. the agent had been training against
+        near-trivial opponents for the whole multi-opponent phase, and its
+        1v2/1v3 win rates were measured against them.
+
+        Every episode is still stored, so band_win_rates and the telemetry keep
+        reporting the full mix; only the gate is filtered."""
         with self._lock:
-            self._recent.append((difficulty, won))
-            if len(self._recent) < self.gate_min_samples or self._d_max >= self.d_max_cap:
+            self._recent.append((difficulty, won, int(opponents)))
+            if self._d_max >= self.d_max_cap:
                 return
             window = list(self._recent)[-self.gate_window:]
             top_band_lo = self._d_max - self.d_step
-            qualifying = [won for d, won in window if d >= top_band_lo]
+            qualifying = [w for d, w, o in window if d >= top_band_lo and o == 1]
             if len(qualifying) < self.gate_min_samples:
                 return
             win_rate = sum(qualifying) / len(qualifying)
@@ -324,14 +343,14 @@ class ScenarioSampler:
         out = {}
         for lo, hi in DIFFICULTY_BANDS:
             label = f"[{lo:.1f},{hi:.1f}]"
-            outcomes = [won for d, won in recent if (lo <= d <= hi if hi == 1.0 else lo <= d < hi)]
+            outcomes = [won for d, won, _o in recent if (lo <= d <= hi if hi == 1.0 else lo <= d < hi)]
             out[label] = (sum(outcomes) / len(outcomes)) if outcomes else None
         return out
 
     def snapshot(self) -> dict:
         """Everything metrics.jsonl's curriculum_live block needs (Sec3.2)."""
         with self._lock:
-            recent_d = [d for d, _ in list(self._recent)[-self.gate_window:]]
+            recent_d = [d for d, _w, _o in list(self._recent)[-self.gate_window:]]
             d_max = self._d_max
             episodes_recorded = len(self._recent)
             last_advance = self._advance_log[-1] if self._advance_log else None
