@@ -102,6 +102,9 @@ class Level:
             f'    </PlaceholderObject>'
         )
 
+    def env_object_count(self) -> int:
+        return len(self.objects)
+
     def render(self) -> str:
         # Terrain is OPTIONAL: nothing.xml ships with no <Terrain> block at
         # all. Omitting it puts the arena in open sky, which (a) avoids the
@@ -224,6 +227,38 @@ def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
 
 
 
+# Engine renderer bug, isolated 2026-09-05 by bisecting a crashing generated map
+# down to object count alone. A level whose EnvObject count lands in [13, 18]
+# segfaults in Engine::DrawScene -- EXC_BAD_ACCESS, KERN_INVALID_ADDRESS at
+# 0xd8, i.e. a null dereference -- as soon as it is DRAWN. Counts of 12 and
+# below, and 19 and above, are fine. Verified on every generated map: 13, 13 and
+# 16 objects crash; 19, 20 and 24 do not; the 5-object minimal map does not.
+#
+# Headless training never touches Draw(), which is why six maps trained happily
+# for hours and then killed the window the moment a human opened them.
+#
+# The engine fix belongs in the renderer's batching path; until then the
+# generator simply refuses to emit a level in the dead band, padding with
+# mirrored cover pillars (tactically neutral, since both halves get the same).
+CRASH_BAND = (13, 18)
+
+
+def pad_out_of_crash_band(lvl: "Level", half: float, floor_top: float,
+                          cx: float, cz: float) -> int:
+    """Add mirrored pillars until the EnvObject count clears the crash band."""
+    added = 0
+    while CRASH_BAND[0] <= lvl.env_object_count() <= CRASH_BAND[1]:
+        i = added // 2
+        sign = -1 if added % 2 else 1
+        a = (i + 0.5) / 4 * math.pi
+        lvl.box(cx + math.cos(a) * half * 0.8, floor_top + 1.35,
+                cz + sign * math.sin(a) * half * 0.75, 1.0, 1.35, 1.0, 0.0, PILLAR)
+        added += 1
+        if added > 40:
+            raise RuntimeError("could not pad out of the renderer crash band")
+    return added
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -277,6 +312,10 @@ def main() -> int:
         cz = (i // cols) * args.arena_spacing - span / 2
         build_court(lvl, rng, args.half_size, floor_top, cx, cz,
                     args.randomize, args.minimal)
+        padded = pad_out_of_crash_band(lvl, args.half_size, floor_top, cx, cz)
+        if padded:
+            print(f"  padded +{padded} pillars to clear the renderer crash band "
+                  f"{CRASH_BAND[0]}-{CRASH_BAND[1]} EnvObjects")
         d = args.half_size * 0.6
         # game_type 0 is the pair the RL fork uses; 1 and 2 are emitted for the
         # first arena only so normal play still works without spawning a crowd.

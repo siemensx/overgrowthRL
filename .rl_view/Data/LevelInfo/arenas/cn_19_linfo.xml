@@ -1,0 +1,13 @@
+<?xml version="2.0" ?>
+<Type>level_info_cache</Type>
+<Version>1</Version>
+<LevelHash>b848086fab53b6babca0981f489e17a8</LevelHash>
+<Name>cn_19</Name>
+<Description>Procedurally generated arena (Tools/rl/gen_arena_map.py)</Description>
+<Shader>post</Shader>
+<Script>Data/Scripts/arena_level_1v1_unarmed.as</Script>
+<PCScript></PCScript>
+<NPCScript></NPCScript>
+<LoadingScreen>
+    <Image></Image>
+</LoadingScreen>
