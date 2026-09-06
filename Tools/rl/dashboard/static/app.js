@@ -783,6 +783,67 @@ function renderCurriculumSection(metrics) {
   bandPanel.appendChild(bandRow);
   frag.appendChild(bandPanel);
 
+  // --- Opponent-count axis (OGRL-20260906-075) ---
+  // The trainer has always logged curriculum_live.opponent_win_rates; nothing
+  // displayed it, which is why a stalled difficulty gate went unnoticed for
+  // 4575 episodes. Both curriculum axes are now visible, and the gate-health
+  // banner below states outright when one has never advanced.
+  const withOpp = metrics.filter(d => d.curriculum_live && d.curriculum_live.opponent_win_rates);
+  if (withOpp.length) {
+    const oppKeys = Object.keys(withOpp[withOpp.length - 1].curriculum_live.opponent_win_rates)
+      .sort((a, b) => Number(a) - Number(b));
+    frag.appendChild(renderChart("Win rate by opponent count (1v1 retention is the control)", withOpp,
+      oppKeys.map((k, i) => ({
+        key: d => {
+          const v = d.curriculum_live.opponent_win_rates[k];
+          return (v === null || v === undefined) ? null : v;
+        },
+        label: `1v${k}`,
+        color: COLORS[i % COLORS.length],
+      })), {}));
+
+    const oppLast = withOpp[withOpp.length - 1].curriculum_live;
+    const oppPanel = document.createElement("div");
+    oppPanel.className = "panel";
+    oppPanel.innerHTML = `<h2>Opponent curriculum (max = ${oppLast.opponents_max ?? "-"})</h2>`;
+    const oppRow = document.createElement("div");
+    oppRow.className = "band-bars";
+    for (const k of oppKeys) {
+      const rate = oppLast.opponent_win_rates[k];
+      const pct = (rate !== null && rate !== undefined) ? Math.round(rate * 100) : null;
+      const atMax = Number(k) === Number(oppLast.opponents_max);
+      const bar = document.createElement("div");
+      bar.className = "band-bar";
+      bar.innerHTML = `
+        <div class="band-bar-label">1v${k}${atMax ? " (at max)" : ""}</div>
+        <div class="band-bar-track"><div class="band-bar-fill" style="width:${pct !== null ? pct : 0}%; background:${pct === null ? "var(--text-faint)" : COLORS[oppKeys.indexOf(k) % COLORS.length]}"></div></div>
+        <div class="band-bar-value">${pct !== null ? pct + "%" : "no data"}</div>`;
+      oppRow.appendChild(bar);
+    }
+    oppPanel.appendChild(oppRow);
+    frag.appendChild(oppPanel);
+  }
+
+  // --- Gate health ---
+  // A curriculum that never advances looks exactly like one that is merely
+  // being careful. Say it explicitly: run21_mac sat at its d_max_start for
+  // 4575 episodes because outnumbered fights were being counted toward a gate
+  // meant to measure difficulty alone.
+  const episodes = last.episodes_recorded || 0;
+  const advanced = last.last_advance !== null && last.last_advance !== undefined;
+  if (episodes > 800 && !advanced) {
+    const warn = document.createElement("div");
+    warn.className = "panel";
+    warn.innerHTML = `<h2>Difficulty gate has never advanced</h2>
+      <div class="empty-state">d_max is still at its starting value (${(last.d_max ?? 0).toFixed(2)})
+      after ${episodes.toLocaleString()} episodes, and the mean sampled difficulty is
+      ${(last.d_mean_sampled ?? 0).toFixed(3)}. The agent is training against opponents far weaker
+      than the cap, and any win rate from this run is conditioned on that. Check that the gate is
+      measuring its own axis -- outnumbered episodes must not count toward the DIFFICULTY gate
+      (OGRL-20260906-075).</div>`;
+    frag.insertBefore(warn, frag.firstChild);
+  }
+
   return frag;
 }
 
