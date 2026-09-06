@@ -496,6 +496,12 @@ def main():
         optimizer.load_state_dict(resumed_checkpoint["optimizer"])
         obs_normalizer.load_state_dict(resumed_checkpoint["obs_normalizer"])
         reward_normalizer.load_state_dict(resumed_checkpoint["reward_normalizer"])
+        # OGRL-20260906-078: restore where the curriculum had climbed to.
+        # Without this every resume restarts d_max at --d-max-start, so an
+        # unattended run that restarts a few times re-climbs difficulty from
+        # scratch each time and never approaches the cap.
+        sampler.load_curriculum_state(resumed_checkpoint.get("curriculum"))
+        print(f"restored curriculum: d_max={sampler.d_max:.2f} opponents_max={sampler.opponents_max}")
         print(f"resumed from {args.resume_from} at global_step={initial_global_step}")
 
     global_step = initial_global_step
@@ -574,7 +580,8 @@ def main():
                 logger.log_event("disk_low_pause", f"{run_id} pausing: {free_gb:.2f}GB free < --pause-below-free-gb {args.pause_below_free_gb}",
                                   body=f"at global_step={global_step}")
                 if args.checkpoint_path:
-                    _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step)
+                    _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step,
+                                 curriculum=sampler.curriculum_state())
                 while shutil.disk_usage(args.repo_root).free / (1024 ** 3) < args.pause_below_free_gb:
                     time.sleep(30.0)
                     if logger.poll_control() == "stop":
@@ -867,7 +874,8 @@ def main():
             })
 
             if args.checkpoint_path and update % args.checkpoint_every_updates == 0:
-                _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step)
+                _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step,
+                                 curriculum=sampler.curriculum_state())
         run_status = "completed"  # reached either by the while condition going false, or the dashboard-stop break above
     finally:
         # OGRL-20260816-018 -- see train.py's identical fix for the full
@@ -876,7 +884,8 @@ def main():
         # capturing that final state. One more unconditional save here
         # covers every exit path (natural completion, Ctrl+C, SIGTERM).
         if args.checkpoint_path:
-            _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step)
+            _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step,
+                                 curriculum=sampler.curriculum_state())
         # OGRL-20260817-028 Sec10: "a run_stop event on every exit path" --
         # the canonical terminal marker, distinct from "stop_requested"
         # above (the WHY, only fired on the dashboard-stop path). Fires here

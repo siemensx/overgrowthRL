@@ -83,3 +83,51 @@ class TestGateIndependence(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCurriculumStatePersistence(unittest.TestCase):
+    """Without checkpointed curriculum state, every resume restarts d_max at
+    --d-max-start. An unattended run that restarts a few times re-climbs
+    difficulty from scratch each time and never approaches the cap -- observed
+    on run21_mac, where several restarts in one night each dropped d_max back
+    to 0.15 after it had reached 0.45."""
+
+    def test_round_trip(self):
+        s = _sampler()
+        for _ in range(400):
+            s.record_episode_outcome(s.d_max, True, opponents=1)
+        self.assertGreater(s.d_max, 0.15)
+        state = s.curriculum_state()
+
+        fresh = _sampler()
+        self.assertEqual(fresh.d_max, 0.15)
+        fresh.load_curriculum_state(state)
+        self.assertAlmostEqual(fresh.d_max, s.d_max, places=6)
+
+    def test_missing_state_is_a_no_op(self):
+        """Older checkpoints have no curriculum key at all."""
+        s = _sampler()
+        s.load_curriculum_state(None)
+        s.load_curriculum_state({})
+        self.assertEqual(s.d_max, 0.15)
+
+    def test_restore_is_clamped_to_this_runs_caps(self):
+        """Lowering --d-max-cap or --opponents-cap on a resume must be honoured,
+        not silently overridden by whatever the checkpoint recorded."""
+        s = ScenarioSampler(d_max_start=0.15, d_step=0.1, d_max_cap=0.5, opponents_cap=2)
+        s.load_curriculum_state({"d_max": 0.95, "opponents_max": 3})
+        self.assertEqual(s.d_max, 0.5)
+        self.assertEqual(s.opponents_max, 2)
+
+    def test_restore_never_goes_below_the_start(self):
+        s = _sampler()
+        s.load_curriculum_state({"d_max": 0.01})
+        self.assertEqual(s.d_max, 0.15)
+
+    def test_outcome_history_is_not_restored(self):
+        """Only the POSITION is carried. Replaying a stale outcome window would
+        let a checkpoint advance the curriculum on episodes the new process
+        never ran."""
+        s = _sampler()
+        state = s.curriculum_state()
+        self.assertEqual(set(state.keys()), {"d_max", "opponents_max"})

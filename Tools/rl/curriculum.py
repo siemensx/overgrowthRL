@@ -282,6 +282,30 @@ class ScenarioSampler:
                 self._opp_max = min(self.opponents_cap, self._opp_max + 1)
                 self._opp_advance_log.append((len(self._opp_recent), old, self._opp_max))
 
+    def curriculum_state(self) -> dict:
+        """The position both curricula have climbed to, for checkpointing.
+
+        Deliberately NOT the outcome histories: those are windows used to decide
+        the next advance, and replaying a resumed run's stale window would let a
+        checkpoint advance the curriculum on episodes the new process never saw.
+        Only the position is restored; the gates re-earn their next step."""
+        with self._lock:
+            return {"d_max": self._d_max, "opponents_max": self._opp_max}
+
+    def load_curriculum_state(self, state: dict | None) -> None:
+        """Restore a checkpointed position. Clamped to this run's own caps, so
+        lowering --d-max-cap or --opponents-cap on a resume is still honoured
+        rather than being silently overridden by the checkpoint."""
+        if not state:
+            return
+        with self._lock:
+            d = state.get("d_max")
+            if isinstance(d, (int, float)):
+                self._d_max = max(self.d_max_start, min(float(d), self.d_max_cap))
+            o = state.get("opponents_max")
+            if isinstance(o, int):
+                self._opp_max = max(1, min(o, self.opponents_cap))
+
     def opponent_win_rates(self, window: int | None = None) -> dict:
         """Win rate per opponent count over the last `window` episodes -- the
         number that says whether 1v1 competence is being retained."""

@@ -350,7 +350,7 @@ def _checkpoint_step(path) -> int:
 
 
 def _save_checkpoint(path: str, policy, optimizer, obs_normalizer, reward_normalizer, global_step: int,
-                     archive_every: int = 40) -> None:
+                     archive_every: int = 40, curriculum: dict | None = None) -> None:
     """Write a checkpoint atomically, refusing to regress, keeping snapshots.
 
     Three properties, each earned by a specific failure on 2026-09-05
@@ -402,6 +402,13 @@ def _save_checkpoint(path: str, policy, optimizer, obs_normalizer, reward_normal
         "layout_local_geometry_rays": policy.layout.local_geometry_rays,
         "layout_action_history_steps": policy.layout.action_history_steps,
         "frame_stack": policy.frame_stack,
+        # Curriculum position (OGRL-20260906-078). Without this every resume
+        # restarts d_max at --d-max-start, so an unattended run that restarts a
+        # few times keeps re-climbing difficulty from scratch and never reaches
+        # the cap. Observed on run21_mac: several restarts in one night, each
+        # dropping d_max back to 0.15. Optional and read with .get(), so older
+        # checkpoints still load.
+        "curriculum": curriculum,
     }
     tmp = path.with_suffix(path.suffix + ".tmp")
     with open(tmp, "wb") as fh:
