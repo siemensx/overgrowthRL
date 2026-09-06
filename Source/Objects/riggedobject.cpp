@@ -1230,6 +1230,7 @@ void RiggedObject::Update(float timestep) {
     {
         if (game_timer.game_time < blood_surface.sleep_time) {
             PROFILER_ZONE(g_profiler_ctx, "Update blood surface");
+            RL_SUBSYSTEM_ZONE(kZoneBloodSurface);
             blood_surface.Update(scenegraph_, timestep);
         }
     }

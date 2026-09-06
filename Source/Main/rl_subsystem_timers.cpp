@@ -82,6 +82,8 @@ std::string ReportFragment(double total_step_seconds) {
         << "\"other_seconds\":" << other_seconds;
     out << ",\"character_script_measured_seconds\":" << character_script_measured
         << ",\"character_script_calls\":" << CallCountFor(kZoneCharacterScript);
+    out << ",\"blood_surface_seconds\":" << SecondsFor(kZoneBloodSurface)
+        << ",\"blood_surface_calls\":" << CallCountFor(kZoneBloodSurface);
     return out.str();
 }
 

@@ -19,6 +19,7 @@ enum Zone {
     kZoneAnimation,
     kZoneObsExtraction,
     kZoneCharacterScript,   // the AngelScript character Update() call itself
+    kZoneBloodSurface,      // visual-only blood drip simulation, measured before deciding to gate it
     kZoneCount,
 };
 
