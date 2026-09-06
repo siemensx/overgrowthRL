@@ -34,6 +34,7 @@
 #include <Logging/ramhandler.h>
 
 #include <Main/engine.h>
+#include <Graphics/pxdebugdraw.h>
 #include <Main/altmain.h>
 #include <Main/rl_benchmark.h>
 #include <Main/rl_subsystem_timers.h>
@@ -456,6 +457,9 @@ int main(int argc, char* argv[]) {
         quit_after_load = quitAfterLoad.getValue();
         no_dialogues = noDialogues.getValue();
         disable_rendering = disableRendering.getValue();
+        // OGRL_KEEP_DEBUG_DRAW=1 forces the old behaviour, so the cost of the
+        // guard can be A/B'd inside ONE binary instead of comparing across builds.
+        g_debug_draw_disabled = disable_rendering && (getenv("OGRL_KEEP_DEBUG_DRAW") == nullptr);
         load_all_levels = loadAllLevels.getValue();
         clear_cache = clearCache.getValue();
         clear_cache_dry_run = clearCacheDryRun.getValue();
@@ -533,6 +537,7 @@ int main(int argc, char* argv[]) {
         }
         if (RLBenchmark::Enabled()) {
             disable_rendering = true;
+            g_debug_draw_disabled = (getenv("OGRL_KEEP_DEBUG_DRAW") == nullptr);
         }
 
         std::stringstream configurationStream(configuration);

@@ -78,6 +78,17 @@ enum DDElement {
     kWireCylinder
 };
 
+// Set when the engine runs with --disable-rendering. Every DebugDraw::Add*
+// entry point then returns immediately instead of copying vertex data or
+// heap-allocating a DebugDrawElement that nothing will ever draw.
+//
+// aschar.as and enemycontrol.as carry ~219 DebugDraw call sites between them,
+// and they are hot: the character scripts are 61.6% of engine step time under
+// training (measured 2026-09-05 with --benchmark-subsystem-timers). None of
+// that work can affect physics or observations -- it is pure render debt paid
+// by every headless training step.
+extern bool g_debug_draw_disabled;
+
 class DebugDrawElement {
     DDLifespan lifespan;
 

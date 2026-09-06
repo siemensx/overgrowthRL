@@ -45,6 +45,8 @@
 
 #include <set>
 
+bool g_debug_draw_disabled = false;
+
 extern Timer game_timer;
 
 extern TextAtlas g_text_atlas[kNumTextAtlas];
@@ -158,6 +160,7 @@ void DebugDraw::Remove(int which) {
 
 int DebugDraw::AddElement(DebugDrawElement *element,
                           const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     LOGS << "Adding element" << std::endl;
     int new_id;
     if (free_ids.empty()) {
@@ -179,6 +182,7 @@ int DebugDraw::AddLine(const vec3 &start,
                        const vec4 &end_color,
                        const DDLifespan lifespan,
                        const DDFlag &flags) {
+    if (g_debug_draw_disabled) { return -1; }
     if (lifespan == _delete_on_update && flags == _DD_NO_FLAG) {
         size_t start_count = delete_on_update.verts.size();
         delete_on_update.verts.resize(start_count + 14);
@@ -206,17 +210,20 @@ int DebugDraw::AddLine(const vec3 &start,
                        const vec4 &color,
                        const DDLifespan lifespan,
                        const DDFlag &flags) {
+    if (g_debug_draw_disabled) { return -1; }
     // sync_attach_3 vore coolt att skicka över detta
     // om vi kommer från sync_attach_1
     return AddLine(start, end, color, color, lifespan, flags);
 }
 
 int DebugDraw::AddRibbon(const vec3 &start, const vec3 &end, const vec4 &start_color, const vec4 &end_color, const float start_width, const float end_width, const DDLifespan lifespan, const DDFlag &flags /*= _DD_NO_FLAG*/) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawRibbon(start, end, start_color, end_color, start_width, end_width, flags);
     return AddElement(element, lifespan);
 }
 
 int DebugDraw::AddRibbon(const DDLifespan lifespan, const DDFlag &flags /*= _DD_NO_FLAG*/) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawRibbon(flags);
     return AddElement(element, lifespan);
 }
@@ -225,6 +232,7 @@ int DebugDraw::AddPoint(const vec3 &point,
                         const vec4 &color,
                         const DDLifespan lifespan,
                         const DDFlag &flags) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawPoint(point, color, flags);
     return AddElement(element, lifespan);
 }
@@ -233,6 +241,7 @@ int DebugDraw::AddWireSphere(const vec3 &position,
                              const float radius,
                              const vec4 &color,
                              const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     if (radius == 0.0f) {
         DisplayError("Error", "Creating debug draw sphere with radius zero");
     }
@@ -241,6 +250,7 @@ int DebugDraw::AddWireSphere(const vec3 &position,
 }
 
 int DebugDraw::AddText(const vec3 &position, const std::string &content, const float &scale, const DDLifespan lifespan, const DDFlag &flags, const vec4 &color) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawText(position, scale, content, flags, color);
     return AddElement(element, lifespan);
 }
@@ -277,6 +287,7 @@ DebugDrawElement *DebugDraw::GetElement(int id) {
 }
 
 int DebugDraw::AddWireBox(const vec3 &position, const vec3 &dimensions, const vec4 &color, const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawWireBox(position,
                                                      dimensions,
                                                      color);
@@ -284,6 +295,7 @@ int DebugDraw::AddWireBox(const vec3 &position, const vec3 &dimensions, const ve
 }
 
 int DebugDraw::AddWireCylinder(const vec3 &position, const float radius, const float height, const vec4 &color, const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawWireCylinder(position,
                                                           radius,
                                                           height,
@@ -292,11 +304,13 @@ int DebugDraw::AddWireCylinder(const vec3 &position, const float radius, const f
 }
 
 int DebugDraw::AddWireScaledSphere(const vec3 &position, const float radius, const vec3 &scale, const vec4 &color, const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawWireSphere(position, radius, scale, color);
     return AddElement(element, lifespan);
 }
 
 int DebugDraw::AddWireMesh(const std::string &path, const mat4 &transform, const vec4 &color, const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     RC_VBOContainer vbo;
     std::vector<vec3> vertices;
 
@@ -339,6 +353,7 @@ int DebugDraw::AddLineObject(const RC_VBOContainer &vbo,
                              const mat4 &transform,
                              const vec4 &color,
                              const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawWire(vbo, transform, color, _DD_NO_FLAG);
     return AddElement(element, lifespan);
 }
@@ -347,31 +362,37 @@ int DebugDraw::AddStippleMesh(const RC_VBOContainer &vbo,
                               const mat4 &transform,
                               const vec4 &color,
                               const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawStippleMesh(vbo, transform, color, _DD_NO_FLAG);
     return AddElement(element, lifespan);
 }
 
 int DebugDraw::AddLines(const std::vector<float> &vertices, const std::vector<unsigned> &indices, const vec4 &color, const DDLifespan lifespan, const DDFlag &flags) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawLines(vertices, indices, color, flags);
     return AddElement(element, lifespan);
 }
 
 int DebugDraw::AddLines(const std::vector<vec3> &vertices, const vec4 &color, const DDLifespan lifespan, const DDFlag &flags) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawLines(vertices, color, flags);
     return AddElement(element, lifespan);
 }
 
 int DebugDraw::AddCircle(const mat4 &transform, const vec4 &color, const DDLifespan lifespan, const DDFlag &flags) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawCircle(transform, color, flags);
     return AddElement(element, lifespan);
 }
 
 int DebugDraw::AddBillboard(const TextureRef &ref, const vec3 &position, float scale, const vec4 &color, AlphaMode mode, const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawElement *element = new DebugDrawBillboard(ref, position, scale, color, mode);
     return AddElement(element, lifespan);
 }
 
 int DebugDraw::AddTransformedWireScaledSphere(const mat4 &transform, const vec4 &color, const DDLifespan lifespan) {
+    if (g_debug_draw_disabled) { return -1; }
     DebugDrawWireSphere *element = new DebugDrawWireSphere(transform, color);
     return AddElement((DebugDrawElement *)element, lifespan);
 }
