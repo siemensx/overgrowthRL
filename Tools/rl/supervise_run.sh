@@ -44,6 +44,20 @@ LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,aren
 
 say() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$LOG"; }
 
+# A fresh supervisor OWNS the run. Without this it only calls launch() when it
+# sees the run DOWN, so starting a new supervisor over a live trainer silently
+# leaves the old one in charge -- with the old level list, the old write-dirs
+# and the old baked navmeshes. That happened on 2026-09-07: two "restarts" to
+# change the map rotation both appeared to succeed while the 20:14 process kept
+# running, and it then read regenerated map files against navmeshes baked from
+# the geometry they replaced. 76% of episodes timed out before it was spotted.
+for pid in $(pgrep -f "ppo/train_vec.py"); do
+  kill -INT "$pid" 2>/dev/null
+  for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+  kill -9 "$pid" 2>/dev/null
+done
+pkill -f "MacOS/Overgrowth" 2>/dev/null; sleep 2
+
 free_gb() { df -k /System/Volumes/Data | tail -1 | awk '{printf "%.2f", $4/1048576}'; }
 
 launch() {
