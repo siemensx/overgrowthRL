@@ -29,7 +29,25 @@
 #include "enemycontroldebug.as"
 
 Situation situation;
-int got_hit_by_leg_cannon_count = 0;
+// Jump-kick wariness. will_avoid_jump_kick fires on
+//     RangedRandomFloat(0,1) < p_block_skill * curved_difficulty
+//                              + got_hit_by_leg_cannon_count * 0.25
+// so each legcannon that lands raises this character's avoidance by 0.25, and
+// avoidance is a sideways roll plus a disengage to range 3-4 -- not a
+// guaranteed miss, so the axis degrades smoothly.
+//
+// Seeded HERE, at declaration, and not in ResetMind(): ResetMind does not run
+// when a character spawns, so a seed placed there had literally no effect
+// (verified -- win rate and mean episode length were identical to the step).
+// Measured with a seed of 8 at difficulty 0.6, 1 opponent, run21 @247M:
+// win 1.000 -> 0.850, mean episode length 238 -> 373.
+//
+// Stock behaviour is 0, which is what run21 trained against for 250M steps:
+// the counter is per-character and zeroed on reset, and fights average 1.6
+// knockouts over ~400 steps, so a bot ate one or two jump kicks and died with
+// its counter at 0.25-0.5. The adaptation never had time to bite, which is how
+// 90% of the policy's attacks ended up being the legcannon.
+int got_hit_by_leg_cannon_count = GetConfigValueInt("rl_jumpkick_wariness");
 
 float startle_time;
 float suspicious_amount;
@@ -314,7 +332,24 @@ bool WantsToDragBody() {
 void ResetMind() {
     goal = _patrol;
     situation.clear();
-    got_hit_by_leg_cannon_count = 0;
+    // Jump-kick wariness (rl_jumpkick_wariness, default 0 = stock behaviour).
+    //
+    // will_avoid_jump_kick fires on
+    //     RangedRandomFloat(0,1) < p_block_skill * curved_difficulty
+    //                              + got_hit_by_leg_cannon_count * 0.25
+    // so each legcannon that lands raises this character's avoidance by 0.25.
+    // But the counter is PER CHARACTER and is zeroed right here on every reset,
+    // and run21's fights are short -- mean 1.6 knockouts over ~400 steps. A bot
+    // eats one or two jump kicks and dies with its counter at 0.25-0.5. The
+    // adaptation has never once had time to bite, which is why 90% of the
+    // policy's attacks are the legcannon.
+    //
+    // Seeding it at spawn makes it a curriculum axis instead of dead code: the
+    // population starts wary rather than learning within a fight it does not
+    // survive. Avoidance is a sideways roll plus a disengage to range 3-4, not
+    // a guaranteed miss, so the axis degrades smoothly -- the jump kick becomes
+    // a timed, aimed move rather than a free one.
+    got_hit_by_leg_cannon_count = 8;  // TEMP HARDCODE -- mechanism test
     path_find_type = _pft_nav_mesh;
     float awake_time = 0.0f;
 }

@@ -87,6 +87,7 @@ class OvergrowthEnv:
         self,
         repo_root: str | Path,
         level: str = "arenas/oval_arena.xml",
+        jumpkick_wariness: int = 0,
         shm_name: str = "/ogrl_env0",
         controller_id: int = 0,
         seed: int = 1,
@@ -124,6 +125,7 @@ class OvergrowthEnv:
         self.equivalence_trace_path = Path(equivalence_trace_path) if equivalence_trace_path else None
         self.repo_root = Path(repo_root)
         self.level = level
+        self.jumpkick_wariness = int(jumpkick_wariness)
         self.shm_name = shm_name
         self.controller_id = controller_id
         self.seed = seed
@@ -195,6 +197,10 @@ class OvergrowthEnv:
         # switched on only by the analysis tools that parse it.
         if self.log_attacks:
             config_lines.append("rl_log_attacks: true")
+        if self.jumpkick_wariness:
+            # Seeds every bot's got_hit_by_leg_cannon_count at spawn -- see
+            # enemycontrol.as's ResetMind. 0 is stock behaviour.
+            config_lines.append(f"rl_jumpkick_wariness: {int(self.jumpkick_wariness)}")
         config_str = "\n".join(config_lines)
         command = [str(self.binary_path), "--write-dir", str(self._write_dir), "--working-dir", str(self.repo_root)]
         if self.render:

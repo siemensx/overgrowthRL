@@ -149,6 +149,8 @@ def parse_args():
     p.add_argument("--seed-base", type=int, default=DEFAULT_SEED_BASE,
                     help=f"held-out seed range, never used for training (default {DEFAULT_SEED_BASE})")
     p.add_argument("--difficulty-bands", default="0.1,0.3,0.5,0.7,0.9,1.0")
+    p.add_argument("--jumpkick-wariness", type=int, default=0,
+               help="seed every bot's got_hit_by_leg_cannon_count at spawn; each point adds 0.25 to its jump-kick avoidance probability (enemycontrol.as ResetMind). 0 = stock.")
     p.add_argument("--opponents", type=int, default=1)
     p.add_argument("--weapons", type=float, default=0.0)
     p.add_argument("--species", type=int, default=0)
@@ -210,6 +212,7 @@ def main():
     env = OvergrowthEnv(
         repo_root=args.repo_root, level=args.level, shm_name=shm_name, seed=args.seed_base,
         layout=layout, frame_stack=args.frame_stack, act_period=args.act_period, render=False,
+        jumpkick_wariness=args.jumpkick_wariness,
     )
     bands = [float(x) for x in args.difficulty_bands.split(",") if x.strip()]
     result = {"global_step": global_step, "checkpoint": args.checkpoint, "episodes": args.episodes,

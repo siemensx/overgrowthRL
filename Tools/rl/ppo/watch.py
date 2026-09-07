@@ -95,6 +95,8 @@ def parse_args():
     # Watching the agent fight ONE opponent tells you almost nothing about how it
     # handles being outnumbered, which is the whole multi-opponent curriculum.
     # These reach the level script through the same set_rl_* path training uses.
+    p.add_argument("--jumpkick-wariness", type=int, default=0,
+               help="seed every bot's got_hit_by_leg_cannon_count at spawn; each point adds 0.25 to its jump-kick avoidance probability (enemycontrol.as ResetMind). 0 = stock.")
     p.add_argument("--opponents", type=int, default=1, help="1, 2 or 3 -- needs a level with the generator's game_type 3/4 spawn groups (the t_train_* arenas have them; oval falls back to 1v1)")
     p.add_argument("--difficulty", type=float, default=None, help="0..1 opponent skill; default: whatever the level script picks")
     args = p.parse_args()
@@ -168,6 +170,7 @@ def main():
     env = OvergrowthEnv(
         repo_root=args.repo_root, level=args.level, shm_name=args.shm_name, seed=args.seed,
         layout=layout, frame_stack=args.frame_stack, render=True, time_scale_mult=1, act_period=args.act_period,
+        jumpkick_wariness=args.jumpkick_wariness,
     )
     try:
         for episode in range(args.episodes):
