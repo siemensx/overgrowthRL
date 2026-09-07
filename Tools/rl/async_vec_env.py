@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
+import os
 import threading
 import time
 from pathlib import Path
@@ -84,10 +85,27 @@ class AsyncVecOvergrowthEnv:
         # worker rather than per episode means every PPO batch mixes maps, while
         # no episode ever pays a level reload it would not otherwise pay. Levels
         # are dealt round-robin so the mix is deterministic given n_envs.
+        #
+        # The deal STARTS at an offset derived from base_seed rather than always
+        # at levels[0]. With a fixed start, n_envs < len(levels) always drops the
+        # same tail of the list -- and the supervisor sheds workers under memory
+        # pressure, so run21_mac spent every low-memory stretch training on maps
+        # 101/102 alone while 103-106 were never loaded. The offset makes the
+        # maps that get dropped differ per launch, so coverage evens out across
+        # restarts instead of concentrating on the head of the list.
+        #
+        # The offset comes from OGRL_LEVEL_OFFSET, not from base_seed: base_seed
+        # is fixed per RUN, so deriving it there would still give every launch of
+        # run21 the same deal. The supervisor sets it from its launch counter.
+        # Unset means 0, i.e. exactly the previous behaviour.
         levels = [level] if isinstance(level, str) else list(level)
         if not levels:
             raise ValueError("at least one level is required")
-        self.levels = [levels[i % len(levels)] for i in range(n_envs)]
+        try:
+            offset = int(os.environ.get("OGRL_LEVEL_OFFSET", "0")) % len(levels)
+        except ValueError:
+            offset = 0
+        self.levels = [levels[(offset + i) % len(levels)] for i in range(n_envs)]
         self.level = self.levels[0]
         self.layout = layout
         self.frame_stack = max(1, frame_stack)

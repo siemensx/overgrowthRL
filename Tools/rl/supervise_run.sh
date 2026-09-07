@@ -26,6 +26,7 @@ K_STANDBY=${2:-2}
 # shedding workers buys little -- but two envs still makes progress where a
 # paused run makes none.
 MIN_ENVS=2
+LAUNCH_N=0
 CKPT=Tools/rl/ppo/checkpoints/${RUN_ID}.pt
 LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,arenas/t_train_104.xml,arenas/t_train_105.xml,arenas/t_train_106.xml
 
@@ -47,8 +48,14 @@ launch() {
   done
   [ "$waited" -gt 0 ] && say "space returned after ${waited}s (free=$(free_gb)GB)"
   local shm="/ogrl_s$(date +%H%M%S)"     # fresh every time -- see (3) above
+  # Rotate which map each worker is dealt. Workers are dealt levels round-robin
+  # from the head of LEVELS, so any launch with fewer workers than maps -- every
+  # launch after memory-pressure shedding -- trains only on the head of the list.
+  # run21_mac spent its low-memory stretches on 101/102 alone. Advancing the
+  # offset each launch makes the dropped maps differ instead.
+  LAUNCH_N=$((LAUNCH_N + 1))
   pkill -f "MacOS/Overgrowth" 2>/dev/null; sleep 3
-  nohup env OGRL_ALLOW_NENVS_CHANGE=1 caffeinate -i python3 -u Tools/rl/ppo/train_vec.py \
+  nohup env OGRL_ALLOW_NENVS_CHANGE=1 OGRL_LEVEL_OFFSET="$LAUNCH_N" caffeinate -i python3 -u Tools/rl/ppo/train_vec.py \
     --repo-root "$PWD" --levels "$LEVELS" --shm-prefix "$shm" \
     --n-envs "$N_ENVS" --k-standby "$K_STANDBY" --seed 21 \
     --total-timesteps 400000000 --n-steps 256 --n-epochs 1 --minibatch-size 128 \

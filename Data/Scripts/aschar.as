@@ -9525,6 +9525,20 @@ bool LoadAppropriateAttack(bool mirrored, AttackScriptGetter& temp_attack_getter
                 attack_path = "Data/Attacks/rearknifecapture.xml";
             }
         }
+
+        // Throws bypass ChooseAttack/GetAttackPath entirely, so the RLATK line
+        // emitted there never sees them -- every throw was invisible to
+        // move_stats.py, which is how "it learned the over-shoulder throw" and
+        // "89% of its attacks are legcannon" could both be true reports of the
+        // same policy. Same field order as GetAttackPath's line so move_stats
+        // needs no change.
+        if(g_rl_log_attacks) {
+            Log(info, "RLATK id=" + this_mo.GetID() + " kind=throw" +
+                      " path=" + attack_path +
+                      " ragdoll=" + (ragdoll_enemy ? 1 : 0) +
+                      " ducking=" + (ducking_enemy ? 1 : 0) +
+                      " dist=" + attack_distance);
+        }
     } else {
         // Choose what class of strike to use
         ChooseAttack(front, curr_attack);
