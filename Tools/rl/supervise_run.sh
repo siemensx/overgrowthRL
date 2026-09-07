@@ -47,6 +47,12 @@ CKPT=Tools/rl/ppo/checkpoints/${RUN_ID}.pt
 # script: the first validation pass scored them while they were still on
 # the stock multi-round arena script, which revives the fallen, so its
 # "0.0% timeouts" result said nothing about whether a fight resolves.
+# Overnight 2026-09-07: 101/102/104 only. All three predate tonight's work --
+# original geometry, RL level script, 0.2-2.5% timeouts across 1/2/3 opponents.
+# 103/105/106 render correctly again now that the DrawScene iterator bug is
+# fixed, but they have brand-new geometry and no completed timeout gate on the
+# RL script, and the morning comparison against the 960-episode baseline is
+# worth more than the extra map diversity. Add them back deliberately, awake.
 LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml
 
 say() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$LOG"; }
