@@ -3065,9 +3065,35 @@ void Engine::DrawScene(DrawingViewport drawing_viewport, Engine::PostEffectsType
         ActiveCameras::Get()->tint = vec3(1.0);
         ActiveCameras::Get()->vignette_tint = vec3(1.0);
         float predraw_time = game_timer.GetRenderTime();
-        for (auto obj : scenegraph_->objects_) {
-            if (!obj->parent) {
-                obj->PreDrawCamera(predraw_time);
+        // Index loop, not a range-for, and re-read size() every iteration.
+        //
+        // PreDrawCamera spawns grass and other detail objects, which pushes
+        // into scenegraph_->objects_ while we are iterating it. A push_back
+        // that reallocates leaves the range-for's begin/end pointers dangling,
+        // and the next `obj->parent` reads through garbage -- observed as
+        // Engine::DrawScene -> EXC_BAD_ACCESS, KERN_INVALID_ADDRESS at 0xd8,
+        // 0xd8 being Object::parent's offset. Disassembly of the faulting
+        // instruction is `ldr x8, [x0, #0xd8]` with x0 == 0.
+        //
+        // Whether the spawn reallocates depends on the vector's size against
+        // its capacity, which is why this presented as levels crashing in
+        // BANDS of EnvObject count (13-18 recorded in OGRL-20260905-067;
+        // ~38-45 measured 2026-09-07) rather than above some threshold, and
+        // why headless training -- which never calls Draw() -- never saw it.
+        //
+        // SendMessageToAllObjects and SendScriptMessageToAllObjects in
+        // scenegraph.cpp already carry this exact fix, with a comment saying
+        // the iterator form "would crash ... after passing way past the end.
+        // Likely because objects_ is sometimes changed as a result of this
+        // call." Same cause, same remedy.
+        for (unsigned int i = 0; i < scenegraph_->objects_.size(); i++) {
+            Object* obj = scenegraph_->objects_[i];
+            if (obj) {
+                if (!obj->parent) {
+                    obj->PreDrawCamera(predraw_time);
+                }
+            } else {
+                LOGE << "One of the objects is NULL in the PreDrawCamera pass." << std::endl;
             }
         }
     }
