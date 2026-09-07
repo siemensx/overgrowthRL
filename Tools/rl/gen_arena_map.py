@@ -93,11 +93,17 @@ class Level:
              0,              0,         0,          1]
         rs = " ".join(f'r{i}="{v:.6g}"' for i, v in enumerate(r))
         if record:
+            # Scale by the MODEL's half-extent, not by 1.0: soft_cube is
+            # 2x2x2 (half 1.0) but soft_square_pillar is 0.6 wide (half 0.3),
+            # so recording a pillar as a 2*sx square over-states its footprint
+            # more than threefold and makes dense placement impossible.
+            m = 0.3 if type_file == PILLAR else 1.0
+            hx, hz = abs(sx) * m, abs(sz) * m
             # Yaw-rotated props get their bounding square, which is
             # conservative -- fine, we are only ever avoiding overlap.
-            e = max(abs(sx), abs(sz)) if yaw else None
-            self.rects.append((cx - (e or sx), cz - (e or sz),
-                               cx + (e or sx), cz + (e or sz), kind))
+            e = max(hx, hz) if yaw else None
+            self.rects.append((cx - (e or hx), cz - (e or hz),
+                               cx + (e or hx), cz + (e or hz), kind))
         self.objects.append(
             f'        <EnvObject t0="{cx:.4f}" t1="{cy:.4f}" t2="{cz:.4f}" '
             f's0="{sx:.4f}" s1="{sy:.4f}" s2="{sz:.4f}" {rs} '
@@ -451,6 +457,12 @@ def main() -> int:
                          "(default 0.12). Measured on the run21 corpus: maps at 13-17%% "
                          "coverage time out on 0.2-2.5%% of episodes; the generator used "
                          "to have no cap at all and produced maps at 108%% and 217%%.")
+    ap.add_argument("--pad-to", type=int, default=0,
+                    help="pad with mirrored cover pillars until the level has EXACTLY this "
+                         "many EnvObjects. The instrument for mapping the renderer crash "
+                         "band: it varies object count while holding the layout fixed, "
+                         "which is the only way a negative result means anything (see the "
+                         "two failed bisects in research-log 2026-09-05).")
     ap.add_argument("--minimal", action="store_true",
                     help="bare floor plus perimeter walls only -- no divider, cover or "
                          "ledges. The floor of achievable geometry cost, for throughput "
@@ -552,6 +564,30 @@ def main() -> int:
             print(f"  cover: {placed}/{args.clutter} props placed "
                   f"({100 * cover_area / (2 * half) ** 2:.1f}% of floor, cap "
                   f"{100 * args.max_cover:.0f}%)")
+        if args.pad_to:
+            # Pad on concentric rings with real angular spacing, testing each
+            # candidate. The first version stepped the angle by i/6*pi and
+            # reused positions, so the pillars grew into each other and
+            # validate_level refused every padded level -- which then made a
+            # crash-band sweep test files that were never written.
+            n_extra, ring, guard = 0, 0, 0
+            while lvl.env_object_count() < args.pad_to and guard < 4000:
+                guard += 1
+                r = half * (0.90 - 0.07 * ring)
+                if r < half * 0.25:
+                    break
+                per_ring = max(6, int(2 * math.pi * r / 2.2))
+                k = n_extra % per_ring
+                if k == 0 and n_extra:
+                    ring += 1
+                    continue
+                a = 2 * math.pi * k / per_ring
+                px, pz = cx + math.cos(a) * r, cz + math.sin(a) * r
+                rect = _rect(px, pz, 0.9, 0.9)
+                n_extra += 1
+                if _hits(rect, keep_out) or _hits(rect, lvl.rects):
+                    continue
+                lvl.box(px, floor_top + 1.35, pz, 1.0, 1.35, 1.0, 0.0, PILLAR)
         padded = pad_out_of_crash_band(lvl, args.half_size, floor_top, cx, cz)
         if padded:
             print(f"  padded +{padded} pillars to clear the renderer crash band "
