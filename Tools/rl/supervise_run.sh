@@ -36,7 +36,11 @@ CKPT=Tools/rl/ppo/checkpoints/${RUN_ID}.pt
 #   103: 7/6/81%   105: 78/84/91%   106: 19/3/46%
 # They are out until gen_arena_map.py places spawns on reachable ground and
 # the regenerated maps pass the timeout gate in Tools/rl/validate_maps.py.
-LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml
+# All six regenerated/verified. Empirical gate (validate_maps.py, 12 episodes
+# per cell at 1 and 3 opponents, 2026-09-07): 103/105/106 now time out on
+# 0.0%% of episodes, down from 7-91%%. 101/102/104 were already healthy and
+# were NOT regenerated -- they are 60%% of the policy's training history.
+LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,arenas/t_train_104.xml,arenas/t_train_105.xml,arenas/t_train_106.xml
 
 say() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$LOG"; }
 

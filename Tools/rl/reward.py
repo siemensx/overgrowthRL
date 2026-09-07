@@ -56,6 +56,9 @@ class RewardConfig:
     opponent_knockout_bonus: float = 8.0  # per opponent transitioning awake -> unconscious/dead this step
     time_cost: float = 0.01              # flat per-step cost, discourages stalling
     ragdoll_penalty: float = 0.05        # per-step cost while limp (ragdolled) and still awake -- see compute()
+    ground_finish_weight: float = 0.0    # extra credit for damage landed on an opponent that was
+                                          # already DOWN (ragdolled or on the ground) the step
+                                          # before. OFF by default -- see compute()
     closing_distance_weight: float = 0.0  # curriculum-gated; 0.0 = off (set by Curriculum, not by hand normally)
     closing_distance_cap: float = 30.0    # meters; beyond this, no closing-distance shaping (avoid rewarding
                                            # "walk toward a target 200m away" as if it were meaningful progress)
@@ -197,6 +200,7 @@ class RewardComputer:
         prev_entities = {e["id"]: e for e in layout.all_entities(prev_values) if e["valid"]}
         curr_entities = {e["id"]: e for e in layout.all_entities(values) if e["valid"]}
         damage_dealt = 0.0
+        ground_finish = 0.0
         knockout_bonus = 0.0
         friendly_fire = 0.0
         hostile_kos = 0
@@ -229,11 +233,31 @@ class RewardComputer:
                     friendly_fire += 1.0  # a full ally knockout is worse than chip damage, weighted like one below
             else:
                 damage_dealt += health_lost
+                # Was this opponent already DOWN when we hit it? entity state is
+                # a 5-way one-hot (movement, ground, attack, hit_reaction,
+                # ragdoll); indices 1 and 4 are the two down states.
+                if health_lost > 0.0 and (prev["state"][4] > 0.5 or prev["state"][1] > 0.5):
+                    ground_finish += health_lost
                 if target_knocked_out_this_step:
                     knockout_bonus += cfg.opponent_knockout_bonus
                     hostile_kos += 1
         components["damage_dealt"] = cfg.damage_dealt_weight * damage_dealt
         components["opponent_knockout"] = knockout_bonus
+        # Finishing a downed opponent instead of waiting for it to stand up.
+        #
+        # The engine makes this a hard move to find: playercontrol.as picks the
+        # attack CLASS from movement state alone (airborne -> "air", crouching ->
+        # "low", grounded+moving -> "moving", grounded+still -> "stationary"), and
+        # aschar.as only maps "moving" + a ragdolled target to the ground
+        # finisher. So the finisher needs grounded AND not crouching AND moving
+        # AND the target already down -- a conjunction the policy has no gradient
+        # towards while its airborne opening already wins ~87% of fights. Measured
+        # on run21: 6-7% of its attacks land on a downed opponent.
+        #
+        # Weight 0.0 by default. This is a change to the OBJECTIVE, not a bug
+        # fix, so it goes in as a switch to be A/B'd on its own rather than
+        # stacked on top of the map repair.
+        components["ground_finish"] = cfg.ground_finish_weight * ground_finish
 
         # Knockout EVENT count this step, for the win condition (OGRL-20260905).
         # Counting events and accumulating them over the episode is robust to

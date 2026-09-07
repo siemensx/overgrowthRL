@@ -22,7 +22,13 @@ HOST=${2:-trainer-lan}
 CKPT=Tools/rl/ppo/checkpoints/run21_mac.pt
 BANDS=0.2,0.5,0.8,1.0
 EPISODES=40
-LEVELS="arenas/t_train_103.xml arenas/t_held_202.xml"
+# One SEEN map and one HELD-OUT map, both with a clean bill of health from
+# validate_maps.py. Deliberately not t_held_201/202: regenerated tonight and
+# showing 2/12 timeouts, which n=12 cannot separate from noise -- they get a
+# bigger validation pass before they are allowed to carry an eval number.
+# The old pairing (t_train_103 + t_held_202) is exactly what made the cadence
+# numbers uninterpretable: both maps spawned the opponent on a raised deck.
+LEVELS="arenas/t_train_101.xml arenas/t_held_203.xml"
 OPPONENTS="1 2 3"
 
 STEP=$(python3 -c "import torch;print(torch.load('$CKPT',map_location='cpu',weights_only=False)['global_step'])")
