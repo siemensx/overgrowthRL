@@ -62,18 +62,42 @@ class Level:
         self.cam = cam
         self.objects: list[str] = []
         self.spawns: list[str] = []
+        # XZ footprint of every prop, so later placement can avoid overlap.
+        # The floor slab passes record=False -- it covers the whole court.
+        self.rects: list[tuple] = []
         self._id = 100
 
     def next_id(self) -> int:
         self._id += 1
         return self._id
 
-    def box(self, cx, cy, cz, sx, sy, sz, yaw=0.0, type_file=CUBE):
-        """Axis-aligned (or Y-rotated) box. sx/sy/sz are HALF extents in world
-        units, so a 40x2x40 slab is sx=20, sy=1, sz=20."""
-        c, s = math.cos(yaw), math.sin(yaw)
-        r = [c, 0, s, 0,  0, 1, 0, 0,  -s, 0, c, 0,  0, 0, 0, 1]
+    def box(self, cx, cy, cz, sx, sy, sz, yaw=0.0, type_file=CUBE, pitch=0.0,
+            record=True, kind="prop"):
+        """Axis-aligned (or rotated) box. sx/sy/sz are HALF extents in world
+        units, so a 40x2x40 slab is sx=20, sy=1, sz=20.
+
+        `pitch` tilts the box about the Z axis, which is what makes a RAMP a
+        ramp. Without it every "ramp" this generator emitted was an
+        axis-aligned block running from the floor to the deck height -- i.e. a
+        solid wall. t_train_105 had three of them, up to 10.5 units tall,
+        standing in the middle of the court. The renderer showed them as walls
+        because they were walls.
+        """
+        cy_, sy_ = math.cos(yaw), math.sin(yaw)
+        cp, sp = math.cos(pitch), math.sin(pitch)
+        # R = Ryaw . Rpitch(about Z), row-major, matching the stock levels'
+        # convention (rows are the transformed basis vectors).
+        r = [cy_ * cp,      -cy_ * sp,  sy_,        0,
+             sp,             cp,        0,          0,
+             -sy_ * cp,      sy_ * sp,  cy_,        0,
+             0,              0,         0,          1]
         rs = " ".join(f'r{i}="{v:.6g}"' for i, v in enumerate(r))
+        if record:
+            # Yaw-rotated props get their bounding square, which is
+            # conservative -- fine, we are only ever avoiding overlap.
+            e = max(abs(sx), abs(sz)) if yaw else None
+            self.rects.append((cx - (e or sx), cz - (e or sz),
+                               cx + (e or sx), cz + (e or sz), kind))
         self.objects.append(
             f'        <EnvObject t0="{cx:.4f}" t1="{cy:.4f}" t2="{cz:.4f}" '
             f's0="{sx:.4f}" s1="{sy:.4f}" s2="{sz:.4f}" {rs} '
@@ -167,7 +191,8 @@ class Level:
 
 
 def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
-                cx: float, cz: float, randomize: bool, minimal: bool = False) -> None:
+                cx: float, cz: float, randomize: bool, minimal: bool = False,
+                keep_out: "list | None" = None) -> None:
     """One enclosed court: floor slab, perimeter walls, a divider with
     chokepoints, cover pillars and raised ledges.
 
@@ -192,13 +217,13 @@ def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
         n_pillars, ledge, ledge_h = 3, True, 2.0
 
     # Floor slab, top surface at floor_top, 2 units thick.
-    lvl.box(cx, floor_top - 1.0, cz, half, 1.0, half)
+    lvl.box(cx, floor_top - 1.0, cz, half, 1.0, half, record=False)
 
     # Perimeter walls. In sky mode these are the only thing between a
     # character and a very long fall, so they are not optional.
     for dx, dz, sx, sz in ((0, half, half, 0.5), (0, -half, half, 0.5),
                            (half, 0, 0.5, half), (-half, 0, 0.5, half)):
-        lvl.box(cx + dx, floor_top + wall_h / 2, cz + dz, sx, wall_h / 2, sz)
+        lvl.box(cx + dx, floor_top + wall_h / 2, cz + dz, sx, wall_h / 2, sz, kind="wall")
 
     # Divider across the middle, leaving n_gaps openings.
     n_seg = n_gaps + 1
@@ -207,24 +232,78 @@ def build_court(lvl: Level, rng: random.Random, half: float, floor_top: float,
         left = cx - half
         for i in range(n_seg):
             c = left + seg / 2
-            lvl.box(c, floor_top + div_h / 2, cz, seg / 2, div_h / 2, 0.6)
+            lvl.box(c, floor_top + div_h / 2, cz, seg / 2, div_h / 2, 0.6, kind="wall")
             left += seg + gap_w
 
-    # Cover pillars, mirrored so neither side is advantaged.
+    # Cover pillars, mirrored so neither side is advantaged. Each candidate is
+    # tested against the spawn keep-outs and against what is already placed:
+    # unconditional placement is how pillars ended up standing on spawn points
+    # and inside each other.
+    ko = list(keep_out or [])
     for sign in (-1, 1):
         for i in range(n_pillars):
-            a = (i + 0.5) / n_pillars * math.pi
-            px = math.cos(a) * half * rng.uniform(0.35, 0.75)
-            pz = sign * half * rng.uniform(0.35, 0.78)
-            lvl.pillar(cx + px, floor_top + 1.5, cz + pz, 3.0)
+            for _ in range(24):
+                a = (i + 0.5) / n_pillars * math.pi
+                px = math.cos(a) * half * rng.uniform(0.35, 0.75)
+                pz = sign * half * rng.uniform(0.35, 0.78)
+                r = _rect(cx + px, cz + pz, 2.0, 2.0)
+                if not _hits(r, ko) and not _hits(r, lvl.rects):
+                    lvl.pillar(cx + px, floor_top + 1.5, cz + pz, 3.0)
+                    break
 
     if ledge:
         for sign in (-1, 1):
             lx, lz = cx + sign * half * 0.62, cz + sign * half * 0.62
-            lvl.box(lx, floor_top + ledge_h / 2, lz, 4.0, ledge_h / 2, 4.0)
+            r = _rect(lx, lz, 6.0, 6.0)
+            if _hits(r, ko) or _hits(r, lvl.rects):
+                continue
+            lvl.box(lx, floor_top + ledge_h / 2, lz, 4.0, ledge_h / 2, 4.0, kind="deck")
             lvl.box(lx - sign * 4.8, floor_top + ledge_h / 4, lz,
-                    1.0, ledge_h / 4, 3.0)
+                    1.0, ledge_h / 4, 3.0, kind="deck")
 
+
+
+# --- placement bookkeeping -------------------------------------------------
+# Every prop the generator drops is recorded as an XZ footprint so nothing is
+# ever placed inside anything else. The old generator drew clutter positions
+# from a uniform and never tested them, which is why t_train_105/106 rendered
+# as interpenetrating cubes (z-fighting on every shared face) and why 259
+# "small" boxes could still add up to a wall.
+
+def _rect(cx, cz, sx, sz, margin=0.0):
+    return (cx - sx - margin, cz - sz - margin, cx + sx + margin, cz + sz + margin)
+
+
+def _hits(r, taken):
+    return any(not (r[2] <= t[0] or t[2] <= r[0] or r[3] <= t[1] or t[3] <= r[1])
+               for t in taken)
+
+
+def _corridor(ax, az, bx, bz, width):
+    """Footprints covering the straight line between two spawns, so cover is
+    never dropped into the lane the fighters use to find each other."""
+    n = max(2, int(math.hypot(bx - ax, bz - az) / (width * 0.5)))
+    return [_rect(ax + (bx - ax) * i / n, az + (bz - az) * i / n, width, width)
+            for i in range(n + 1)]
+
+
+def build_platform(lvl, cx, cz, px, pz, deck, height, floor_top, yaw=0.0):
+    """A raised deck with a REAL inclined ramp up to it.
+
+    The ramp is a thin slab pitched so its low edge meets the floor and its
+    high edge meets the deck. The previous implementation emitted an
+    unrotated box of half-height `height/2`, which is a solid wall from the
+    floor to the deck -- traversable by nothing.
+    """
+    lvl.box(px, floor_top + height, pz, deck, 0.4, deck, kind="deck")   # deck
+    run = height * 2.6                                            # ~21 degrees
+    pitch = math.atan2(height, run)
+    mx = px - (deck + run / 2) * math.cos(yaw)
+    mz = pz - (deck + run / 2) * math.sin(yaw)
+    lvl.box(mx, floor_top + height / 2, mz,
+            math.hypot(run, height) / 2, 0.25, deck * 0.75, yaw, pitch=pitch,
+            kind="deck")
+    return [_rect(px, pz, deck, deck), _rect(mx, mz, run / 2 + 1, deck)]
 
 
 # Engine renderer bug, isolated 2026-09-05 by bisecting a crashing generated map
@@ -257,6 +336,70 @@ def pad_out_of_crash_band(lvl: "Level", half: float, floor_top: float,
         if added > 40:
             raise RuntimeError("could not pad out of the renderer crash band")
     return added
+
+
+
+
+def validate_level(lvl, half, arenas):
+    """Refuse to emit a level a fight cannot happen in.
+
+    Every check here corresponds to a defect that shipped and cost training
+    time, not to a hypothetical:
+
+      * spawn height gap -- t_train_105 spawned the opponent 11.3u up on a
+        deck; 78-91% of its episodes timed out.
+      * spawn overlapping geometry -- the 1v3 flank spawns on 103/106 landed
+        inside the old ramp blocks; 1v3 timed out on 81% and 46% of episodes.
+      * prop overlap -- 105/106 interpenetrated on hundreds of faces, which is
+        the z-fighting visible in a render.
+      * cover fraction -- unbounded before; 105 reached 217% of floor area.
+    """
+    errs, lines = [], []
+    sp = []
+    for blk in lvl.spawns:
+        import re as _re
+        t = _re.search(r't0="([-\d.]+)" t1="([-\d.]+)" t2="([-\d.]+)"', blk)
+        g = _re.search(r'name="game_type" type="string" val="(\d+)"', blk)
+        if t and g:
+            sp.append((int(g.group(1)), float(t.group(1)), float(t.group(2)), float(t.group(3))))
+
+    for gt in sorted({x[0] for x in sp}):
+        ys = [x[2] for x in sp if x[0] == gt]
+        gap = max(ys) - min(ys)
+        lines.append(f"game_type {gt}: {len(ys)} spawns, height gap {gap:.2f}u")
+        if gap > 1.0:
+            errs.append(f"game_type {gt} spawns differ in height by {gap:.2f}u "
+                        f"(max 1.0) -- fighters start on different storeys")
+
+    for gt, x, y, z in sp:
+        r = _rect(x, z, 1.2, 1.2)
+        if _hits(r, lvl.rects):
+            errs.append(f"game_type {gt} spawn at ({x:.1f},{z:.1f}) is inside geometry")
+
+    # Walls meet at the court corners and a ramp meets its own deck: those are
+    # the design, not interpenetration. Free-standing props must never overlap.
+    overlaps = 0
+    rs = [r for r in lvl.rects if r[4] == "prop"]
+    for i in range(len(rs)):
+        for j in range(i + 1, len(rs)):
+            a, b = rs[i], rs[j]
+            if not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]):
+                overlaps += 1
+    lines.append(f"prop pairs overlapping in XZ: {overlaps}")
+    if overlaps:
+        errs.append(f"{overlaps} overlapping prop pairs -- geometry interpenetrates")
+
+    floor = (2 * half) ** 2 * arenas
+    covered = sum((r[2] - r[0]) * (r[3] - r[1]) for r in lvl.rects if r[4] != "wall")
+    lines.append(f"floor covered by props: {100 * covered / floor:.1f}%")
+    if covered / floor > 0.35:
+        errs.append(f"props cover {100 * covered / floor:.0f}% of the floor (max 35%)")
+
+    n = lvl.env_object_count()
+    if CRASH_BAND[0] <= n <= CRASH_BAND[1]:
+        errs.append(f"{n} EnvObjects is inside the renderer crash band {CRASH_BAND}")
+    lines.append(f"EnvObjects: {n}")
+    return {"errors": errs, "lines": lines}
 
 
 def main() -> int:
@@ -292,6 +435,11 @@ def main() -> int:
                          "observation casts 16 geometry rays, which hit something on "
                          "every step in a cluttered level and mostly nothing in a bare "
                          "one -- a distribution the sparse-trained policy never saw.")
+    ap.add_argument("--max-cover", type=float, default=0.12,
+                    help="hard cap on the fraction of floor area covered by cover props "
+                         "(default 0.12). Measured on the run21 corpus: maps at 13-17%% "
+                         "coverage time out on 0.2-2.5%% of episodes; the generator used "
+                         "to have no cap at all and produced maps at 108%% and 217%%.")
     ap.add_argument("--minimal", action="store_true",
                     help="bare floor plus perimeter walls only -- no divider, cover or "
                          "ledges. The floor of achievable geometry cost, for throughput "
@@ -324,51 +472,79 @@ def main() -> int:
     for i in range(args.arenas):
         cx = (i % cols) * args.arena_spacing - span / 2
         cz = (i // cols) * args.arena_spacing - span / 2
+        half = args.half_size
+        d = half * 0.6
+        # Lanes the fighters must have, computed BEFORE any geometry is placed:
+        # every spawn this level will emit, plus the corridor between the 1v1
+        # pair. Nothing -- court furniture included -- may be placed in these.
+        keep_out = [_rect(cx, cz - d, 3.5, 3.5), _rect(cx, cz + d, 3.5, 3.5)]
+        for ox, oz in ((-4, -d), (4, -d), (-4, d), (4, d),
+                       (-d, -d), (d, -d), (d, d), (-d, d)):
+            keep_out.append(_rect(cx + ox, cz + oz, 3.0, 3.0))
+        for ang in (-0.7, -0.45, 0.0, 0.45, 0.7):
+            keep_out.append(_rect(cx + math.sin(ang) * d, cz + math.cos(ang) * d, 3.5, 3.5))
+        keep_out += _corridor(cx, cz - d, cx, cz + d, 2.5)
         build_court(lvl, rng, args.half_size, floor_top, cx, cz,
-                    args.randomize, args.minimal)
-        # Tiers: raised platforms plus ramps, so the arena has real verticality
-        # and the two fighters can start on different levels.
-        tier_h = 0.0
-        if args.tiers > 0:
-            half = args.half_size
-            for t in range(args.tiers):
-                th = (t + 1) * 3.5
-                side = -1 if t % 2 else 1
-                px = cx + side * half * 0.55
-                pz = cz + (half * 0.45 if t % 2 else -half * 0.45)
-                pw = half * 0.32
-                lvl.box(px, floor_top + th, pz, pw, 0.4, pw)          # platform deck
-                # ramp from the floor up to it, so the level is actually traversable
-                rl_len = th * 2.2
-                lvl.box(px - side * (pw + rl_len / 2), floor_top + th / 2,
-                        pz, rl_len / 2, th / 2, pw * 0.5)
-                tier_h = th
-        for _ in range(args.clutter):
-            bx = rng.uniform(-args.half_size * 0.92, args.half_size * 0.92)
-            bz = rng.uniform(-args.half_size * 0.92, args.half_size * 0.92)
-            h = rng.uniform(0.15, 0.7)
-            lvl.box(cx + bx, floor_top + h, cz + bz,
-                    rng.uniform(0.2, 0.8), h, rng.uniform(0.2, 0.8),
-                    rng.uniform(0, math.pi))
+                    args.randomize, args.minimal, keep_out=keep_out)
+
+        # Raised ground. One deck per tier, sized as a FEATURE (<=12u square,
+        # <=3.5u tall) rather than a roof: t_train_105's three decks were 28.8u
+        # square in a 90u court, covering the arena at three heights. Each gets
+        # a real inclined ramp. Both fighters still spawn on the floor -- see
+        # the spawn block below.
+        for t in range(args.tiers):
+            th = 2.0 + t * 1.5
+            if th > 3.5:
+                break
+            deck = min(6.0, half * 0.18)
+            ang = (t + 0.5) / max(1, args.tiers) * math.pi
+            px, pz = cx + math.cos(ang) * half * 0.62, cz + math.sin(ang) * half * 0.62
+            r = _rect(px, pz, deck + 2, deck + 2)
+            if _hits(r, keep_out) or _hits(r, lvl.rects):
+                continue
+            keep_out += build_platform(lvl, cx, cz, px, pz, deck, th, floor_top,
+                                       yaw=ang + math.pi)
+
+        # Cover. Rejection-sampled with a real gap between props, capped by
+        # coverage rather than by count, and never inside a keep-out. The old
+        # loop drew uniform positions and tested nothing, so props grew into
+        # each other (the z-fighting you can see in 105/106) and a "clutter"
+        # count of 264 produced a maze rather than cover.
+        placed, tries, cover_area = 0, 0, 0.0
+        budget = args.max_cover * (2 * half) ** 2
+        while placed < args.clutter and tries < args.clutter * 60:
+            tries += 1
+            bx = cx + rng.uniform(-half * 0.88, half * 0.88)
+            bz = cz + rng.uniform(-half * 0.88, half * 0.88)
+            w, dp = rng.uniform(0.6, 1.6), rng.uniform(0.6, 1.6)
+            h = rng.uniform(0.25, 0.75)                 # vaultable, always
+            r = _rect(bx, bz, w, dp, margin=1.6)        # 1.6u of walking room
+            if _hits(r, keep_out) or _hits(r, lvl.rects):
+                continue
+            if cover_area + 4 * w * dp > budget:
+                break
+            lvl.box(bx, floor_top + h, bz, w, h, dp, rng.uniform(0, math.pi))
+            cover_area += 4 * w * dp
+            placed += 1
+        if args.clutter:
+            print(f"  cover: {placed}/{args.clutter} props placed "
+                  f"({100 * cover_area / (2 * half) ** 2:.1f}% of floor, cap "
+                  f"{100 * args.max_cover:.0f}%)")
         padded = pad_out_of_crash_band(lvl, args.half_size, floor_top, cx, cz)
         if padded:
             print(f"  padded +{padded} pillars to clear the renderer crash band "
                   f"{CRASH_BAND[0]}-{CRASH_BAND[1]} EnvObjects")
-        d = args.half_size * 0.6
-        # Vertical spawn separation: put one fighter on the top tier.
-        spawn_y_offset = (tier_h + 0.8) if args.tiers > 0 else 0.0
-        # game_type 0 is the pair the RL fork uses; 1 and 2 are emitted for the
-        # first arena only so normal play still works without spawning a crowd.
-        if spawn_y_offset > 0.0:
-            half = args.half_size
-            side = -1 if (args.tiers - 1) % 2 else 1
-            tx = cx + side * half * 0.55
-            tz = cz + (half * 0.45 if (args.tiers - 1) % 2 else -half * 0.45)
-            lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)                       # ground floor
-            lvl.spawn(tx, sy + spawn_y_offset, tz, math.pi, 0, 1)      # top tier
-        else:
-            lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)
-            lvl.spawn(cx, sy, cz + d, math.pi, 0, 1)
+        # BOTH fighters spawn on the floor, always.
+        #
+        # The previous rule put the opponent on the top deck whenever --tiers
+        # was used, to give the agent an opponent on another storey. Measured
+        # over 60k episodes it gave the agent no opponent at all: the scripted
+        # AI does not come down, so the episode runs to the cap. Timeout rate
+        # by spawn height gap -- 0.0u: 0.2-2.5%; 7.8u: 6-81%; 11.3u: 78-91%.
+        # Verticality has to be ground the fighters can choose to use, not a
+        # wall between them.
+        lvl.spawn(cx, sy, cz - d, 0.0, 0, 0)
+        lvl.spawn(cx, sy, cz + d, math.pi, 0, 1)
         if i == 0:
             for ox, oz, team in [(-4, -d, 0), (4, -d, 0), (-4, d, 1), (4, d, 1)]:
                 lvl.spawn(cx + ox, sy, cz + oz, 0.0 if oz < 0 else math.pi, 1, team)
@@ -391,6 +567,14 @@ def main() -> int:
             lvl.spawn(cx, sy, cz - d, 0.0, 4, 0)
             for ang in (-0.7, 0.0, 0.7):
                 lvl.spawn(cx + math.sin(ang) * d, sy, cz + math.cos(ang) * d, math.pi, 4, 1)
+
+    report = validate_level(lvl, args.half_size, args.arenas)
+    for line in report["lines"]:
+        print(f"  {line}")
+    if report["errors"]:
+        for e in report["errors"]:
+            print(f"  REFUSING: {e}")
+        return 2
 
     xml = lvl.render()
     out = data / "Levels" / "arenas" / f"{args.name}.xml"

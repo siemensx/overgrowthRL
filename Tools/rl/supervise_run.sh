@@ -28,7 +28,15 @@ K_STANDBY=${2:-2}
 MIN_ENVS=2
 LAUNCH_N=0
 CKPT=Tools/rl/ppo/checkpoints/${RUN_ID}.pt
-LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,arenas/t_train_104.xml,arenas/t_train_105.xml,arenas/t_train_106.xml
+# Only maps whose fighters can actually reach each other. 103/105/106 were
+# generated with --tiers, which spawns the OPPONENT on a raised deck 7.8-11.3
+# units above the agent and drops the 1v3 hostiles inside the ramp geometry.
+# Measured timeout rates, last 60k episodes:
+#   101/102/104 (no tiers): 0.2-2.5% across 1/2/3 opponents
+#   103: 7/6/81%   105: 78/84/91%   106: 19/3/46%
+# They are out until gen_arena_map.py places spawns on reachable ground and
+# the regenerated maps pass the timeout gate in Tools/rl/validate_maps.py.
+LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml
 
 say() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$LOG"; }
 
