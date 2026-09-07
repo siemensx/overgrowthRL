@@ -24,7 +24,9 @@ for lv in "$@"; do
   waited=0
   while kill -0 $pid 2>/dev/null && [ $waited -lt $timeout_s ]; do sleep 2; waited=$((waited+2)); done
   kill -9 $pid 2>/dev/null
-  pkill -9 -f "MacOS/Overgrowth" 2>/dev/null; sleep 2
+  # Only this probe's engine -- see crash_band_sweep.sh; a bare
+  # "MacOS/Overgrowth" pattern takes the training workers with it.
+  pkill -9 -f "write-dir.*env-ogrl_w" 2>/dev/null; sleep 2
   if grep -qiE "segmentation|EXC_BAD_ACCESS|Assertion|GenerateStacktrace|Traceback" "$log"; then
     echo "  CRASH  $(basename "$lv")   -- see $log"; fail=1
   elif grep -q "episode 0:" "$log"; then

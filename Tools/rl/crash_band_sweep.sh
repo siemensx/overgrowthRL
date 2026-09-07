@@ -23,6 +23,9 @@ probe() {
   local xml="$ARENAS/$(basename "$lv")"
   [ -f "$xml" ] || { echo "MISSING FILE"; return; }
   local n; n=$(grep -c "<EnvObject " "$xml")
+  # probe() is called in a command substitution, i.e. a SUBSHELL, so a variable
+  # assigned here never reaches the caller. Report the count through the result
+  # string instead of through a global.
   local before; before=$(ls "$DR"/Overgrowth* 2>/dev/null | wc -l | tr -d ' ')
   local log=/tmp/cb_$(basename "$lv" .xml).log
   ( python3 -u Tools/rl/ppo/watch.py --checkpoint "$CKPT" --level "$lv" \
@@ -30,18 +33,23 @@ probe() {
       --episodes 1 --max-episode-real-seconds 20 > "$log" 2>&1 ) &
   local p=$! w=0
   while kill -0 $p 2>/dev/null && [ $w -lt $BUDGET ]; do sleep 3; w=$((w+3)); done
-  kill -9 $p 2>/dev/null; pkill -9 -f "MacOS/Overgrowth" 2>/dev/null; sleep 2
+  kill -9 $p 2>/dev/null
+  # Kill ONLY this probe's engine. `pkill -f MacOS/Overgrowth` matches every
+  # engine on the machine, training workers included -- running this sweep
+  # beside a live run killed all six workers after every probe and left
+  # train_vec blocked on dead children for 13 minutes. watch.py names its
+  # write-dir env-ogrl_w<pid>, so match that.
+  pkill -9 -f "write-dir.*env-ogrl_w" 2>/dev/null; sleep 2
   local after; after=$(ls "$DR"/Overgrowth* 2>/dev/null | wc -l | tr -d ' ')
-  LAST_N=$n
-  if [ "$after" -gt "$before" ]; then echo "SEGFAULT"
-  elif grep -q "episode 0:" "$log"; then echo "ok"
-  else echo "hung"; fi
+  if [ "$after" -gt "$before" ]; then echo "$n SEGFAULT"
+  elif grep -q "episode 0:" "$log"; then echo "$n ok"
+  else echo "$n hung"; fi
 }
 
 CONTROL=${CONTROL:-arenas/t_train_101.xml}
 printf 'control %s ... ' "$(basename "$CONTROL")"
-res=$(probe "$CONTROL"); echo "$res (objects=$LAST_N)"
-if [ "$res" != "ok" ]; then
+res=$(probe "$CONTROL"); echo "$res"
+if [ "${res##* }" != "ok" ]; then
   echo "ABORT: the control did not pass, so no negative result here means anything."
   exit 1
 fi
@@ -49,5 +57,5 @@ fi
 printf '\n%-16s %-9s %s\n' level objects result
 for lv in "$@"; do
   r=$(probe "$lv")
-  printf '%-16s %-9s %s\n' "$(basename "$lv" .xml)" "$LAST_N" "$r"
+  printf '%-16s %-9s %s\n' "$(basename "$lv" .xml)" "${r%% *}" "${r##* }"
 done
