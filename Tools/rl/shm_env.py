@@ -202,11 +202,12 @@ _HEADER_FIELD_TYPES = [
     ("reset_requested", "I"), ("reset_seed", "I"), ("reset_ok", "I"),
     ("reset_mode", "I"), ("reset_difficulty", "f"), ("reset_opponents", "I"),
     ("reset_weapons", "f"), ("reset_species", "I"),
+    ("reset_armed_count", "I"), ("reset_weapon_type", "I"), ("reset_throw_aggression", "f"),
 ]
 _HEADER_FIELDS = [name for name, _ in _HEADER_FIELD_TYPES]
 _HEADER_FORMAT = "<" + "".join(t for _, t in _HEADER_FIELD_TYPES)
 _HEADER_SIZE = struct.calcsize(_HEADER_FORMAT)
-assert _HEADER_SIZE == 64, _HEADER_SIZE
+assert _HEADER_SIZE == 76, _HEADER_SIZE  # 64 + armed_count/weapon_type/throw_aggression
 _MAGIC = 0x4C524730
 
 # reset_mode values (rl_shm_transport.cpp's ShmHeader.reset_mode)
@@ -403,6 +404,9 @@ class ShmEnv:
         opponents: int = 1,
         weapons: float = 0.0,
         species: int = 0,
+        armed_count: int = 0,
+        weapon_type: int = 0,
+        throw_aggression: float = 1.0,
     ) -> Observation:
         """Resets the training scenario in-process and returns the fresh
         post-reset observation, matching Gym's env.reset() -> obs contract.
@@ -431,6 +435,9 @@ class ShmEnv:
         header["reset_opponents"] = int(opponents)
         header["reset_weapons"] = float(weapons)
         header["reset_species"] = int(species)
+        header["reset_armed_count"] = int(armed_count)
+        header["reset_weapon_type"] = int(weapon_type)
+        header["reset_throw_aggression"] = float(throw_aggression)
         self._mm[:_HEADER_SIZE] = _pack_header(header)
         _sem_post(self._action_sem)
 

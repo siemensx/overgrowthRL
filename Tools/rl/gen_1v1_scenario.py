@@ -58,7 +58,12 @@ def transform_script(stock: str) -> str:
 float rl_difficulty = -1.0f;
 int rl_opponents = 1;      // 1..3 requested; SetUpLevel currently only honors 1 -- see its comment
 float rl_weapons = 0.0f;   // probability the round is armed, 0..1; 0 matches the original unarmed-1v1 default exactly
-int rl_species = 0;        // 0 = random guard/raider (legacy default), 1 = guard, 2 = raider, 3 = civ, 4 = random all three
+int rl_species = 0;        // 0 = random guard/raider (legacy default), 1 = guard, 2 = raider, 3 = civ, 4 = random all three,
+                            // 5 = cat (the only species whose AI throws knives at an AIRBORNE target -- see
+                            // enemycontrol.as WantsToThrowItem), 6 = random of guard/raider/cat
+int rl_armed_count = 0;    // how many HOSTILES carry a weapon. The agent is never armed by this axis.
+int rl_weapon_type = 0;    // 0 = random, 1 = knife, 2 = big_sword, 3 = sword, 4 = spear
+float rl_throw_aggression = 1.0f;  // multiplier on WantsToThrowItem's hardcoded 0.04 throttle
 ''', 1)
 
     # 2. ReceiveMessage: new set_rl_* tokens, right before set_all_hostile.
@@ -79,6 +84,18 @@ int rl_species = 0;        // 0 = random guard/raider (legacy default), 1 = guar
     } else if(token == "set_rl_species"){
         token_iter.FindNextToken(msg);
         rl_species = atoi(token_iter.GetToken(msg));
+    } else if(token == "set_rl_armed_count"){
+        token_iter.FindNextToken(msg);
+        rl_armed_count = atoi(token_iter.GetToken(msg));
+    } else if(token == "set_rl_weapon_type"){
+        token_iter.FindNextToken(msg);
+        rl_weapon_type = atoi(token_iter.GetToken(msg));
+    } else if(token == "set_rl_throw_aggression"){
+        token_iter.FindNextToken(msg);
+        rl_throw_aggression = max(atof(token_iter.GetToken(msg)), 0.0f);
+        // enemycontrol.as reads this at character-spawn time via
+        // GetConfigValueFloat, so it must be set BEFORE SetUpLevel spawns them.
+        SetConfigValueFloat("rl_throw_aggression", rl_throw_aggression);
     } else if(token == "set_all_hostile"){''', 1)
 
     # 3. CreateEnemy: species widened from a fixed rand()%2+1 to an rl_species axis.
@@ -96,8 +113,18 @@ int rl_species = 0;        // 0 = random guard/raider (legacy default), 1 = guar
     else if(rl_species == 2){ rnd = 2; }
     else if(rl_species == 3){ rnd = 0; }
     else if(rl_species == 4){ rnd = rand()%3; }
+    else if(rl_species == 5){ rnd = 3; }
+    else if(rl_species == 6){ rnd = (rand()%3 == 0) ? 3 : (rand()%2+1); }
     else { rnd = rand()%2+1; }
-    switch(rnd){''', 1)
+    switch(rnd){
+    case 3:
+        // Cat. The ONLY species whose controller throws a knife at an airborne
+        // target -- WantsToThrowItem() gates on species == _cat and checks
+        // target_in_air explicitly. There is no char_cat level path, so the
+        // actor object is named directly.
+        fur_channel = 1;
+        actor_path = "Data/Objects/characters/cats/cat_actor.xml";
+        break;''', 1)
 
     # 4. SetUpLevel: force game_type_int=0 (the OGRL-20260816-023 1v1 fork
     #    itself) + a comment on why rl_opponents isn't wired to it yet.
@@ -157,8 +184,57 @@ int rl_species = 0;        // 0 = random guard/raider (legacy default), 1 = guar
     // original OGRL-20260816-023 unarmed-1v1 behavior exactly when the
     // harness hasn't set it) is the probability this round is armed, rolled
     // fresh on every SetUpLevel call.
-    bool use_weapons = (rl_weapons > 0.0f) && (RangedRandomFloat(0.0f, 1.0f) < rl_weapons);
+    bool use_weapons = (rl_armed_count > 0)
+                       || ((rl_weapons > 0.0f) && (RangedRandomFloat(0.0f, 1.0f) < rl_weapons));
     if(use_weapons){''', 1)
+
+    # 6b. Arm HOSTILES ONLY, and only rl_armed_count of them.
+    #
+    # The stock loop hands the rolled weapon to EVERY character, the agent
+    # included, which is the opposite of what the Stage B curriculum needs: the
+    # point is an unarmed agent facing a partly-armed group, ramping 1-of-2 ->
+    # 2-of-2 -> 1-of-3 -> 2-of-3 -> 3-of-3. Team 0 is the agent (see
+    # gen_arena_map.py's game_type 3/4 spawn shape), so team is the filter.
+    #
+    # rl_weapon_type picks the type instead of rand()%4 so a stage can rotate
+    # types deliberately; 0 keeps the random roll.
+    anchor6b = ('        int num_chars = GetNumCharacters();\n'
+                '        for(int i=0; i<num_chars; ++i){\n'
+                '            MovementObject@ char_obj = ReadCharacter(i);\n'
+                '            Object@ obj = ReadObjectFromID(char_obj.GetID());\n'
+                '            Object@ item_obj = SpawnObjectAtSpawnPoint(obj,weap_str);')
+    if anchor6b not in out:
+        raise RuntimeError("anchor 6b (weapon attach loop) not found -- stock script changed shape")
+    out = out.replace(anchor6b, '''        int armed_so_far = 0;
+        int num_chars = GetNumCharacters();
+        for(int i=0; i<num_chars; ++i){
+            MovementObject@ char_obj = ReadCharacter(i);
+            Object@ obj = ReadObjectFromID(char_obj.GetID());
+            if(rl_armed_count > 0){
+                // Stage B: arm only hostiles, and only this many of them.
+                ScriptParams@ tparams = obj.GetScriptParams();
+                int team_i = tparams.HasParam("Teams") ? atoi(tparams.GetString("Teams")) : 0;
+                if(team_i == 0){ continue; }              // the agent stays unarmed
+                if(armed_so_far >= rl_armed_count){ continue; }
+                armed_so_far++;
+            }
+            Object@ item_obj = SpawnObjectAtSpawnPoint(obj,weap_str);''', 1)
+
+    # 6c. Weapon TYPE selectable, so a stage can rotate types deliberately
+    # instead of taking rand()%4. rl_weapon_type 0 keeps the random roll.
+    anchor6c = ("        string weap_str;\n"
+                "        int rnd = rand()%4;\n"
+                "        if(knife_test){\n"
+                "            rnd = 0;\n"
+                "        }")
+    if anchor6c not in out:
+        raise RuntimeError("anchor 6c (weapon type roll) not found -- stock script changed shape")
+    out = out.replace(anchor6c, """        string weap_str;
+        int rnd = rand()%4;
+        if(knife_test){
+            rnd = 0;
+        }
+        if(rl_weapon_type >= 1 && rl_weapon_type <= 4){ rnd = rl_weapon_type - 1; }""", 1)
 
     # M. Opponent-count curriculum (OGRL-20260905-070). RESTORED into the
     # generator on 2026-09-06: this wiring and the player_id fix below had only

@@ -88,6 +88,7 @@ class OvergrowthEnv:
         repo_root: str | Path,
         level: str = "arenas/oval_arena.xml",
         jumpkick_wariness: int = 0,
+        throw_aggression_launch: float = 1.0,
         shm_name: str = "/ogrl_env0",
         controller_id: int = 0,
         seed: int = 1,
@@ -126,6 +127,7 @@ class OvergrowthEnv:
         self.repo_root = Path(repo_root)
         self.level = level
         self.jumpkick_wariness = int(jumpkick_wariness)
+        self.throw_aggression_launch = float(throw_aggression_launch)
         self.shm_name = shm_name
         self.controller_id = controller_id
         self.seed = seed
@@ -201,6 +203,12 @@ class OvergrowthEnv:
             # Seeds every bot's got_hit_by_leg_cannon_count at spawn -- see
             # enemycontrol.as's ResetMind. 0 is stock behaviour.
             config_lines.append(f"rl_jumpkick_wariness: {int(self.jumpkick_wariness)}")
+        if self.throw_aggression_launch != 1.0:
+            # Also passed at LAUNCH, not only per-episode via the level script's
+            # SetConfigValueFloat: enemycontrol reads it in a global initialiser
+            # at character-spawn time, and the launch config is the path already
+            # verified to reach GetConfigValue* (the wariness A/B).
+            config_lines.append(f"rl_throw_aggression: {self.throw_aggression_launch}")
         config_str = "\n".join(config_lines)
         command = [str(self.binary_path), "--write-dir", str(self._write_dir), "--working-dir", str(self.repo_root)]
         if self.render:
@@ -319,6 +327,9 @@ class OvergrowthEnv:
         opponents: int = 1,
         weapons: float = 0.0,
         species: int = 0,
+        armed_count: int = 0,
+        weapon_type: int = 0,
+        throw_aggression: float = 1.0,
     ) -> np.ndarray:
         """soft/difficulty/opponents/weapons/species are the OGRL-20260817-028
         Sec1/Sec3.1 curriculum hook -- forwarded straight to ShmEnv.reset(),
@@ -337,7 +348,8 @@ class OvergrowthEnv:
         else:
             reset_seed = seed if seed is not None else self.seed
             reset_start = time.monotonic()
-            obs = self._shm.reset(reset_seed, soft=soft, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species)
+            obs = self._shm.reset(reset_seed, soft=soft, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
+                              armed_count=armed_count, weapon_type=weapon_type, throw_aggression=throw_aggression)
             self.last_reset_seconds = time.monotonic() - reset_start  # OGRL-20260817-028 Sec8.2: perf.reset_seconds source
             self.episode_count += 1
             self.last_reset_seed = reset_seed

@@ -49,6 +49,36 @@ Situation situation;
 // 90% of the policy's attacks ended up being the legcannon.
 int got_hit_by_leg_cannon_count = GetConfigValueInt("rl_jumpkick_wariness");
 
+// Multiplier on WantsToThrowItem's hardcoded 0.04 knife-throw throttle. A cat
+// with a knife is the only scripted behaviour in this game that explicitly
+// answers a jump kick -- it checks target_in_air and throws -- but at stock
+// settings the gate is
+//     RangedRandomFloat(0,1) > p_aggression * game_difficulty * 0.04
+// so even a maximally aggressive cat at difficulty 1.0 throws on 4% of ticks.
+// 0 from an unset config is coerced to 1.0 so absent config = stock behaviour.
+float g_rl_throw_aggression = GetConfigValueFloat("rl_throw_aggression") > 0.0f
+                            ? GetConfigValueFloat("rl_throw_aggression") : 1.0f;
+
+// One dial for every Dynamic AI Aggression behaviour ported below. > 1.0
+// enables them; 1.0 (what the harness sends by default) is bit-identical to
+// stock, which matters because these edits land while a run is live.
+bool g_rl_daa = g_rl_throw_aggression > 1.0f;
+
+// DAA state. Stock enemycontrol has none of these.
+bool can_jump_kick = true;          // one AI jump-kick per approach, re-armed on landing
+bool target_has_weapon = false;
+
+// --- DAA group coordination ---
+// Stock bots all rush at once and get in each other's way, which is a large
+// part of why 2 opponents measured EASIER than 1 for our policy (live rates
+// 0.905 vs 0.889). DAA has them take turns: a bot whose target is already
+// engaged with someone else holds back, and its patience decays, so the group
+// arrives in waves instead of a clump. A bot that has been waiting is also the
+// one DAA lets jump-kick (see WantsToJump).
+bool group_fighting_wait = false;   // this bot is holding back during a group fight
+int group_wait = 0;                 // how long it has been holding back
+int group_wait_aggression = 2;      // fewer waits before it commits, the more it has waited
+
 float startle_time;
 float suspicious_amount;
 float sound_time;
@@ -2291,9 +2321,47 @@ bool WantsToThrowItem() {
     int primary_weapon_id = weapon_slots[primary_weapon_slot];
     int secondary_weapon_id = weapon_slots[secondary_weapon_slot];
 
+    // --- Dynamic AI Aggression throw rules (workshop mod 1241215386) ---
+    //
+    // Ported because the stock rules cannot punish a jump kick. Stock gates
+    // every throw on species == _cat AND a 0.04 probability, so a guard or
+    // raider -- the only species run21 has ever trained against -- never
+    // throws anything at all.
+    //
+    // DAA's first rule is the one that matters: when the bot's sub_goal is
+    // _avoid_jump_kick, which is set whenever the TARGET IS AIRBORNE (see the
+    // "!target.GetBoolVar(\"on_ground\")" branch that assigns it), any armed
+    // bot within 5.5 units throws, deterministically. No species gate, no
+    // probability gate. That is a direct, guaranteed answer to an agent whose
+    // entire strategy is being in the air.
+    //
+    // Gated on g_rl_throw_aggression > 1.0 so it is a curriculum axis, not a
+    // silent change: 1.0 (the default the harness sends) is exactly stock.
+    if(g_rl_throw_aggression > 1.0f && chase_target_id != -1 &&
+            (primary_weapon_id != -1 || secondary_weapon_id != -1)) {
+        MovementObject@ daa_target = ReadCharacterID(chase_target_id);
+        float daa_dist_sq = distance_squared(this_mo.position, daa_target.position);
+
+        // throw at air targets at close range
+        if(sub_goal == _avoid_jump_kick && daa_dist_sq <= 5.5f) {
+            return true;
+        }
+
+        // rabbits throw a knife when hurt and at range
+        if(species == _rabbit && temp_health <= 0.45f && daa_dist_sq >= 5.5f * 5.5f &&
+                primary_weapon_id != -1 && ReadItemID(primary_weapon_id).GetLabel() == "knife") {
+            return true;
+        }
+
+        // throw while airborne themselves
+        if(species == _rabbit && !on_ground && daa_dist_sq <= 6.0f) {
+            return true;
+        }
+    }
+
     if(species == _cat && chase_target_id != -1 &&
             (secondary_weapon_id != -1 || (primary_weapon_id != -1 && ReadItemID(primary_weapon_id).GetLabel() == "knife"))) {
-        if(RangedRandomFloat(0.0f, 1.0f) > p_aggression * game_difficulty * 0.04) {
+        if(RangedRandomFloat(0.0f, 1.0f) > p_aggression * game_difficulty * 0.04 * g_rl_throw_aggression) {
             return false;
         }
 
@@ -2358,9 +2426,35 @@ bool TargetedJump() {
 bool WantsToJump() {
     if(species == _wolf) {
         return false;
-    } else {
-        return has_jump_target || trying_to_climb == _jump;
     }
+
+    // --- Dynamic AI Aggression: bots jump-kick too (workshop 1241215386) ---
+    //
+    // Stock AI never leaves the ground to attack, which is the deeper reason
+    // the agent's aerial game is unopposed: it is the only fighter in the
+    // arena using the air at all. DAA lets a rabbit commit to a jump attack
+    // when it is hurt, or when it has been waiting its turn in a group fight.
+    //
+    // Deliberately kept off against an ARMED target (target_has_weapon) and
+    // when startled, exactly as DAA has it -- jumping into a spear is how an
+    // aggression mod turns into a suicide mod.
+    if(g_rl_daa && species == _rabbit && on_ground && can_jump_kick && !startled &&
+            !target_has_weapon && goal == _attack && chase_target_id != -1) {
+        MovementObject@ jk_target = ReadCharacterID(chase_target_id);
+        if(distance_squared(this_mo.position, jk_target.position) < 12.0f &&
+                (temp_health <= 0.6f || group_fighting_wait)) {
+            sub_goal = _rush_and_attack;
+            target_attack_range = 0.5f;
+            ai_attacking = true;
+            can_jump_kick = false;
+            return true;
+        }
+    }
+    if(on_ground && !can_jump_kick) {
+        can_jump_kick = true;   // re-arm once it lands
+    }
+
+    return has_jump_target || trying_to_climb == _jump;
 }
 
 bool WantsToAttack() {

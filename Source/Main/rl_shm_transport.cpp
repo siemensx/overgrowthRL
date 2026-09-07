@@ -56,7 +56,15 @@ struct ShmHeader {
     uint32_t reset_opponents;      // 1..3 requested hostile count, forwarded as "set_rl_opponents <i>" (only 1 honored by
                                     // arena_level_1v1_unarmed.as today -- see its SetUpLevel comment on why 2/3 aren't wired yet)
     float reset_weapons;           // 0..1, probability the round is armed, forwarded as "set_rl_weapons <f>"
-    uint32_t reset_species;        // 0..4, forwarded as "set_rl_species <i>" -- see arena_level_1v1_unarmed.as's CreateEnemy for the mapping
+    uint32_t reset_species;        // 0..6, forwarded as "set_rl_species <i>" -- see arena_level_1v1_unarmed.as's CreateEnemy for the mapping
+    // --- Stage B/C axes (2026-09-07). The scripted AI's only counter to the
+    // jump kick that actually works is a CAT with a knife: WantsToThrowItem()
+    // in enemycontrol.as explicitly prioritises an airborne target
+    // ("if(target_in_air && distance_sq > 2.5*2.5) return true"), but only for
+    // species == _cat, and only through a hardcoded 0.04 throttle.
+    uint32_t reset_armed_count;    // how many HOSTILES carry a weapon (0..3). The agent stays unarmed.
+    uint32_t reset_weapon_type;    // 0 = random, 1 = knife, 2 = big_sword, 3 = sword, 4 = spear
+    float reset_throw_aggression;  // multiplier on that 0.04 throttle; 1.0 = stock, 0 is coerced to 1.0
 };
 #pragma pack(pop)
 
@@ -119,6 +127,13 @@ void SendScenarioMessages(Engine* engine, const ShmHeader* header) {
     std::snprintf(buf, sizeof(buf), "set_rl_weapons %g", static_cast<double>(header->reset_weapons));
     scenegraph->level->Message(buf);
     std::snprintf(buf, sizeof(buf), "set_rl_species %u", header->reset_species);
+    scenegraph->level->Message(buf);
+    std::snprintf(buf, sizeof(buf), "set_rl_armed_count %u", header->reset_armed_count);
+    scenegraph->level->Message(buf);
+    std::snprintf(buf, sizeof(buf), "set_rl_weapon_type %u", header->reset_weapon_type);
+    scenegraph->level->Message(buf);
+    std::snprintf(buf, sizeof(buf), "set_rl_throw_aggression %g",
+                  static_cast<double>(header->reset_throw_aggression));
     scenegraph->level->Message(buf);
 }
 

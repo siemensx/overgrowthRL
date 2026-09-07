@@ -10588,6 +10588,18 @@ void HandleThrow() {
             SetTargetID(best_target);
             going_to_throw_item = true;
             going_to_throw_item_time = time;
+
+            // Ground truth for the Stage B/C curriculum: did a bot actually
+            // commit to a weapon throw, and was the target AIRBORNE when it
+            // did? WantsToThrowItem claims to prioritise airborne targets
+            // (species == _cat only) but that had never been observed.
+            if(g_rl_log_attacks) {
+                MovementObject@ tgt = ReadCharacterID(best_target);
+                Log(info, "RLTHROW id=" + this_mo.GetID() + " species=" + species +
+                          " target=" + best_target +
+                          " target_in_air=" + (tgt.GetBoolVar("on_ground") ? 0 : 1) +
+                          " dist=" + distance(this_mo.position, tgt.position));
+            }
         }
     }
 
