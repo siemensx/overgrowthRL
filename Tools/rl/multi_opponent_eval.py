@@ -59,8 +59,13 @@ def main() -> int:
     ap.add_argument("--out", default="")
     a = ap.parse_args()
 
-    tmp = Path(a.repo_root) / ".rl_mo_eval"
+    # Per-invocation, because two of these ran against the same trainer on
+    # 2026-09-07 (a comprehensive snapshot and the cadence loop) and wrote
+    # their per-cell JSONs to identical paths, silently overwriting each
+    # other's results.
+    tmp = Path(a.repo_root) / ".rl_mo_eval" / f"{os.getpid()}_{int(time.time())}"
     tmp.mkdir(parents=True, exist_ok=True)
+    print(f"per-cell results: {tmp}")
     grid, i = {}, 0
     print(f"checkpoint: {a.checkpoint}")
     header = f"{'level':<26}" + "".join(f"{('%dv' % n):>9}" for n in a.opponents)

@@ -62,7 +62,7 @@ Set-Location C:\ogrl\overgrowthRL
 $py = (Get-Command python -ErrorAction SilentlyContinue); if (-not $py) { $py = (Get-Command py) }
 $env:PYTHONUNBUFFERED="1"
 & $py.Source Tools\rl\multi_opponent_eval.py --checkpoint Tools\rl\ppo\checkpoints\cadence.pt `
-  --levels arenas/t_train_103.xml arenas/t_held_202.xml --opponents 1 2 3 `
+  --levels arenas/t_train_101.xml arenas/t_held_203.xml --opponents 1 2 3 `
   --episodes 30 --difficulty-bands 0.4,0.8 --max-episode-steps 1200 `
   --out C:\ogrl\cadence.json 2>&1
 PS
