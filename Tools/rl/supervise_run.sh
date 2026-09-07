@@ -40,7 +40,14 @@ CKPT=Tools/rl/ppo/checkpoints/${RUN_ID}.pt
 # per cell at 1 and 3 opponents, 2026-09-07): 103/105/106 now time out on
 # 0.0%% of episodes, down from 7-91%%. 101/102/104 were already healthy and
 # were NOT regenerated -- they are 60%% of the policy's training history.
-LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,arenas/t_train_104.xml,arenas/t_train_105.xml,arenas/t_train_106.xml
+# 101/102/104 ONLY. These three were never regenerated -- they are the
+# original geometry on the RL level script, and 60% of the policy's
+# training history. 103/105/106 were regenerated twice tonight and are
+# out until they pass validate_maps.py AND render_smoke.sh on the RL
+# script: the first validation pass scored them while they were still on
+# the stock multi-round arena script, which revives the fallen, so its
+# "0.0% timeouts" result said nothing about whether a fight resolves.
+LEVELS=arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml
 
 say() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$LOG"; }
 

@@ -395,6 +395,17 @@ def validate_level(lvl, half, arenas):
     if covered / floor > 0.35:
         errs.append(f"props cover {100 * covered / floor:.0f}% of the floor (max 35%)")
 
+    # The level script decides whether this is an RL episode or a stock
+    # multi-round match. Getting it wrong is invisible in the geometry and
+    # obvious the moment a human watches: the fallen are revived and the new
+    # round's combatants fight each other instead of the agent.
+    RL_SCRIPTS = ("Data/Scripts/arena_level_1v1_unarmed.as",
+                  "Data/Scripts/arena_level_human_duel.as")
+    lines.append(f"script: {lvl.script}")
+    if lvl.script not in RL_SCRIPTS:
+        errs.append(f"level script is {lvl.script}, not one of {RL_SCRIPTS} -- "
+                    f"the stock arena script revives the fallen and runs rounds")
+
     n = lvl.env_object_count()
     if CRASH_BAND[0] <= n <= CRASH_BAND[1]:
         errs.append(f"{n} EnvObjects is inside the renderer crash band {CRASH_BAND}")
@@ -450,7 +461,18 @@ def main() -> int:
                          "script spawns both sides as player actors and owns the "
                          "camera; its paths sidecar is keyed to the script name, "
                          "so no per-level path file is needed.")
-    ap.add_argument("--script", default="Data/Scripts/arena_level.as")
+    # DEFAULT IS THE RL SCRIPT, not the stock one.
+    #
+    # arena_level.as is Overgrowth's own multi-round arena: it revives the
+    # fallen and starts a new round with fresh combatants, who then fight each
+    # other rather than the agent. arena_level_1v1_unarmed.as is the RL fork --
+    # it pins game_type, owns the episode protocol and never revives.
+    #
+    # Regenerating t_train_103/105/106 on 2026-09-07 without passing --script
+    # silently moved three training maps onto the stock script. Every map this
+    # generator has ever produced for training uses the RL one, so that is what
+    # it defaults to; pass --script explicitly to make a normally playable map.
+    ap.add_argument("--script", default="Data/Scripts/arena_level_1v1_unarmed.as")
     ap.add_argument("--overgrowth-data", default=None)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
