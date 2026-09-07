@@ -22,7 +22,7 @@ import gen_arena_map as G
 
 def _court(half=20.0, seed=3, randomize=True, minimal=False, keep_out=None):
     import random
-    lvl = G.Level("t_test", "Data/Scripts/arena_level.as")
+    lvl = G.Level("t_test", "Data/Scripts/arena_level_1v1_unarmed.as")
     G.build_court(lvl, random.Random(seed), half, 500.0, 0.0, 0.0,
                   randomize, minimal, keep_out=keep_out)
     return lvl
@@ -95,6 +95,15 @@ class TestValidateLevel(unittest.TestCase):
         rep = G.validate_level(self._minimal_level_with_spawns(), 20.0, 1)
         self.assertEqual(rep["errors"], [], rep["errors"])
 
+    def test_stock_arena_script_is_rejected(self):
+        """gen_arena_map's --script defaulted to the stock multi-round arena,
+        which revives the fallen and starts a new round whose combatants fight
+        each other rather than the agent. Invisible in the geometry."""
+        lvl = self._minimal_level_with_spawns()
+        lvl.script = "Data/Scripts/arena_level.as"
+        rep = G.validate_level(lvl, 20.0, 1)
+        self.assertTrue(any("level script" in e for e in rep["errors"]), rep)
+
     def test_spawn_height_gap_is_rejected(self):
         """The defect itself: --tiers put the opponent on the top deck, and
         the scripted AI does not come down. Timeout rate tracked the gap --
@@ -122,7 +131,7 @@ class TestValidateLevel(unittest.TestCase):
         self.assertTrue(any("cover" in e or "overlapping" in e for e in rep["errors"]), rep)
 
     def test_renderer_crash_band_is_rejected(self):
-        lvl = G.Level("t", "s")
+        lvl = G.Level("t", "Data/Scripts/arena_level_1v1_unarmed.as")
         for i in range(15):                             # inside CRASH_BAND 13-18
             lvl.box(i * 4.0, 501.0, 0.0, 1.0, 1.0, 1.0)
         lvl.spawn(0.0, 500.7, -12.0, 0.0, 0, 0)
