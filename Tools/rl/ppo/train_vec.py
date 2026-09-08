@@ -839,14 +839,16 @@ def main():
             # Stage transitions carry the global step: the sampler decides
             # them but has no idea what step it is, so without this the ladder
             # would advance invisibly mid-run.
-            for _old, _new, _label in sampler.take_armed_advances():
+            for _old, _new, _label, _wr, _n in sampler.take_armed_advances():
                 logger.log_event(
                     "curriculum_advance",
                     f"{run_id} armed stage {_old} -> {_new} ({_label})",
-                    body=f"at global_step={global_step:,}  d_max={sampler.d_max:.2f}  "
+                    body=f"at global_step={global_step:,}  armed win rate {_wr:.3f} "
+                         f"over {_n} armed episodes (gate {sampler.armed_gate_win_rate:.2f} "
+                         f"x{sampler.armed_gate_min_samples})  d_max={sampler.d_max:.2f}  "
                          f"opponents_max={sampler.opponents_max}")
-                print(f"[curriculum] global_step={global_step:,}  "
-                      f"ARMED STAGE {_old} -> {_new}  {_label}", flush=True)
+                print(f"[curriculum] global_step={global_step:,}  ARMED STAGE {_old} -> {_new}  "
+                      f"{_label}  (won {_wr:.3f} of {_n} armed episodes)", flush=True)
 
             logger.log_update({
                 "t": time.time(), "global_step": global_step, "update": update,

@@ -236,9 +236,14 @@ class ScenarioSampler:
     # (whose controller throws on its own account too). Each row is gated on
     # win rate exactly like difficulty and opponent count.
     armed_stage: int = 0            # index into ARMED_STAGES; advances automatically
-    armed_gate_win_rate: float = 0.60
-    armed_gate_window: int = 400
-    armed_gate_min_samples: int = 150
+    # Sized to be EVIDENCE, not a formality. The first version (150 samples at
+    # 0.60) let the ladder climb four rungs in ten minutes: ~40% of ~690
+    # episodes per 5 min are armed, so 150 armed rounds accrue in about two
+    # minutes, and the window clears on every advance so it simply refilled.
+    # A rung must now cost a real sample at a real standard.
+    armed_gate_win_rate: float = 0.70
+    armed_gate_window: int = 1200
+    armed_gate_min_samples: int = 600
     species_mode: int = 0           # rl_species value: 0 = legacy random guard/raider (Stage A default,
                                      # matches run8/run9's own opponent mix exactly), 4 = random of all 3 (Stage B)
     weapons_prob: float = 0.0       # probability a round is armed (Stage C axis)
@@ -353,7 +358,8 @@ class ScenarioSampler:
                 self._armed_stage = min(len(ARMED_STAGES) - 1, self._armed_stage + 1)
                 self._armed_recent.clear()   # the next stage re-earns its own window
                 self._armed_advance_log.append(
-                    (old, self._armed_stage, ARMED_STAGES[self._armed_stage][0]))
+                    (old, self._armed_stage, ARMED_STAGES[self._armed_stage][0],
+                     sum(window) / len(window), len(window)))
 
     @property
     def armed_stage_index(self) -> int:

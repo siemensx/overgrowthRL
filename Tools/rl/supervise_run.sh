@@ -71,6 +71,22 @@ for pid in $(pgrep -f "ppo/train_vec.py"); do
 done
 pkill -f "MacOS/Overgrowth" 2>/dev/null; sleep 2
 
+# Roll the run logs. metrics.jsonl reached 491MB and episodes.jsonl 237MB on
+# 2026-09-07, filled the disk, and --stop-below-free-gb halted training at
+# 01:34 for two hours. The engine-log janitor never covered these.
+roll_run_logs() {
+  local R=Tools/rl/runs/${RUN_ID}
+  for f in metrics.jsonl episodes.jsonl; do
+    [ -f "$R/$f" ] || continue
+    local mb=$(( $(wc -c < "$R/$f") / 1048576 ))
+    if [ "$mb" -gt 150 ]; then
+      tail -40000 "$R/$f" > "$R/$f.tmp" && mv "$R/$f.tmp" "$R/$f"
+      say "rolled $f (${mb}MB -> $(( $(wc -c < "$R/$f") / 1048576 ))MB)"
+    fi
+  done
+  ls Tools/rl/ppo/checkpoints/archive/*.pt 2>/dev/null | head -n -8 | xargs rm -f 2>/dev/null
+}
+
 free_gb() { df -k /System/Volumes/Data | tail -1 | awk '{printf "%.2f", $4/1048576}'; }
 
 launch() {
@@ -86,6 +102,7 @@ launch() {
     waited=$((waited + 60)); sleep 60
   done
   [ "$waited" -gt 0 ] && say "space returned after ${waited}s (free=$(free_gb)GB)"
+  roll_run_logs
   local shm="/ogrl_s$(date +%H%M%S)"     # fresh every time -- see (3) above
   # Rotate which map each worker is dealt. Workers are dealt levels round-robin
   # from the head of LEVELS, so any launch with fewer workers than maps -- every
