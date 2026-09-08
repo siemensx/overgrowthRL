@@ -394,8 +394,14 @@ class ScenarioSampler:
         """The current rung's scenario, for the deterministic gate eval."""
         with self._lock:
             label, armed, weap, aggr, species, min_opp = ARMED_STAGES[self._armed_stage]
+            # The gate must fight the HARDEST configuration this rung trains
+            # on, not the easiest one it permits. min_opp only decides which
+            # episodes get armed; using it as the gate's opponent count made
+            # stage 0 promote on a 1v1 -- a fight the policy wins ~90% of the
+            # time -- while its actual 1v3 deterministic rate was 0.450.
             return {"label": label, "armed_count": armed, "weapon_type": weap,
-                    "throw_aggression": aggr, "species": species, "opponents": min_opp}
+                    "throw_aggression": aggr, "species": species,
+                    "opponents": max(min_opp, self._opp_max)}
 
     @property
     def armed_stage_index(self) -> int:

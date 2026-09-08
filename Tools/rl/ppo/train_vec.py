@@ -889,7 +889,7 @@ def main():
                 logger.log_event(
                     "curriculum_advance",
                     f"{run_id} armed stage {_old} -> {_new} ({_label})",
-                    body=f"at global_step={global_step:,}  armed win rate {_wr:.3f} "
+                    body=f"at global_step={global_step:,}  DETERMINISTIC win rate {_wr:.3f} "
                          f"over {_n} armed episodes (gate {sampler.armed_gate_win_rate:.2f} "
                          f"x{sampler.armed_gate_min_samples})  d_max={sampler.d_max:.2f}  "
                          f"opponents_max={sampler.opponents_max}")
