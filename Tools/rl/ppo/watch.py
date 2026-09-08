@@ -95,6 +95,18 @@ def parse_args():
     # Watching the agent fight ONE opponent tells you almost nothing about how it
     # handles being outnumbered, which is the whole multi-opponent curriculum.
     # These reach the level script through the same set_rl_* path training uses.
+    p.add_argument("--armed-count", type=int, default=0,
+                   help="how many HOSTILES carry a weapon (0-3). The agent is never armed by this.")
+    p.add_argument("--weapon-type", type=int, default=0,
+                   help="0 random, 1 knife, 2 big_sword, 3 sword, 4 spear")
+    p.add_argument("--throw-aggression", type=float, default=1.0,
+                   help=">1.0 turns on the Dynamic AI Aggression behaviours: armed bots hold their "
+                        "ground instead of rolling away from a jump kick, and throw at an airborne target.")
+    p.add_argument("--species", type=int, default=0,
+                   help="0 guard/raider, 1 guard, 2 raider, 3 civ, 4 random-of-three, 5 cat, 6 random incl. cat")
+    p.add_argument("--stage", type=int, default=-1,
+                   help="replay a curriculum stage by index, overriding the four flags above. "
+                        "See curriculum.ARMED_STAGES / Tools/rl/CURRICULUM.md")
     p.add_argument("--jumpkick-wariness", type=int, default=0,
                help="seed every bot's got_hit_by_leg_cannon_count at spawn; each point adds 0.25 to its jump-kick avoidance probability (enemycontrol.as ResetMind). 0 = stock.")
     p.add_argument("--opponents", type=int, default=1, help="1, 2 or 3 -- needs a level with the generator's game_type 3/4 spawn groups (the t_train_* arenas have them; oval falls back to 1v1)")
@@ -171,10 +183,13 @@ def main():
         repo_root=args.repo_root, level=args.level, shm_name=args.shm_name, seed=args.seed,
         layout=layout, frame_stack=args.frame_stack, render=True, time_scale_mult=1, act_period=args.act_period,
         jumpkick_wariness=args.jumpkick_wariness,
+        throw_aggression_launch=args.throw_aggression,
     )
     try:
         for episode in range(args.episodes):
-            kw = {"opponents": args.opponents}
+            kw = {"opponents": args.opponents, "armed_count": args.armed_count,
+                  "weapon_type": args.weapon_type, "species": args.species,
+                  "throw_aggression": args.throw_aggression}
             if args.difficulty is not None:
                 kw["difficulty"] = args.difficulty
             raw_obs = env.reset(seed=args.seed + episode, **kw)
