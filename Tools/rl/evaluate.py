@@ -76,6 +76,9 @@ def random_action(rng: np.random.Generator) -> np.ndarray:
     return np.concatenate([move, buttons])
 
 
+_ARMED = [0, 0, 1.0]   # armed_count, weapon_type, throw_aggression -- set from args in main()
+
+
 def run_episodes(
     env: OvergrowthEnv, act_fn, episodes: int, seed_base: int, difficulty: float,
     opponents: int, weapons: float, species: int, max_episode_steps: int, obs_normalizer, layout,
@@ -86,7 +89,8 @@ def run_episodes(
     emergence = EmergenceAccumulator()
     for ep in range(episodes):
         seed = seed_base + ep
-        raw_obs = env.reset(seed=seed, soft=False, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species)
+        raw_obs = env.reset(seed=seed, soft=False, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
+                            armed_count=_ARMED[0], weapon_type=_ARMED[1], throw_aggression=_ARMED[2])
         obs = obs_normalizer.normalize(raw_obs, update=False) if obs_normalizer is not None else None
         ep_components = defaultdict(float)
         won = False
@@ -149,6 +153,9 @@ def parse_args():
     p.add_argument("--seed-base", type=int, default=DEFAULT_SEED_BASE,
                     help=f"held-out seed range, never used for training (default {DEFAULT_SEED_BASE})")
     p.add_argument("--difficulty-bands", default="0.1,0.3,0.5,0.7,0.9,1.0")
+    p.add_argument("--armed-count", type=int, default=0)
+    p.add_argument("--weapon-type", type=int, default=0)
+    p.add_argument("--throw-aggression", type=float, default=1.0)
     p.add_argument("--jumpkick-wariness", type=int, default=0,
                help="seed every bot's got_hit_by_leg_cannon_count at spawn; each point adds 0.25 to its jump-kick avoidance probability (enemycontrol.as ResetMind). 0 = stock.")
     p.add_argument("--opponents", type=int, default=1)
@@ -160,6 +167,7 @@ def parse_args():
     p.add_argument("--device", default="cpu", choices=["cpu", "mps"])
     p.add_argument("--out", default=None, help="write the full result JSON here regardless of --run-id")
     args = p.parse_args()
+    _ARMED[0], _ARMED[1], _ARMED[2] = args.armed_count, args.weapon_type, args.throw_aggression
     if args.from_run:
         cfg = load_run_env_config(args.repo_root, args.from_run, runs_root=args.runs_root)
         args.level = args.level if args.level is not None else cfg["level"]
@@ -213,6 +221,7 @@ def main():
         repo_root=args.repo_root, level=args.level, shm_name=shm_name, seed=args.seed_base,
         layout=layout, frame_stack=args.frame_stack, act_period=args.act_period, render=False,
         jumpkick_wariness=args.jumpkick_wariness,
+        throw_aggression_launch=args.throw_aggression,
     )
     bands = [float(x) for x in args.difficulty_bands.split(",") if x.strip()]
     result = {"global_step": global_step, "checkpoint": args.checkpoint, "episodes": args.episodes,

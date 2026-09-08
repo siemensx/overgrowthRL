@@ -268,6 +268,7 @@ class ScenarioSampler:
     _armed_stage: int = field(default=0, repr=False)
     _armed_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)
     _armed_advance_log: list = field(default_factory=list, repr=False)
+    _gate_pending: object = field(default=None, repr=False)
     _opp_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (opponents, won)
     _opp_advance_log: list = field(default_factory=list, repr=False)
     _advance_log: list = field(default_factory=list, repr=False)  # (episode_index, old_d_max, new_d_max) for the research log / events.jsonl
@@ -354,12 +355,47 @@ class ScenarioSampler:
             if len(window) < self.armed_gate_min_samples:
                 return
             if sum(window) / len(window) >= self.armed_gate_win_rate:
-                old = self._armed_stage
-                self._armed_stage = min(len(ARMED_STAGES) - 1, self._armed_stage + 1)
-                self._armed_recent.clear()   # the next stage re-earns its own window
-                self._armed_advance_log.append(
-                    (old, self._armed_stage, ARMED_STAGES[self._armed_stage][0],
-                     sum(window) / len(window), len(window)))
+                # DO NOT advance on this number. It is the STOCHASTIC policy --
+                # training samples from the action distribution. On 2026-09-07
+                # that read 58.5% at stage 6 while the DETERMINISTIC policy, the
+                # one that gets deployed and the one a human watches, scored
+                # ZERO wins and zero knockdowns there. The ladder promoted six
+                # times on a number that corresponded to nothing, and 74M steps
+                # were spent in fights the agent could not score in.
+                #
+                # This only flags a CANDIDATE. train_vec then runs a real
+                # deterministic evaluation at this rung and calls
+                # confirm_advance() with the result.
+                self._gate_pending = (sum(window) / len(window), len(window))
+
+    def gate_pending(self):
+        """(stochastic_win_rate, n) if the cheap pre-filter has fired, else None."""
+        with self._lock:
+            return self._gate_pending
+
+    def confirm_advance(self, det_win_rate: float, det_n: int) -> bool:
+        """Advance only if the DETERMINISTIC policy clears the bar at this rung."""
+        with self._lock:
+            pend, self._gate_pending = self._gate_pending, None
+            if pend is None:
+                return False
+            if det_win_rate < self.armed_gate_win_rate:
+                self._armed_recent.clear()   # re-earn the pre-filter before retrying
+                return False
+            old = self._armed_stage
+            self._armed_stage = min(len(ARMED_STAGES) - 1, self._armed_stage + 1)
+            self._armed_recent.clear()
+            self._armed_advance_log.append(
+                (old, self._armed_stage, ARMED_STAGES[self._armed_stage][0],
+                 det_win_rate, det_n))
+            return True
+
+    def stage_params(self) -> dict:
+        """The current rung's scenario, for the deterministic gate eval."""
+        with self._lock:
+            label, armed, weap, aggr, species, min_opp = ARMED_STAGES[self._armed_stage]
+            return {"label": label, "armed_count": armed, "weapon_type": weap,
+                    "throw_aggression": aggr, "species": species, "opponents": min_opp}
 
     @property
     def armed_stage_index(self) -> int:

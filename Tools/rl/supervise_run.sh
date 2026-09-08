@@ -115,7 +115,13 @@ launch() {
     --repo-root "$PWD" --levels "$LEVELS" --shm-prefix "$shm" \
     --n-envs "$N_ENVS" --k-standby "$K_STANDBY" --seed 21 \
     --total-timesteps 400000000 --n-steps 256 --n-epochs 1 --minibatch-size 128 \
-    --entropy-coef 0.012 --entropy-coef-final 0.008 --entropy-anneal-steps 8000000 \
+    # REVERTED 2026-09-08. Raising this to 0.012/0.008 held entropy at 4.5-4.9
+    # (random reference 7.0) for 74M steps. Training win rate looked fine
+    # because it measures the SAMPLED policy; the DETERMINISTIC policy -- the
+    # deployable one, and the one watch.py shows -- collapsed to 0.200 at 1v3
+    # difficulty 1.0 against 0.475 at 247M. A distribution that wide has a
+    # meaningless mode, which is the "it only jumps" behaviour.
+    --entropy-coef 0.003 --entropy-coef-final 0.003 --entropy-anneal-steps 1000000 \\
     --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 \
     --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 50 \
     --d-max-start 0.15 --d-max-cap 1.0 --d-step 0.1 \

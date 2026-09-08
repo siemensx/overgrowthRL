@@ -22,6 +22,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import json
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -208,6 +209,8 @@ def parse_args():
                         "worse than running the fast one alone.")
     p.add_argument("--remote-workers", type=int, default=0,
                    help="number of remote workers to wait for before training starts")
+    p.add_argument("--gate-eval-episodes", type=int, default=30,
+                   help="deterministic episodes run before the armed ladder may advance")
     p.add_argument("--armed-stage", type=int, default=0,
                    help="starting index into curriculum.ARMED_STAGES (0 = unarmed, the run21 default). "
                         "The ladder advances automatically from here on win rate.")
@@ -836,6 +839,49 @@ def main():
             if episode_components_this_update:
                 names = set().union(*(d.keys() for d in episode_components_this_update))
                 component_means = {name: float(np.mean([d.get(name, 0.0) for d in episode_components_this_update])) for name in names}
+            # --- Deterministic gate ---------------------------------------
+            # The stochastic window only nominates. Before the ladder moves we
+            # save a checkpoint and run evaluate.py GREEDILY at this rung, and
+            # advance only if that clears the bar. This is the number that
+            # corresponds to what a human sees; the stochastic one promoted the
+            # policy six rungs into fights it could not score in.
+            _pend = sampler.gate_pending()
+            if _pend is not None:
+                _sp = sampler.stage_params()
+                _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer,
+                                 reward_normalizer, global_step,
+                                 curriculum=sampler.curriculum_state())
+                _out = Path(logger.run_dir) / f"gate_{global_step}.json"
+                _cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "evaluate.py"),
+                        "--checkpoint", args.checkpoint_path, "--repo-root", args.repo_root,
+                        "--level", levels_list[0], "--frame-stack", str(args.frame_stack),
+                        "--act-period", str(args.act_period), "--episodes", str(args.gate_eval_episodes),
+                        "--difficulty-bands", "1.0", "--opponents", str(_sp["opponents"]),
+                        "--max-episode-steps", str(args.max_episode_steps),
+                        "--armed-count", str(_sp["armed_count"]), "--weapon-type", str(_sp["weapon_type"]),
+                        "--throw-aggression", str(_sp["throw_aggression"]),
+                        "--shm-name", f"{args.shm_prefix}g", "--device", "cpu", "--no-control",
+                        "--out", str(_out)]
+                _wr, _n = 0.0, 0
+                try:
+                    subprocess.run(_cmd, capture_output=True, timeout=3600)
+                    if _out.exists():
+                        _b = json.loads(_out.read_text())["bands"][0]["policy"]
+                        _wr, _n = _b["win_rate"], _b["episodes"]
+                except Exception as _e:
+                    print(f"[gate] deterministic eval failed: {_e}", flush=True)
+                _ok = sampler.confirm_advance(_wr, _n)
+                logger.log_event(
+                    "gate_eval",
+                    f"{run_id} gate eval at {_sp['label']}: deterministic {_wr:.3f} "
+                    f"({'ADVANCE' if _ok else 'HOLD'})",
+                    body=f"at global_step={global_step:,}  stochastic nominated {_pend[0]:.3f} "
+                         f"over {_pend[1]}  deterministic {_wr:.3f} over {_n} "
+                         f"(bar {sampler.armed_gate_win_rate:.2f})")
+                print(f"[gate] global_step={global_step:,} {_sp['label']}: stochastic "
+                      f"{_pend[0]:.3f} -> DETERMINISTIC {_wr:.3f} over {_n} -> "
+                      f"{'ADVANCE' if _ok else 'HOLD'}", flush=True)
+
             # Stage transitions carry the global step: the sampler decides
             # them but has no idea what step it is, so without this the ladder
             # would advance invisibly mid-run.

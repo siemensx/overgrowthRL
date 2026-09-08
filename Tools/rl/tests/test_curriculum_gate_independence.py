@@ -190,6 +190,16 @@ class TestArmedStageGate(unittest.TestCase):
         s = self._sampler(armed_stage=1)
         for _ in range(10):        # exactly armed_gate_min_samples
             s.record_armed_outcome(True, armed=1)
+        # Stochastic wins only NOMINATE. The ladder must not move until a
+        # deterministic evaluation confirms -- the stochastic number promoted
+        # the policy six rungs into fights it scored zero in.
+        self.assertEqual(s.armed_stage_index, 1)
+        self.assertIsNotNone(s.gate_pending())
+        self.assertFalse(s.confirm_advance(0.40, 30))   # weak greedy -> hold
+        self.assertEqual(s.armed_stage_index, 1)
+        for _ in range(10):
+            s.record_armed_outcome(True, armed=1)
+        self.assertTrue(s.confirm_advance(0.85, 30))    # strong greedy -> advance
         self.assertEqual(s.armed_stage_index, 2)
         adv = s.take_armed_advances()
         self.assertEqual(len(adv), 1)
