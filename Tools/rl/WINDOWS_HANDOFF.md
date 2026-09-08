@@ -47,7 +47,25 @@ python Tools\rl\gen_1v1_scenario.py          # regenerate the level script
 cmake --build C:\ogrl\overgrowthRL\BuildWin64 --config Release --target Overgrowth -j 12
 ```
 
-Verify: `python -c "import sys;sys.path.insert(0,'Tools/rl');import shm_env;print(shm_env._HEADER_SIZE)"` → **76**.
+Verify BOTH sides, they must agree:
+
+```powershell
+python -c "import sys;sys.path.insert(0,'Tools/rl');import shm_env;print(shm_env._HEADER_SIZE)"   # -> 76
+(Get-Item BuildWin64\Release\Overgrowth.exe).LastWriteTime                                        # must be AFTER the rebuild
+```
+
+**As of handoff the Python side reads 76 but the .exe is still dated
+2026-09-06 03:31 — the rebuild had not completed.** Run it DETACHED, because a
+`winps.sh` session ends before a long compile does and takes the build with it:
+
+```powershell
+Start-Process cmd.exe -ArgumentList "/c cmake --build C:\ogrl\overgrowthRL\BuildWin64 --config Release --target Overgrowth -j 12 > C:\ogrl\build.log 2>&1" -WindowStyle Hidden
+```
+
+Then poll `Get-Content C:\ogrl\build.log -Tail 5` until it reports the link,
+and re-check the `.exe` timestamp. **Do not start training until it is newer
+than the source change** — a stale exe writes a 64-byte header while
+`shm_env.py` reads 76, which surfaces as a hang, not an error.
 
 ## 3. Assets that must match
 
