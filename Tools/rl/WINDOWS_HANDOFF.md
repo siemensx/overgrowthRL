@@ -35,7 +35,35 @@ Run PowerShell on the box with `bash Tools/rl/winps.sh trainer-lan < script.ps1`
 (base64-encodes, so quoting survives). Plain `ssh trainer-lan "powershell -Command ..."`
 mangles quotes — use the helper.
 
-## 2. The engine MUST be rebuilt on Windows
+## 2. The engine MUST be rebuilt on Windows -- and the tree was badly stale
+
+Six distinct blockers hit in sequence on 2026-09-08. Each was a real staleness
+gap, not a repeat, so fix them in this order or you will rediscover them:
+
+| # | symptom | cause | fix |
+|---|---|---|---|
+| 1 | `Cannot open include file: rl_shm_transport.h` | only the `.cpp` was copied | copy all `Source/Main/rl_*.h` and `.cpp` |
+| 2 | `ResetRLTrainingScenario is not a member of Engine` | `engine.h` on the old lineage | sync the whole `Source/` tree |
+| 3 | `does not appear to contain CMakeLists.txt` | CMake source dir is `Projects/`, not the repo root | `cmake -S <repo>\Projects -B <repo>\BuildWin64` |
+| 4 | `unknown character 0x5` in `._consolehandler.cpp` | macOS AppleDouble files in the tarball, globbed as C++ | build the tarball with `COPYFILE_DISABLE=1 tar --exclude='._*'` |
+| 5 | `Engine::ResetRLTrainingScenario` unresolved at LINK | **`tar` on Windows does not overwrite existing files** | `Remove-Item -Recurse Source` FIRST, then extract |
+| 6 | `LightProbeCollection::InitHeadless` unresolved | stale `.obj` from incremental builds | `cmake --build ... --clean-first` |
+
+Number 5 is the nasty one: each fix only revealed the next stale file
+underneath. **Always wipe `Source/` before extracting.**
+
+```powershell
+Remove-Item -Recurse -Force C:\ogrl\overgrowthRL\Source
+tar -xzf C:\ogrl\src2.tgz -C C:\ogrl\overgrowthRL
+cmake -S C:\ogrl\overgrowthRL\Projects -B C:\ogrl\overgrowthRL\BuildWin64
+cmake --build C:\ogrl\overgrowthRL\BuildWin64 --config Release --target Overgrowth --clean-first -j 12
+```
+
+A `winps.sh` session ends before a long compile does and kills it. Run builds
+from a `.bat` over a held-open ssh with `ServerAliveInterval`, not
+`Start-Process` (which reported success and ran nothing, twice).
+
+## 2b. Original note: why the rebuild is mandatory
 
 The shm reset header grew 64 → **76 bytes** (added `reset_armed_count`,
 `reset_weapon_type`, `reset_throw_aggression`). A stale `.exe` and the current
@@ -98,6 +126,19 @@ scp Tools/rl/ppo/checkpoints/run21_mac.pt trainer-lan:C:/ogrl/overgrowthRL/Tools
 `OGRL_ALLOW_CHECKPOINT_REGRESSION=1` deliberately.
 
 ## 5. Start training
+
+**Just run the supervisor** -- it handles power, snapshots, log rotation and
+restarts, and is what should be running for weeks:
+
+```powershell
+Start-Process C:\ogrl\run_forever.bat
+```
+
+It disables sleep/hibernate/monitor timeouts on AC, snapshots the checkpoint
+each cycle (keeps 24), truncates `metrics.jsonl`/`episodes.jsonl` past 150MB,
+kills orphaned engines between cycles, and relaunches on any exit.
+
+### The manual command it wraps
 
 The Mac supervisor is bash. On Windows run `train_vec.py` directly, matching the
 Mac's arguments (they are in `Tools/rl/supervise_run.sh`, the `launch()` body):
