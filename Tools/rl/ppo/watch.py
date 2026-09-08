@@ -112,6 +112,18 @@ def parse_args():
     p.add_argument("--opponents", type=int, default=1, help="1, 2 or 3 -- needs a level with the generator's game_type 3/4 spawn groups (the t_train_* arenas have them; oval falls back to 1v1)")
     p.add_argument("--difficulty", type=float, default=None, help="0..1 opponent skill; default: whatever the level script picks")
     args = p.parse_args()
+
+    if args.stage >= 0:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from curriculum import ARMED_STAGES
+        label, armed, weap, throw_aggr, species, min_opp = ARMED_STAGES[
+            min(args.stage, len(ARMED_STAGES) - 1)]
+        args.armed_count, args.weapon_type = armed, weap
+        args.throw_aggression, args.species = throw_aggr, species
+        args.opponents = max(args.opponents, min_opp)
+        print(f"stage {args.stage}: {label} -> opponents={args.opponents} armed={armed} "
+              f"weapon={weap} throw_aggression={throw_aggr} species={species}", flush=True)
+
     if args.from_run:
         cfg = load_run_env_config(args.repo_root, args.from_run, runs_root=args.runs_root)
         if args.level is None:
