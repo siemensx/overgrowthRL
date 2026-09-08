@@ -105,6 +105,32 @@ def main() -> int:
         d = [float(x) for _, x in thr]
         print(f"  throw distance mean/min/max : {sum(d)/len(d):.1f} / {min(d):.1f} / {max(d):.1f}")
     print(f"  agent attack events (RLATK) : {atk}")
+    dbg = re.findall(r"RLTHROWDBG daa=(\d+) aggr=([\d.]+) prim=(-?\d+) sec=(-?\d+) "
+                     r"subgoal=(\d+) avoid=(\d+) dist=([\d.]+)", txt)
+    gate = re.findall(r"RLTHROWGATE tether=(\d+) prim=(-?\d+) sec=(-?\d+) knifelayer=(-?\d+) "
+                      r"onground=(\d+) flipping=(\d+) target=(-?\d+)", txt)
+    if gate:
+        n = len(gate)
+        print(f"  HandleThrow gate reached     : {n}  (WantsToThrowItem returned TRUE)")
+        print(f"     tethered free             : {sum(1 for g in gate if g[0]=='1')}/{n}")
+        print(f"     PRIMARY slot has a weapon : {sum(1 for g in gate if g[1]!='-1')}/{n}")
+        print(f"     secondary has a weapon    : {sum(1 for g in gate if g[2]!='-1')}/{n}")
+        print(f"     knife layer free          : {sum(1 for g in gate if g[3]=='-1')}/{n}")
+        print(f"     on ground or flipping     : {sum(1 for g in gate if g[4]=='1' or g[5]=='1')}/{n}")
+        print(f"     GetThrowTarget() valid    : {sum(1 for g in gate if g[6]!='-1')}/{n}")
+    print(f"  throw-predicate evaluations : {len(dbg)}")
+    if dbg:
+        daa_on = sum(1 for d in dbg if d[0] == "1")
+        armed  = sum(1 for d in dbg if d[2] != "-1" or d[3] != "-1")
+        in_goal= sum(1 for d in dbg if d[4] == d[5])
+        close  = sum(1 for d in dbg if float(d[6]) <= 8.0)
+        both   = sum(1 for d in dbg if d[4] == d[5] and float(d[6]) <= 8.0
+                     and (d[2] != "-1" or d[3] != "-1") and d[0] == "1")
+        print(f"     g_rl_daa true            : {daa_on}/{len(dbg)}   (aggr={dbg[0][1]})")
+        print(f"     holding a weapon         : {armed}/{len(dbg)}")
+        print(f"     sub_goal==_avoid_jumpkick: {in_goal}/{len(dbg)}")
+        print(f"     within 8 units           : {close}/{len(dbg)}")
+        print(f"     ALL FOUR at once         : {both}/{len(dbg)}")
     return 0
 
 

@@ -10540,8 +10540,22 @@ int GetThrowTarget() {
                 situation.known_chars[known_id].last_seen_time > time - 1.0 &&
                 !this_mo.OnSameTeam(mo) && mo.GetIntVar("state") != _ragdoll_state &&
                 distance_squared(this_mo.position, mo.position) > min_throw_range_squared) {
-            vec3 cam_dir = normalize(mo.position - camera.GetPos());
-            float cam_dot_val = dot(cam_dir, camera.GetFacing());
+            // An AI throws at what IT faces, not at what the CAMERA faces.
+            //
+            // This test used camera.GetPos()/GetFacing() unconditionally, which
+            // is player logic applied to every character. Headless training has
+            // no meaningful camera, so cam_dot_val never cleared 0.4 and this
+            // function returned -1 on every single call -- measured 1220/1220
+            // with bots that were armed, untethered, on the ground, and whose
+            // WantsToThrowItem() had already returned true. No AI has ever
+            // thrown a weapon in this project's training, for this reason.
+            //
+            // It is wrong in normal play too: an AI could only throw while the
+            // player's camera happened to be pointing at its target.
+            vec3 ref_pos = this_mo.controlled ? camera.GetPos() : this_mo.position;
+            vec3 ref_facing = this_mo.controlled ? camera.GetFacing() : this_mo.GetFacing();
+            vec3 cam_dir = normalize(mo.position - ref_pos);
+            float cam_dot_val = dot(cam_dir, ref_facing);
 
             if(cam_dot_val > 0.4 && cam_dot_val > best_dot) {
                 best_dot = cam_dot_val;
