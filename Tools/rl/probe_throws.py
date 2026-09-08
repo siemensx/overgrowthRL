@@ -60,18 +60,32 @@ def main() -> int:
                             weapon_type=a.weapon_type, throw_aggression=a.throw_aggression)
             kos = 0
             armed_seen = 0
+            air_steps = 0
+            air_runs = []
+            run_len = 0
             for _ in range(a.max_episode_steps):
                 o = torch.as_tensor(norm.normalize(obs), dtype=torch.float32).unsqueeze(0)
                 act = deterministic_action(policy, o)
                 obs, _, done, info = env.step(np.asarray(act, dtype=np.float32).ravel())
                 kos += int(info.get("hostile_kos_this_step", 0) or 0)
-                for ent in layout.all_entities(obs[-layout.total_floats:]):
+                frame = obs[-layout.total_floats:]
+                on_ground = float(frame[layout.GROUNDED])
+                if on_ground is not None:
+                    if on_ground < 0.5:
+                        air_steps += 1; run_len += 1
+                    elif run_len:
+                        air_runs.append(run_len); run_len = 0
+                for ent in layout.all_entities(frame):
                     if ent["valid"] and ent.get("has_weapon", 0) > 0.5:
                         armed_seen += 1
                 if done:
                     break
             wins += int(kos >= max(1, a.opponents))
-            print(f"  ep{ep}: kos={kos} armed-entity-observations={armed_seen}", flush=True)
+            if run_len: air_runs.append(run_len)
+            mean_air = (sum(air_runs)/len(air_runs)) if air_runs else 0.0
+            print(f"  ep{ep}: kos={kos} armed_obs={armed_seen} airborne_steps={air_steps} "
+                  f"jumps={len(air_runs)} mean_airborne={mean_air:.1f} steps "
+                  f"({mean_air*4/120:.2f}s)", flush=True)
         # Read the engine log BEFORE close(): env.close() rmtree's the
         # write-dir and removes its sibling .log, so reading afterwards always
         # finds nothing -- which looks exactly like "no throws happened".

@@ -2057,16 +2057,36 @@ void UpdateBrain(const Timestep &in ts) {
                 might_avoid_jump_kick = false;
             }
 
-            if(will_avoid_jump_kick) {
-                if(!wants_to_roll) {
-                    if(distance_squared(this_mo.position, target.position) < 8.0f) {
-                        strafe_vel = strafe_vel > 0.0f ? 5.0f : -5.0f;
-                        wants_to_roll = true;
-                    }
-                }
+            // An ARMED bot under DAA must NOT roll away from a jump kick.
+            // The roll is not a counter -- it costs the agent 15 points at
+            // difficulty 0.6 and nothing at 1.0 -- and it actively defeats the
+            // counter that IS real, by disengaging to range 3-4 while the throw
+            // predicate needs close range. The two cancel, which is exactly why
+            // zero throws were ever observed. Armed bots hold and throw.
+            //
+            // The block braces matter: declaring a variable directly inside a
+            // switch case is a compile error, and that is what took the run
+            // down at 17:02.
+            {
+                bool daa_armed = g_rl_daa &&
+                        (weapon_slots[primary_weapon_slot] != -1 ||
+                         weapon_slots[secondary_weapon_slot] != -1);
 
-                if(CheckRangeChange(ts)) {
-                    target_attack_range = RangedRandomFloat(3.0f, 4.0f);
+                if(will_avoid_jump_kick && !daa_armed) {
+                    if(!wants_to_roll) {
+                        if(distance_squared(this_mo.position, target.position) < 8.0f) {
+                            strafe_vel = strafe_vel > 0.0f ? 5.0f : -5.0f;
+                            wants_to_roll = true;
+                        }
+                    }
+
+                    if(CheckRangeChange(ts)) {
+                        target_attack_range = RangedRandomFloat(3.0f, 4.0f);
+                    }
+                } else if(will_avoid_jump_kick && daa_armed) {
+                    if(CheckRangeChange(ts)) {
+                        target_attack_range = RangedRandomFloat(1.5f, 3.0f);
+                    }
                 }
             }
 
@@ -2342,8 +2362,11 @@ bool WantsToThrowItem() {
         MovementObject@ daa_target = ReadCharacterID(chase_target_id);
         float daa_dist_sq = distance_squared(this_mo.position, daa_target.position);
 
-        // throw at air targets at close range
-        if(sub_goal == _avoid_jump_kick && daa_dist_sq <= 5.5f) {
+        // Throw at air targets. DAA writes this as "distance_squared <= 5.5",
+        // i.e. 2.35 units -- grappling range, not throwing range, and
+        // unreachable the moment anything backs the bot off.
+        const float kDaaThrowRange = 8.0f;
+        if(sub_goal == _avoid_jump_kick && daa_dist_sq <= kDaaThrowRange * kDaaThrowRange) {
             return true;
         }
 

@@ -130,7 +130,7 @@ class TestCurriculumStatePersistence(unittest.TestCase):
         never ran."""
         s = _sampler()
         state = s.curriculum_state()
-        self.assertEqual(set(state.keys()), {"d_max", "opponents_max"})
+        self.assertEqual(set(state.keys()), {"d_max", "opponents_max", "armed_stage"})
 
 
 class TestGateWindowSizing(unittest.TestCase):
@@ -169,3 +169,55 @@ class TestGateWindowSizing(unittest.TestCase):
             won = (rng.random() < 0.40) if solo else True   # solo poor, multi perfect
             s.record_episode_outcome(d, won, opponents=1 if solo else 3)
         self.assertEqual(s.d_max, 0.15, "advanced without solo evidence")
+
+
+class TestArmedStageGate(unittest.TestCase):
+    """The armed ladder is a THIRD independent gate. It must not be advanceable
+    by the unarmed anti-forgetting rounds, and it must carry its position
+    across a resume the same way d_max and opponents_max do."""
+
+    def _sampler(self, **kw):
+        return ScenarioSampler(opponents_cap=3, armed_gate_min_samples=10,
+                               armed_gate_window=20, armed_gate_win_rate=0.6, **kw)
+
+    def test_unarmed_rounds_cannot_promote_an_armed_stage(self):
+        s = self._sampler(armed_stage=1)
+        for _ in range(200):
+            s.record_armed_outcome(True, armed=0)      # solo unarmed rounds
+        self.assertEqual(s.armed_stage_index, 1, "unarmed wins advanced the armed ladder")
+
+    def test_armed_wins_advance_and_are_logged(self):
+        s = self._sampler(armed_stage=1)
+        for _ in range(10):        # exactly armed_gate_min_samples
+            s.record_armed_outcome(True, armed=1)
+        self.assertEqual(s.armed_stage_index, 2)
+        adv = s.take_armed_advances()
+        self.assertEqual(len(adv), 1)
+        self.assertEqual((adv[0][0], adv[0][1]), (1, 2))
+        self.assertEqual(s.take_armed_advances(), [], "advances must pop once")
+
+    def test_losses_do_not_advance(self):
+        s = self._sampler(armed_stage=1)
+        for _ in range(40):
+            s.record_armed_outcome(False, armed=1)
+        self.assertEqual(s.armed_stage_index, 1)
+
+    def test_stage_survives_a_resume(self):
+        s = self._sampler(armed_stage=0)
+        s._armed_stage = 3
+        restored = self._sampler(armed_stage=0)
+        restored.load_curriculum_state(s.curriculum_state())
+        self.assertEqual(restored.armed_stage_index, 3)
+
+    def test_solo_rounds_stay_unarmed_at_an_armed_stage(self):
+        s = self._sampler(armed_stage=5)      # B5: 3-armed-of-3, min_opponents 3
+        s._opp_max = 3
+        for _ in range(300):
+            ep = s.sample_episode()
+            if ep["opponents"] < 3:
+                self.assertEqual(ep["armed_count"], 0)
+                self.assertEqual(ep["throw_aggression"], 1.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

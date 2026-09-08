@@ -98,11 +98,12 @@ launch() {
     --repo-root "$PWD" --levels "$LEVELS" --shm-prefix "$shm" \
     --n-envs "$N_ENVS" --k-standby "$K_STANDBY" --seed 21 \
     --total-timesteps 400000000 --n-steps 256 --n-epochs 1 --minibatch-size 128 \
-    --entropy-coef 0.008 --entropy-coef-final 0.003 --entropy-anneal-steps 10000000 \
+    --entropy-coef 0.012 --entropy-coef-final 0.008 --entropy-anneal-steps 8000000 \
     --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 \
     --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 50 \
     --d-max-start 0.15 --d-max-cap 1.0 --d-step 0.1 \
     --gate-window 300 --gate-min-samples 50 --gate-win-rate 0.75 \
+    --armed-stage 1 \
     --opponents-cap 3 --opp-gate-win-rate 0.6 --opp-gate-window 400 \
     --opp-gate-min-samples 150 --opp-keep-solo 0.35 \
     --collection-torch-threads 1 --update-torch-threads 4 --torch-interop-threads 1 \

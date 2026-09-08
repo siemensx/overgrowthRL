@@ -208,6 +208,9 @@ def parse_args():
                         "worse than running the fast one alone.")
     p.add_argument("--remote-workers", type=int, default=0,
                    help="number of remote workers to wait for before training starts")
+    p.add_argument("--armed-stage", type=int, default=0,
+                   help="starting index into curriculum.ARMED_STAGES (0 = unarmed, the run21 default). "
+                        "The ladder advances automatically from here on win rate.")
     p.add_argument("--opponents-cap", type=int, default=1,
                    help="maximum opponents the curriculum may unlock (1 disables it). Needs maps "
                         "carrying game_type 3 (1v2) and 4 (1v3); any level without them falls back "
@@ -397,7 +400,7 @@ def main():
         gate_window=args.gate_window, gate_min_samples=args.gate_min_samples,
         gate_win_rate=args.gate_win_rate, opponents=args.opponents,
         species_mode=args.species_mode, weapons_prob=args.weapons_prob,
-        opponents_cap=args.opponents_cap, opp_gate_win_rate=args.opp_gate_win_rate,
+        opponents_cap=args.opponents_cap, armed_stage=args.armed_stage, opp_gate_win_rate=args.opp_gate_win_rate,
         opp_gate_window=args.opp_gate_window, opp_gate_min_samples=args.opp_gate_min_samples,
         opp_keep_solo=args.opp_keep_solo, rng_seed=args.seed,
     )
@@ -688,6 +691,7 @@ def main():
                     # Opponent-count curriculum advances on its own gate, kept
                     # separate from difficulty so neither can advance the other.
                     sampler.record_opponent_outcome(ended_scenario.get("opponents", 1) or 1, won)
+                    sampler.record_armed_outcome(won, ended_scenario.get("armed_count", 0) or 0)
                     logger.log_episode({
                         "t": time.time(), "global_step": global_step, "worker": int(i),
                         "seed": ended_seed if ended_seed is not None else episode_seed_used[i],
@@ -762,6 +766,7 @@ def main():
                         if _ep.get("difficulty") is not None:
                             sampler.record_episode_outcome(_ep["difficulty"], _ep["won"], _ep.get("opponents", 1) or 1)
                         sampler.record_opponent_outcome(_ep.get("opponents", 1) or 1, _ep["won"])
+                        sampler.record_armed_outcome(_ep["won"], _ep.get("armed_count", 0) or 0)
                     global_step += args.n_steps * _msg["obs"].shape[1]
                 remote_wait_seconds = time.monotonic() - _rt0
             else:
@@ -828,6 +833,18 @@ def main():
             if episode_components_this_update:
                 names = set().union(*(d.keys() for d in episode_components_this_update))
                 component_means = {name: float(np.mean([d.get(name, 0.0) for d in episode_components_this_update])) for name in names}
+            # Stage transitions carry the global step: the sampler decides
+            # them but has no idea what step it is, so without this the ladder
+            # would advance invisibly mid-run.
+            for _old, _new, _label in sampler.take_armed_advances():
+                logger.log_event(
+                    "curriculum_advance",
+                    f"{run_id} armed stage {_old} -> {_new} ({_label})",
+                    body=f"at global_step={global_step:,}  d_max={sampler.d_max:.2f}  "
+                         f"opponents_max={sampler.opponents_max}")
+                print(f"[curriculum] global_step={global_step:,}  "
+                      f"ARMED STAGE {_old} -> {_new}  {_label}", flush=True)
+
             logger.log_update({
                 "t": time.time(), "global_step": global_step, "update": update,
                 "phase": curriculum.phase_name(global_step),
@@ -852,6 +869,11 @@ def main():
                 # explicit boolean flag per update is the fix, not a
                 # threshold anyone has to remember to check for.
                 "kl_spike": bool(stats["approx_kl"] > args.target_kl * 10),
+                # Stage transitions are logged as events with the global step
+                # attached: the sampler decides them but has no idea what step
+                # it is, so without this the ladder would advance invisibly.
+                "armed_stage": sampler.armed_stage_index,
+                "armed_stage_label": sampler.armed_stage_label,
                 "curriculum_live": {
                         "opponents_max": sampler.opponents_max,
                         "opponent_win_rates": {str(k): v for k, v in sampler.opponent_win_rates().items()},

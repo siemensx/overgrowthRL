@@ -146,6 +146,20 @@ def band_for(d: float) -> str:
     return f"[{DIFFICULTY_BANDS[-1][0]:.1f},{DIFFICULTY_BANDS[-1][1]:.1f}]"
 
 
+# stage: (label, armed_count, weapon_type, throw_aggression, species_mode, min_opponents)
+# weapon_type 0=random 1=knife 2=big_sword 3=sword 4=spear
+# species_mode 0=guard/raider 6=guard/raider/cat
+ARMED_STAGES = [
+    ("A unarmed",        0, 0, 1.0, 0, 1),
+    ("B1 1-armed-of-2",  1, 1, 4.0, 0, 2),
+    ("B2 2-armed-of-2",  2, 1, 4.0, 0, 2),
+    ("B3 1-armed-of-3",  1, 1, 4.0, 0, 3),
+    ("B4 2-armed-of-3",  2, 0, 4.0, 0, 3),
+    ("B5 3-armed-of-3",  3, 0, 4.0, 0, 3),
+    ("C  cats + mixed",  3, 0, 6.0, 6, 3),
+]
+
+
 @dataclass
 class ScenarioSampler:
     # d_max schedule (Sec3.2, Sec10 "tonight's run"): start LOW. Run9 trained
@@ -209,6 +223,22 @@ class ScenarioSampler:
     opp_gate_window: int = 400
     opp_gate_min_samples: int = 150
     opp_keep_solo: float = 0.35     # fraction of episodes held at 1v1 once the curriculum has advanced
+    # --- Stage B/C: armed opponents (2026-09-07) ---
+    #
+    # The jump-kick monoculture survives every knob on the UNARMED scripted AI:
+    # its only counter, the roll-away, is saturated at d_max=1.0 and costs the
+    # policy nothing there. An armed opponent is a different matter, because
+    # Dynamic AI Aggression's throw rule fires on sub_goal == _avoid_jump_kick,
+    # which is set precisely when the agent is AIRBORNE. A knife thrown at a
+    # committed jump kick is the first thing in this game that punishes it.
+    #
+    # Ramp: how many of the hostiles are armed, then which weapons, then cats
+    # (whose controller throws on its own account too). Each row is gated on
+    # win rate exactly like difficulty and opponent count.
+    armed_stage: int = 0            # index into ARMED_STAGES; advances automatically
+    armed_gate_win_rate: float = 0.60
+    armed_gate_window: int = 400
+    armed_gate_min_samples: int = 150
     species_mode: int = 0           # rl_species value: 0 = legacy random guard/raider (Stage A default,
                                      # matches run8/run9's own opponent mix exactly), 4 = random of all 3 (Stage B)
     weapons_prob: float = 0.0       # probability a round is armed (Stage C axis)
@@ -230,6 +260,9 @@ class ScenarioSampler:
                                                                                          # capped generously, gate only ever
                                                                                          # looks at the last gate_window
     _opp_max: int = field(default=1, repr=False)
+    _armed_stage: int = field(default=0, repr=False)
+    _armed_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)
+    _armed_advance_log: list = field(default_factory=list, repr=False)
     _opp_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (opponents, won)
     _opp_advance_log: list = field(default_factory=list, repr=False)
     _advance_log: list = field(default_factory=list, repr=False)  # (episode_index, old_d_max, new_d_max) for the research log / events.jsonl
@@ -238,6 +271,7 @@ class ScenarioSampler:
         self._rng = random.Random(self.rng_seed)
         self._d_max = self.d_max_start
         self._opp_max = max(1, min(self.opponents, self.opponents_cap))
+        self._armed_stage = max(0, min(int(self.armed_stage), len(ARMED_STAGES) - 1))
 
     @property
     def d_max(self) -> float:
@@ -260,11 +294,21 @@ class ScenarioSampler:
                 opponents = 1                       # anti-forgetting: keep fighting 1v1
             else:
                 opponents = self._rng.randint(2, self._opp_max)
+            label, armed, weap, throw_aggr, species, min_opp = ARMED_STAGES[
+                min(self._armed_stage, len(ARMED_STAGES) - 1)]
+            # A stage that needs 2+ hostiles must not be sampled as a 1v1; the
+            # anti-forgetting solo episodes stay UNARMED so the 1v1 skill the
+            # eval tracks is still measured against the same opponent it always was.
+            if opponents < min_opp:
+                armed = 0
         return {
             "difficulty": d,
             "opponents": opponents,
             "weapons": self.weapons_prob,
-            "species": self.species_mode,
+            "species": species if armed > 0 else self.species_mode,
+            "armed_count": armed,
+            "weapon_type": weap,
+            "throw_aggression": throw_aggr if armed > 0 else 1.0,
         }
 
     @property
@@ -290,6 +334,42 @@ class ScenarioSampler:
                 self._opp_max = min(self.opponents_cap, self._opp_max + 1)
                 self._opp_advance_log.append((len(self._opp_recent), old, self._opp_max))
 
+    def record_armed_outcome(self, won: bool, armed: int) -> None:
+        """Advance the armed-opponent ladder. Only ARMED episodes count: the
+        unarmed anti-forgetting solo rounds must not be able to promote a stage
+        whose difficulty they never sampled -- the same independence the
+        difficulty and opponent gates already keep from each other."""
+        if self._armed_stage >= len(ARMED_STAGES) - 1:
+            return
+        with self._lock:
+            if self._armed_stage > 0 and int(armed) <= 0:
+                return          # unarmed round at an armed stage: not evidence
+            self._armed_recent.append(bool(won))
+            window = list(self._armed_recent)[-self.armed_gate_window:]
+            if len(window) < self.armed_gate_min_samples:
+                return
+            if sum(window) / len(window) >= self.armed_gate_win_rate:
+                old = self._armed_stage
+                self._armed_stage = min(len(ARMED_STAGES) - 1, self._armed_stage + 1)
+                self._armed_recent.clear()   # the next stage re-earns its own window
+                self._armed_advance_log.append(
+                    (old, self._armed_stage, ARMED_STAGES[self._armed_stage][0]))
+
+    @property
+    def armed_stage_index(self) -> int:
+        return self._armed_stage
+
+    @property
+    def armed_stage_label(self) -> str:
+        return ARMED_STAGES[self._armed_stage][0]
+
+    def take_armed_advances(self) -> list:
+        """Pop stage transitions so the trainer can log them WITH the global
+        step they happened at -- the sampler has no idea what step it is."""
+        with self._lock:
+            out, self._armed_advance_log = self._armed_advance_log, []
+            return out
+
     def curriculum_state(self) -> dict:
         """The position both curricula have climbed to, for checkpointing.
 
@@ -298,7 +378,8 @@ class ScenarioSampler:
         checkpoint advance the curriculum on episodes the new process never saw.
         Only the position is restored; the gates re-earn their next step."""
         with self._lock:
-            return {"d_max": self._d_max, "opponents_max": self._opp_max}
+            return {"d_max": self._d_max, "opponents_max": self._opp_max,
+                    "armed_stage": self._armed_stage}
 
     def load_curriculum_state(self, state: dict | None) -> None:
         """Restore a checkpointed position. Clamped to this run's own caps, so
@@ -313,6 +394,10 @@ class ScenarioSampler:
             o = state.get("opponents_max")
             if isinstance(o, int):
                 self._opp_max = max(1, min(o, self.opponents_cap))
+            st = state.get("armed_stage")
+            if st is not None:
+                self._armed_stage = max(0, min(int(st), len(ARMED_STAGES) - 1))
+
 
     def opponent_win_rates(self, window: int | None = None) -> dict:
         """Win rate per opponent count over the last `window` episodes -- the
