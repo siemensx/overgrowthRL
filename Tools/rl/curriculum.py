@@ -243,6 +243,8 @@ class ScenarioSampler:
     # A rung must now cost a real sample at a real standard.
     armed_gate_win_rate: float = 0.70
     armed_gate_window: int = 1200
+    armed_gate_min_difficulty: float = 0.8   # the gate evaluates at 1.0; only near-1.0
+                                             # training episodes are evidence for it
     armed_gate_min_samples: int = 600
     species_mode: int = 0           # rl_species value: 0 = legacy random guard/raider (Stage A default,
                                      # matches run8/run9's own opponent mix exactly), 4 = random of all 3 (Stage B)
@@ -340,16 +342,42 @@ class ScenarioSampler:
                 self._opp_max = min(self.opponents_cap, self._opp_max + 1)
                 self._opp_advance_log.append((len(self._opp_recent), old, self._opp_max))
 
-    def record_armed_outcome(self, won: bool, armed: int) -> None:
+    def record_armed_outcome(self, won: bool, armed: int,
+                             opponents: int = None, difficulty: float = None) -> None:
         """Advance the armed-opponent ladder. Only ARMED episodes count: the
         unarmed anti-forgetting solo rounds must not be able to promote a stage
         whose difficulty they never sampled -- the same independence the
-        difficulty and opponent gates already keep from each other."""
+        difficulty and opponent gates already keep from each other.
+
+        The window must also be restricted to the SAME CELL the deterministic
+        gate tests. Training samples difficulty ~ U(d_min, d_max) and opponents
+        over {1..opp_max}, so the pooled win rate is dominated by easy cells.
+        Measured on run21_win at 279M over 20,004 episodes:
+
+            opp1  d0.0-0.2  0.896      opp3  d0.0-0.2  0.872
+            opp1  d0.8-1.0  0.789      opp3  d0.8-1.0  0.374
+            POOLED                                     0.782
+
+        The pre-filter was reading that 0.782, clearing its 0.70 bar every
+        time, and nominating -- while the deterministic gate ran at 3
+        opponents and difficulty 1.0 and read 0.33. The two numbers were
+        measuring different fights, which is why the gate fired every ~220k
+        steps and held every single time for 5.4M steps. That is the third
+        instance of this bug class in this run: the stochastic gate measured
+        the wrong POLICY, the opponent-count bug measured the wrong COUNT, and
+        this one measured the wrong DIFFICULTY MIX.
+
+        opponents/difficulty are optional so the existing tests, which only
+        exercise the armed filter, keep passing unchanged."""
         if self._armed_stage >= len(ARMED_STAGES) - 1:
             return
         with self._lock:
             if self._armed_stage > 0 and int(armed) <= 0:
                 return          # unarmed round at an armed stage: not evidence
+            if opponents is not None and int(opponents) < self._opp_max:
+                return          # easier count than the gate tests
+            if difficulty is not None and float(difficulty) < self.armed_gate_min_difficulty:
+                return          # easier difficulty than the gate tests
             self._armed_recent.append(bool(won))
             window = list(self._armed_recent)[-self.armed_gate_window:]
             if len(window) < self.armed_gate_min_samples:

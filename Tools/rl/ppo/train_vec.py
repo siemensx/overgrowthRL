@@ -703,7 +703,9 @@ def main():
                     # Opponent-count curriculum advances on its own gate, kept
                     # separate from difficulty so neither can advance the other.
                     sampler.record_opponent_outcome(ended_scenario.get("opponents", 1) or 1, won)
-                    sampler.record_armed_outcome(won, ended_scenario.get("armed_count", 0) or 0)
+                    sampler.record_armed_outcome(won, ended_scenario.get("armed_count", 0) or 0,
+                                                 opponents=ended_scenario.get("opponents", 1) or 1,
+                                                 difficulty=ended_scenario.get("difficulty"))
                     logger.log_episode({
                         "t": time.time(), "global_step": global_step, "worker": int(i),
                         "seed": ended_seed if ended_seed is not None else episode_seed_used[i],
@@ -780,7 +782,9 @@ def main():
                         if _ep.get("difficulty") is not None:
                             sampler.record_episode_outcome(_ep["difficulty"], _ep["won"], _ep.get("opponents", 1) or 1)
                         sampler.record_opponent_outcome(_ep.get("opponents", 1) or 1, _ep["won"])
-                        sampler.record_armed_outcome(_ep["won"], _ep.get("armed_count", 0) or 0)
+                        sampler.record_armed_outcome(_ep["won"], _ep.get("armed_count", 0) or 0,
+                                                     opponents=_ep.get("opponents", 1) or 1,
+                                                     difficulty=_ep.get("difficulty"))
                     global_step += args.n_steps * _msg["obs"].shape[1]
                 remote_wait_seconds = time.monotonic() - _rt0
             else:
