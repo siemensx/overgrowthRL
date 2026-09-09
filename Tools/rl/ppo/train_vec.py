@@ -191,11 +191,12 @@ def parse_args():
                          "(shock-avoidance on a resumed policy, signal-density on a cold start).")
     p.add_argument("--d-max-cap", type=float, default=1.0)
     p.add_argument("--d-step", type=float, default=0.10)
-    p.add_argument("--d-min", type=float, default=0.0,
-                    help="OGRL-20260817-034: floor of the per-episode d~Uniform(d_min, d_max) sample range -- 0.0 "
-                         "(default) is the original full-range behavior. Raise this once d_max has been at its cap "
-                         "for a while to stop spending new episodes on already-mastered easy difficulty; see "
-                         "curriculum.ScenarioSampler's d_min comment for the measured justification.")
+    p.add_argument("--d-min", type=float, default=1.0,
+                    help="floor of the per-episode d~Uniform(d_min, d_max) sample range. Pinned to 1.0 on "
+                         "2026-09-09: the curriculum only ever raises the CEILING, so run21 kept sampling U(0,1) "
+                         "for 160M steps after d_max capped, spending ~94%% of episodes on cells it already won "
+                         "65-96%% of. A human always plays at 1.0. Pass 0.0 to restore the old full-range "
+                         "behavior; see curriculum.ScenarioSampler's d_min comment for the measured table.")
     p.add_argument("--gate-window", type=int, default=300, help="episodes considered for the d_max advance gate")
     p.add_argument("--gate-min-samples", type=int, default=50, help="minimum top-band episodes before the gate can fire")
     p.add_argument("--gate-win-rate", type=float, default=0.75)

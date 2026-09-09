@@ -185,9 +185,23 @@ class ScenarioSampler:
     # difficulty band that still has real headroom, without fully pinning to
     # one exact configuration (which would lose the robustness the original
     # full-range design was for -- see this class's own module-level
-    # reasoning above). 0.0 (default) preserves the original Uniform(0,
-    # d_max) behavior exactly for any caller that doesn't set it.
-    d_min: float = 0.0
+    # reasoning above).
+    #
+    # 2026-09-09: pinned to 1.0. The knob existed since -034 and was never
+    # turned. The difficulty curriculum only ever raises the CEILING (d_max);
+    # nothing lowers the amount of easy work once the ceiling is up, so a run
+    # that reached d_max=1.0 at ~120M steps went on sampling U(0, 1) for the
+    # next 160M. Measured over 20,004 episodes at 279M, that is what the
+    # compute was buying:
+    #
+    #     opp1 d0.0-0.2  0.896     opp3 d0.0-0.2  0.872
+    #     opp1 d0.8-1.0  0.789     opp3 d0.8-1.0  0.374
+    #
+    # ~94% of episodes were in cells already won 65-96% of the time, and 6.3%
+    # in the only cell that is stuck. The robustness argument above does not
+    # survive contact with the target: a human opponent always plays at 1.0,
+    # so difficulty below 1.0 is not a band worth being robust across.
+    d_min: float = 1.0
     gate_window: int = 300          # episodes considered for the advance gate
     gate_min_samples: int = 50      # minimum qualifying (top-band) episodes before the gate can fire at all --
                                      # without this, a handful of lucky early wins right after start could advance
