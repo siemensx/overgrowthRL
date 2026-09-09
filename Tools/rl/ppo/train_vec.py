@@ -211,6 +211,13 @@ def parse_args():
                    help="number of remote workers to wait for before training starts")
     p.add_argument("--gate-eval-episodes", type=int, default=30,
                    help="deterministic episodes run before the armed ladder may advance")
+    p.add_argument("--gate-min-step-gap", type=int, default=1_000_000,
+                   help="minimum global steps between deterministic gate evals. The stochastic "
+                        "pre-filter clears its 600-episode bar roughly every 220k steps, and a "
+                        "30-episode greedy eval costs about as much wall time as the training "
+                        "that earned it -- on 2026-09-08 the gate was eating ~50%% of throughput. "
+                        "A nomination is not discarded while the cooldown holds; it fires as soon "
+                        "as the gap is met.")
     p.add_argument("--armed-stage", type=int, default=0,
                    help="starting index into curriculum.ARMED_STAGES (0 = unarmed, the run21 default). "
                         "The ladder advances automatically from here on win rate.")
@@ -524,6 +531,7 @@ def main():
                                                    # VecOvergrowthEnv and isn't currently surfaced back to the
                                                    # caller; this is a placeholder until that's plumbed through,
                                                    # not a claim of per-episode reproducibility
+    _last_gate_step = -10**18   # see --gate-min-step-gap
     previous_cycle_end = time.monotonic()  # for perf.cycle_seconds -- the full update-to-update wall time,
                                             # not just collection_seconds (OGRL-20260816-020's sps blind spot)
     run_status = "interrupted"  # pessimistic default -- only overwritten to "completed" right after a clean loop
@@ -846,7 +854,10 @@ def main():
             # corresponds to what a human sees; the stochastic one promoted the
             # policy six rungs into fights it could not score in.
             _pend = sampler.gate_pending()
+            if _pend is not None and global_step - _last_gate_step < args.gate_min_step_gap:
+                _pend = None    # nomination stands; it fires when the cooldown expires
             if _pend is not None:
+                _last_gate_step = global_step
                 _sp = sampler.stage_params()
                 _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer,
                                  reward_normalizer, global_step,
