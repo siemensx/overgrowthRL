@@ -227,16 +227,29 @@ class ScenarioSampler:
     # Growth mirrors the difficulty gate: unlock the next opponent count once the
     # win rate AT THE CURRENT MAXIMUM clears opp_gate_win_rate over a window.
     #
-    # opp_keep_solo is the anti-forgetting term and is the whole point of the
-    # mix: a fixed share of episodes stays 1v1 forever, so learning to survive a
-    # crowd cannot quietly cost the 1v1 competence that run15-run17 spent 100M
-    # decisions acquiring. Without it this axis is a distribution shift, not an
-    # addition.
+    # opp_keep_solo is the anti-forgetting term: a fixed share of episodes stays
+    # 1v1 forever, so learning to survive a crowd cannot quietly cost the 1v1
+    # competence that run15-run17 spent 100M decisions acquiring. Without it
+    # this axis is a distribution shift, not an addition.
+    #
+    # 2026-09-09: set to 0.0. That is a deliberate acceptance of the shift.
+    # Measured at 279M with difficulty pinned to 1.0, the mixture was spending
+    # 36% of episodes on 1v1 (won 0.778) and 31% on 1v2 (0.550) while the only
+    # cell that matters, 1v3, sat at 0.408 and had not moved in 20M steps.
+    # There is no compute to spare defending competence at counts the agent is
+    # not going to be judged on. With this at zero the sampler pins every
+    # episode to _opp_max, so the training distribution IS the evaluation
+    # distribution: 1v3, unarmed, difficulty 1.0. The armed ladder does not
+    # open until that clears armed_gate_win_rate (0.70) deterministically.
+    #
+    # Retention at 1v1/1v2 is expected to decay. That is the trade. Set this
+    # back above zero to restore the mixture.
     opponents_cap: int = 1          # 1 disables the curriculum entirely (default = old behaviour)
     opp_gate_win_rate: float = 0.60 # lower than the difficulty gate: outnumbered fights are meant to be hard
     opp_gate_window: int = 400
     opp_gate_min_samples: int = 150
-    opp_keep_solo: float = 0.35     # fraction of episodes held at 1v1 once the curriculum has advanced
+    opp_keep_solo: float = 0.0      # fraction of episodes held at 1v1 once the curriculum has advanced;
+                                    # 0.0 pins every episode to _opp_max (see the note above)
     # --- Stage B/C: armed opponents (2026-09-07) ---
     #
     # The jump-kick monoculture survives every knob on the UNARMED scripted AI:
@@ -312,6 +325,10 @@ class ScenarioSampler:
             d = self._rng.uniform(lo, self._d_max)
             if self._opp_max <= 1:
                 opponents = 1
+            elif self.opp_keep_solo <= 0.0:
+                # No anti-forgetting term means no mixture at all: train the
+                # exact configuration the gate certifies, nothing adjacent.
+                opponents = self._opp_max
             elif self._rng.random() < self.opp_keep_solo:
                 opponents = 1                       # anti-forgetting: keep fighting 1v1
             else:

@@ -231,10 +231,12 @@ def parse_args():
                         "Lower than the difficulty gate on purpose -- being outnumbered should stay hard.")
     p.add_argument("--opp-gate-window", type=int, default=400)
     p.add_argument("--opp-gate-min-samples", type=int, default=150)
-    p.add_argument("--opp-keep-solo", type=float, default=0.35,
-                   help="fraction of episodes held at 1v1 once the curriculum advances. This is the "
-                        "anti-forgetting term: without it the opponent axis is a distribution shift "
-                        "rather than an addition, and 1v1 competence can quietly decay.")
+    p.add_argument("--opp-keep-solo", type=float, default=0.0,
+                   help="fraction of episodes held at 1v1 once the curriculum advances -- the "
+                        "anti-forgetting term. Set to 0.0 on 2026-09-09, which also pins every "
+                        "episode to opponents_max: the training distribution then IS the gate's "
+                        "distribution (1v3, unarmed, difficulty 1.0). 1v1/1v2 retention is expected "
+                        "to decay; that is the accepted trade. Raise it to restore the mixture.")
     p.add_argument("--opponents", type=int, default=1, help="Stage D/E axis; NOT wired to game_type in the level "
                                                                "script yet, see arena_level_1v1_unarmed.as -- keep at 1")
     p.add_argument("--stall-target-weight", type=float, default=None,

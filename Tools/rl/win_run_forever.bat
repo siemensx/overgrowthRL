@@ -67,7 +67,7 @@ set OGRL_ALLOW_NENVS_CHANGE=1
   --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 ^
   --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 50 ^
   --d-max-start 1.0 --d-max-cap 1.0 --d-step 0.1 --d-min 1.0 ^
-  --opponents-cap 3 --armed-stage 0 --gate-eval-episodes 30 ^
+  --opponents-cap 3 --opp-keep-solo 0.0 --armed-stage 0 --gate-eval-episodes 30 ^
   --no-tapes --no-native-capture >> C:\ogrl\run21_win.log 2>&1
 
 for /f %%s in ('powershell -NoProfile -Command "[int][double]::Parse((Get-Date -UFormat %%s))"') do set T1=%%s
