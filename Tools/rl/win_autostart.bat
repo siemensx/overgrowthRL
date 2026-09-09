@@ -35,6 +35,12 @@ if not "%HDR%"=="76" (
   exit /b 1
 )
 
+REM Do not stack supervisors. run_forever.bat holds an exclusive lock, so a
+REM second one would exit on its own -- but check here too so the log says why.
+2>nul ( 9>C:\ogrl\run_forever.lock (echo.) ) || (
+  echo [%date% %time%] run_forever already running - not starting another >> %LOG%
+  exit /b 0
+)
 echo [%date% %time%] starting run_forever >> %LOG%
 start "" C:\ogrl\run_forever.bat
 exit /b 0

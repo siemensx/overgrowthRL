@@ -1,10 +1,36 @@
 @echo off
 REM run21 supervisor -- restarts training forever, snapshots checkpoints, rolls logs.
+REM
+REM SINGLE INSTANCE ONLY. Two supervisors are fatal: each one runs
+REM "taskkill /F /IM Overgrowth.exe" between cycles, so supervisor B kills
+REM supervisor A's engines mid-episode, A dies with ShmWaitTimeout, restarts,
+REM and B kills it again -- an infinite mutual-destruction loop. That is
+REM exactly what happened 2026-09-08 23:59 when win_autostart.bat fired a
+REM second time and started a second run_forever. The lock below prevents it:
+REM handle 9 is held open for the whole run, and Windows opens ">" with no
+REM sharing, so a second instance cannot acquire it and exits immediately.
+call :acquire
+exit /b %ERRORLEVEL%
+
+:acquire
+2>nul ( 9>C:\ogrl\run_forever.lock ( call :main ) ) || (
+  echo [%date% %time%] another run_forever already holds the lock - exiting >> C:\ogrl\supervisor.log
+  exit /b 1
+)
+exit /b 0
+
+:main
 REM Power: keep the machine awake for the life of this window.
 powercfg /change standby-timeout-ac 0 >nul 2>&1
 powercfg /change hibernate-timeout-ac 0 >nul 2>&1
 powercfg /change monitor-timeout-ac 0 >nul 2>&1
 
+set PY=C:\Users\pavlov\AppData\Local\Programs\Python\Python312\python.exe
+if not exist "%PY%" (
+  echo [%date% %time%] FATAL: interpreter missing at %PY% >> C:\ogrl\supervisor.log
+  exit /b 1
+)
+set FAST=0
 set REPO=C:\ogrl\overgrowthRL
 set CKPT=%REPO%\Tools\rl\ppo\checkpoints\run21_win.pt
 set SNAP=%REPO%\Tools\rl\ppo\checkpoints\snapshots
@@ -29,8 +55,9 @@ if not exist "%CKPT%" (
   set RESUME=--resume-from %CKPT%
 )
 echo [%date% %time%] launching train_vec >> C:\ogrl\supervisor.log
+for /f %%s in ('powershell -NoProfile -Command "[int][double]::Parse((Get-Date -UFormat %%s))"') do set T0=%%s
 set OGRL_ALLOW_NENVS_CHANGE=1
-python -u Tools\rl\ppo\train_vec.py ^
+%PY% -u Tools\rl\ppo\train_vec.py ^
   --repo-root %REPO% ^
   --levels arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml ^
   --shm-prefix /ogrl_w%RANDOM% --n-envs 10 --k-standby 2 --seed 21 ^
@@ -43,7 +70,17 @@ python -u Tools\rl\ppo\train_vec.py ^
   --opponents-cap 3 --armed-stage 0 --gate-eval-episodes 30 ^
   --no-tapes --no-native-capture >> C:\ogrl\run21_win.log 2>&1
 
-echo [%date% %time%] train_vec exited, restarting in 30s >> C:\ogrl\supervisor.log
+for /f %%s in ('powershell -NoProfile -Command "[int][double]::Parse((Get-Date -UFormat %%s))"') do set T1=%%s
+set /a RAN=%T1%-%T0%
+REM Back off on fast failures. A launch that dies in seconds is a broken
+REM environment, not a transient engine hang -- and the taskkill below would
+REM otherwise fire every 30s forever, which is how one bad supervisor took the
+REM whole run down on 2026-09-08.
+if %RAN% LSS 120 (set /a FAST+=1) else (set FAST=0)
+set WAIT=31
+if %FAST% GEQ 3 set WAIT=121
+if %FAST% GEQ 6 set WAIT=601
+echo [%date% %time%] train_vec exited after %RAN%s (fastfail=%FAST%), restarting in %WAIT%s >> C:\ogrl\supervisor.log
 taskkill /F /IM Overgrowth.exe >nul 2>&1
-ping -n 31 127.0.0.1 >nul
+ping -n %WAIT% 127.0.0.1 >nul
 goto loop
