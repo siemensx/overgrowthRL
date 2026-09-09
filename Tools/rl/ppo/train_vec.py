@@ -211,7 +211,7 @@ def parse_args():
                    help="number of remote workers to wait for before training starts")
     p.add_argument("--gate-eval-episodes", type=int, default=30,
                    help="deterministic episodes run before the armed ladder may advance")
-    p.add_argument("--gate-min-step-gap", type=int, default=1_000_000,
+    p.add_argument("--gate-min-step-gap", type=int, default=3_000_000,
                    help="minimum global steps between deterministic gate evals. The stochastic "
                         "pre-filter clears its 600-episode bar roughly every 220k steps, and a "
                         "30-episode greedy eval costs about as much wall time as the training "
