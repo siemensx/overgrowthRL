@@ -408,6 +408,20 @@ def main():
     levels_list = [x.strip() for x in args.levels.split(",") if x.strip()] or args.level
     if isinstance(levels_list, str):
         levels_list = [levels_list]
+    # A "_duel" level is driven by arena_level_human_duel.as, which spawns the
+    # SECOND fighter as a plain player actor (no scripted AI, no difficulty,
+    # no armed/species curriculum hooks) for play_match.py to hand to a human
+    # on controller 0. Training a policy against an idle/undriven player actor
+    # would silently corrupt the curriculum -- not a crash, a policy that
+    # learns against a dead opponent. gen_arena_map.py's RL_SCRIPTS check
+    # accepts this script (a real corpus map CAN be validated as one), so
+    # this is the actual enforcement point, not that one.
+    _duel_levels = [lvl for lvl in levels_list if "_duel" in Path(lvl).stem or "human_duel" in Path(lvl).stem]
+    if _duel_levels:
+        raise SystemExit(
+            f"refusing to train on human-duel level(s) {_duel_levels}: these are for "
+            f"play_match.py only (arena_level_human_duel.as has no scripted opponent). "
+            f"See gen_arena_map.py --human-duel / Tools/rl/gen_human_duel_scenario.py.")
     sampler_kwargs = dict(
         d_max_start=args.d_max_start, d_max_cap=args.d_max_cap, d_step=args.d_step, d_min=args.d_min,
         gate_window=args.gate_window, gate_min_samples=args.gate_min_samples,
