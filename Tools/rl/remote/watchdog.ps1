@@ -76,7 +76,7 @@ if (-not $unhealthy) {
   $n++
   Set-Content -Path $counterPath -Value $n
   if ($n % $HeartbeatEveryN -eq 0) {
-    Write-Log ("ok - lock held, log fresh (%.1f min old)" -f $staleMin)
+    Write-Log ("ok - lock held, log fresh ({0:F1} min old)" -f $staleMin)
   }
   exit 0
 }
