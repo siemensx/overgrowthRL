@@ -84,6 +84,7 @@
 #include <cassert>
 #include <algorithm>
 #include <cstring>
+#include <cmath>
 
 extern const bool kUseShadowCache;
 static const bool _draw_collision_shapes = false;
@@ -2169,11 +2170,37 @@ void SceneGraph::PrepareLightsAndDecals(vec2 active_screen_start, vec2 active_sc
             vec3 decal_view_max(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
             Box decal_box = dec->box_;
+            bool decal_transform_finite = true;
             for (int point = 0; point < Box::NUM_POINTS; point++) {
                 // strange thing: view space z decreases farther away
                 vec3 view_point = (mv_mat * vec4(decal_box.GetPoint(point), 1.0f)).xyz();
+                if (!std::isfinite(view_point.x()) || !std::isfinite(view_point.y()) || !std::isfinite(view_point.z())) {
+                    decal_transform_finite = false;
+                    break;
+                }
                 decal_view_min = components_min(decal_view_min, view_point);
                 decal_view_max = components_max(decal_view_max, view_point);
+            }
+            if (!decal_transform_finite) {
+                // A decal parented to (or placed from) a character whose own
+                // this_mo.position/velocity has gone NaN -- aschar.as's
+                // CheckForNANPosAndVel logs and Breakpoint(0)s this but never
+                // sanitizes it, so a decal created at that instant carries a
+                // NaN transform permanently (dec->GetTransform() below).
+                // Left unguarded, that NaN reaches LOG_ASSERT_GTEQ(proj_point.w(),
+                // 0.0f) every frame forever (Release builds compile assert()
+                // out, so it never actually stops), and the NaN corrupts the
+                // shared decal_proj_min/max accumulators for the WHOLE
+                // cluster, not just this one decal -- which is why the
+                // symptom is the entire frame going black, not one bad
+                // decal. Reproduced live on a freshly generated arena
+                // (t_train_101_duel.xml) after a knockout; not on
+                // oval_arena_human_duel.xml across 4+ resets, so the
+                // underlying physics NaN is real but conditional -- this is
+                // the boundary sanitization, not a fix for that. Skip the
+                // decal entirely rather than letting a corrupted min/max
+                // enter clustering at all.
+                continue;
             }
 
             // LOGI << "decal " << i << std::endl;
@@ -2200,14 +2227,29 @@ void SceneGraph::PrepareLightsAndDecals(vec2 active_screen_start, vec2 active_sc
 
             // TODO: we probably don't need to do the whole box, just the
             // four points on the near face
+            bool decal_proj_bad = false;
             for (int point = 0; point < Box::NUM_POINTS; point++) {
                 vec4 proj_point = cluster_mat * vec4(view_box.GetPoint(point), 1.0f);
                 // we know it's in front of the screen since we capped it at near plane
                 LOG_ASSERT_GTEQ(proj_point.w(), 0.0f);
+                if (!std::isfinite(proj_point.w()) || proj_point.w() <= 0.0f) {
+                    // See the decal_transform_finite guard above: a corrupted
+                    // proj_point here poisons decal_proj_min/max for every
+                    // OTHER decal sharing this frame's cluster pass, not just
+                    // this one -- that shared-accumulator corruption, not
+                    // any single bad decal, is what made the whole screen
+                    // black. Skip this decal rather than divide by a zero or
+                    // non-finite w.
+                    decal_proj_bad = true;
+                    break;
+                }
                 vec2 proj_point2 = proj_point.xy() * (1.0f / proj_point.w());
 
                 decal_proj_min = components_min2(decal_proj_min, proj_point2);
                 decal_proj_max = components_max2(decal_proj_max, proj_point2);
+            }
+            if (decal_proj_bad) {
+                continue;
             }
 
             /*
@@ -2400,14 +2442,27 @@ void SceneGraph::PrepareLightsAndDecals(vec2 active_screen_start, vec2 active_sc
 
         // TODO: we probably don't need to do the whole box, just the
         // four points on the near face
+        bool light_proj_bad = false;
         for (int point = 0; point < Box::NUM_POINTS; point++) {
             vec4 proj_point = cluster_mat * vec4(view_box.GetPoint(point), 1.0f);
             // we know it's in front of the screen since we capped it at near plane
             LOG_ASSERT_GTEQ(proj_point.w(), 0.0f);
+            if (!std::isfinite(proj_point.w()) || proj_point.w() <= 0.0f) {
+                // Same class of fault as the decal loop above: a light
+                // attached to (or positioned from) an object whose
+                // transform has gone non-finite must not be allowed to
+                // corrupt proj_min/proj_max for every other light sharing
+                // this frame's cluster pass.
+                light_proj_bad = true;
+                break;
+            }
             vec2 proj_point2 = proj_point.xy() * (1.0f / proj_point.w());
 
             proj_min = components_min2(proj_min, proj_point2);
             proj_max = components_max2(proj_max, proj_point2);
+        }
+        if (light_proj_bad) {
+            continue;
         }
 
         /*

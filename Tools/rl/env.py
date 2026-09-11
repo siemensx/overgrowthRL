@@ -194,6 +194,36 @@ class OvergrowthEnv:
             "skip_loading_pause: true",
             "has_detected_settings: true",
         ]
+        if self.render:
+            # Reproduced live 2026-09-11 on a play_match.py human duel: a
+            # character's own this_mo.position/velocity goes NaN at the
+            # moment of a knockout (aschar.as's CheckForNANPosAndVel logs
+            # "Invalid position/velocity at N" and Breakpoint(0)s, but never
+            # sanitizes -- the NaN is left live), and something derived from
+            # that NaN transform -- NOT necessarily a blood decal; setting
+            # blood:0 here did not stop it -- ends up in scenegraph.cpp's
+            # decal/light cluster culling (proj_point.w() = nan), which
+            # LOG_ASSERT_GTEQs every frame forever (Release builds compile
+            # assert() out, so it never actually stops) while the NaN
+            # corrupts the shared min/max accumulator for the WHOLE cluster
+            # pass, not just the one bad object -- hence the entire frame
+            # going black, not one bad decal. The REAL fix is in
+            # scenegraph.cpp's PrepareLightsAndDecals (skip a non-finite
+            # decal/light instead of letting it poison the shared
+            # accumulator) -- verified live across 5 resets on the exact map
+            # that reproduced this twice. blood:0 stays here as a harmless,
+            # independent reduction in decal volume for a rendered session
+            # (never mattered when training always used --disable-rendering),
+            # not as the fix. Reproduced repeatedly on a freshly generated
+            # arena (t_train_101_duel.xml, no baked navmesh); NOT reproduced
+            # across 4+ resets on the long-tested oval_arena_human_duel.xml,
+            # so the underlying NaN-velocity physics bug is real but
+            # conditional, not a defect of the human-duel script itself, and
+            # still open (needs a Bullet-side repro, not a render-side one).
+            # Never surfaced in ~233k headless training episodes because
+            # training never renders, so this whole code path never runs
+            # there.
+            config_lines.append("blood: 0")
         # Ground-truth attack telemetry (aschar.as's g_rl_log_attacks). Off for
         # training -- it costs log volume and nothing reads it there -- and
         # switched on only by the analysis tools that parse it.
