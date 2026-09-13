@@ -111,6 +111,8 @@ def parse_args():
                help="seed every bot's got_hit_by_leg_cannon_count at spawn; each point adds 0.25 to its jump-kick avoidance probability (enemycontrol.as ResetMind). 0 = stock.")
     p.add_argument("--opponents", type=int, default=1, help="1, 2 or 3 -- needs a level with the generator's game_type 3/4 spawn groups (the t_train_* arenas have them; oval falls back to 1v1)")
     p.add_argument("--difficulty", type=float, default=None, help="0..1 opponent skill; default: whatever the level script picks")
+    p.add_argument("--auto-camera", action="store_true",
+                   help="render-only spectator camera: keep the active combat target in view")
     args = p.parse_args()
 
     if args.stage >= 0:
@@ -196,6 +198,7 @@ def main():
         layout=layout, frame_stack=args.frame_stack, render=True, time_scale_mult=1, act_period=args.act_period,
         jumpkick_wariness=args.jumpkick_wariness,
         throw_aggression_launch=args.throw_aggression,
+        auto_camera=args.auto_camera,
     )
     try:
         for episode in range(args.episodes):
