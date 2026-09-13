@@ -64,6 +64,15 @@ float g_rl_throw_aggression = GetConfigValueFloat("rl_throw_aggression") > 0.0f
 // stock, which matters because these edits land while a run is live.
 bool g_rl_daa = g_rl_throw_aggression > 1.0f;
 
+// Diagnostic-only controller used by Tools/rl/engine_ai_baseline.py. It
+// keeps the game's normal movement, animation, attack, block, dodge, and
+// ragdoll code, but removes the visibility/target-acquisition failure modes
+// from the controlled slot so that the script itself can be measured as an
+// upper-bound comparison. This is intentionally outside the fair benchmark.
+bool g_rl_oracle_ai = GetConfigValueBool("rl_oracle_ai");
+bool g_rl_oracle_jumpkick = GetConfigValueBool("rl_oracle_jumpkick");
+bool g_rl_oracle_direct_move = GetConfigValueBool("rl_oracle_direct_move");
+
 // DAA state. Stock enemycontrol has none of these.
 bool can_jump_kick = true;          // one AI jump-kick per approach, re-armed on landing
 bool target_has_weapon = false;
@@ -232,6 +241,60 @@ void SetChaseTarget(int target) {
             target_history.Update(char.position, char.velocity, time);
             situation.Notice(chase_target_id);
         }
+    }
+}
+
+void ApplyRLOracleControl() {
+    if(!g_rl_oracle_ai || !this_mo.controlled || knocked_out != _awake) {
+        return;
+    }
+
+    // This branch is privileged by design: it sees every enabled character,
+    // including characters behind geometry, and selects a target by engine
+    // ID. It never edits health, transforms, damage, or physics state.
+    omniscient = true;
+    SetHostile(true);
+    SetGoal(_attack);
+    SetSubGoal(_rush_and_attack);
+    target_attack_range = 0.0f;
+    ai_attacking = true;
+
+    array<int> characters;
+    GetCharacters(characters);
+    int closest_id = -1;
+    float closest_distance = 1000000.0f;
+
+    for(int i = 0, len = characters.size(); i < len; ++i) {
+        MovementObject@ char = ReadCharacterID(characters[i]);
+        if(char.GetID() == this_mo.GetID() || this_mo.OnSameTeam(char) ||
+                char.GetIntVar("knocked_out") != _awake) {
+            continue;
+        }
+        float candidate_distance = distance_squared(this_mo.position, char.position);
+        if(candidate_distance < closest_distance ||
+                (candidate_distance == closest_distance && char.GetID() < closest_id)) {
+            closest_distance = candidate_distance;
+            closest_id = char.GetID();
+        }
+    }
+
+    if(closest_id != -1) {
+        SetChaseTarget(closest_id);
+        // aschar.as normally fills target_id from the camera-facing ground
+        // selector for controlled characters. The diagnostic has an engine
+        // target ID, so keep the attack pipeline pointed at the same target
+        // instead of letting the camera decide which body receives a strike.
+        target_id = closest_id;
+        MovementObject@ target = ReadCharacterID(closest_id);
+        vec3 facing = target.position - this_mo.position;
+        facing.y = 0.0f;
+        if(length_squared(facing) > 0.0001f) {
+            this_mo.SetRotationFromFacing(normalize(facing));
+        }
+    } else {
+        SetChaseTarget(-1);
+        target_id = -1;
+        ai_attacking = false;
     }
 }
 
@@ -1526,6 +1589,8 @@ void UpdateBrain(const Timestep &in ts) {
         return;
     }
 
+    ApplyRLOracleControl();
+
     if(DebugKeysEnabled() && GetInputDown(this_mo.controller_id, "c") && !GetInputDown(this_mo.controller_id, "ctrl")) {
         if(hostile_switchable) {
             SetHostile(!hostile);
@@ -2226,6 +2291,19 @@ void UpdateBrain(const Timestep &in ts) {
         }
     }
 
+    if(g_rl_oracle_ai && this_mo.controlled && chase_target_id != -1 &&
+            knocked_out == _awake) {
+        // Reassert the diagnostic intent after the ordinary AI state machine
+        // has had its say. Without this, PickAttackSubGoal can legally put a
+        // controlled oracle into a defend/provoke state for a random interval,
+        // which measures stock AI hesitation rather than the requested
+        // deterministic expert policy.
+        SetGoal(_attack);
+        SetSubGoal(_rush_and_attack);
+        target_attack_range = 0.0f;
+        ai_attacking = true;
+    }
+
     if(ReadObjectFromID(this_mo.GetID()).IsSelected() && GetConfigValueBool("debug_mouse_path_test")) {
         MouseControlPathTest();
     }
@@ -2419,7 +2497,22 @@ bool WantsToThrowItem() {
 bool WantsToThrowEnemy() {
     if(last_throw_attempt_time > time - kThrowDelay) {
         return false;
-     } else {
+    }
+
+    if(g_rl_oracle_ai && chase_target_id != -1 && combat_allowed &&
+            knocked_out == _awake) {
+        MovementObject@ target = ReadCharacterID(chase_target_id);
+        if(target.GetIntVar("knocked_out") == _awake &&
+                distance_squared(this_mo.position, target.position) < 1.6f * 1.6f) {
+            // A throw is a legal player action and the strongest deterministic
+            // close-range conversion available in the existing combat API.
+            // The oracle chooses it from engine state; it does not call WasHit
+            // or otherwise apply damage directly.
+            return true;
+        }
+    }
+
+    {
         return throw_after_active_block;
     }
 }
@@ -2461,11 +2554,11 @@ bool WantsToJump() {
     // Deliberately kept off against an ARMED target (target_has_weapon) and
     // when startled, exactly as DAA has it -- jumping into a spear is how an
     // aggression mod turns into a suicide mod.
-    if(g_rl_daa && species == _rabbit && on_ground && can_jump_kick && !startled &&
+    if((g_rl_daa || (g_rl_oracle_ai && g_rl_oracle_jumpkick)) && species == _rabbit && on_ground && can_jump_kick && !startled &&
             !target_has_weapon && goal == _attack && chase_target_id != -1) {
         MovementObject@ jk_target = ReadCharacterID(chase_target_id);
         if(distance_squared(this_mo.position, jk_target.position) < 12.0f &&
-                (temp_health <= 0.6f || group_fighting_wait)) {
+                (g_rl_oracle_ai || temp_health <= 0.6f || group_fighting_wait)) {
             sub_goal = _rush_and_attack;
             target_attack_range = 0.5f;
             ai_attacking = true;
@@ -2576,6 +2669,13 @@ bool WantsToStartActiveBlock(const Timestep &in ts) {
 
         if(block_delay != -1.0f) {
             going_to_block = true;
+        }
+
+        if(g_rl_oracle_ai) {
+            // The privileged diagnostic has the exact target animation event
+            // and removes only reaction uncertainty. The active block itself
+            // remains the ordinary game mechanic.
+            block_delay = 0.0f;
         }
 
         float temp_block_skill = p_block_skill;
@@ -3314,6 +3414,45 @@ vec3 GetChaseTargetPosition(vec3 &out target_react_pos) {
 }
 
 vec3 GetAttackMovement() {
+    if(g_rl_oracle_ai && g_rl_oracle_direct_move && this_mo.controlled && chase_target_id != -1) {
+        MovementObject@ target = ReadCharacterID(chase_target_id);
+        vec3 to_target = target.position - this_mo.position;
+        to_target.y = 0.0f;
+        float target_distance = length(to_target);
+
+        if(target_distance > 0.001f) {
+            vec3 approach = to_target / target_distance;
+            // Keep a small lateral escape vector when a second awake hostile
+            // is already on top of us. The chosen target remains the attack
+            // target; this just avoids standing in the three-body crush.
+            array<int> characters;
+            GetCharacters(characters);
+            vec3 escape;
+            for(int i = 0, len = characters.size(); i < len; ++i) {
+                MovementObject@ other = ReadCharacterID(characters[i]);
+                if(other.GetID() == this_mo.GetID() || this_mo.OnSameTeam(other) ||
+                        other.GetIntVar("knocked_out") != _awake || other.GetID() == chase_target_id) {
+                    continue;
+                }
+                vec3 from_other = this_mo.position - other.position;
+                from_other.y = 0.0f;
+                float other_distance = length(from_other);
+                if(other_distance > 0.001f && other_distance < 2.4f) {
+                    escape += from_other / other_distance * (2.4f - other_distance) / 2.4f;
+                }
+            }
+            if(length_squared(escape) > 0.001f) {
+                approach = normalize(approach + escape * 0.7f);
+            }
+
+            if(target_distance > 1.05f) {
+                return approach;
+            }
+            return escape;
+        }
+        return vec3(0.0f);
+    }
+
     if(combat_allowed || chase_allowed) {
         vec3 target_react_pos;
         vec3 target_point = GetChaseTargetPosition(target_react_pos);
@@ -3501,6 +3640,19 @@ void ChooseAttack(bool front, string &out attack_str) {
     attack_str = "";
 
     if(on_ground) {
+        if(g_rl_oracle_ai && chase_target_id != -1) {
+            MovementObject@ target = ReadCharacterID(chase_target_id);
+            float attack_distance = distance(this_mo.position, target.position);
+            if(target.GetIntVar("knocked_out") != _awake) {
+                attack_str = "low";
+            } else if(attack_distance > 1.25f) {
+                attack_str = "moving";
+            } else {
+                attack_str = "stationary";
+            }
+            return;
+        }
+
         int choice = rand() % 3;
 
         if(sub_goal == _knock_off_ledge) {

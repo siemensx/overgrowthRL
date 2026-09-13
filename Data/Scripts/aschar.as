@@ -10574,6 +10574,18 @@ int GetAttackTarget(float range, uint16 flags) {
     GetMatchingCharactersInArray(nearby_characters, matching_characters, flags);
 
     if(this_mo.controlled) {
+        // The diagnostic engine oracle assigns target_id from the complete
+        // scene before this camera-facing selector runs. Honor that explicit
+        // target so the rendered/virtual camera cannot silently redirect a
+        // strike to another body in a 1v3 pile-up.
+        if(g_rl_oracle_ai && target_id != -1) {
+            for(int i = 0, len = matching_characters.size(); i < len; ++i) {
+                if(matching_characters[i] == target_id) {
+                    return target_id;
+                }
+            }
+        }
+
         int best_target = -1;
         float best_dot = -1.0;
 

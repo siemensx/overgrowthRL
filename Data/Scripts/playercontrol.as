@@ -23,6 +23,10 @@
 //-----------------------------------------------------------------------------
 
 #include "aircontrols_params.as"
+// aschar.as is text-included by both playercontrol.as and enemycontrol.as.
+// Keep the privileged engine-oracle hook disabled in the normal player
+// controller while allowing aschar.as to compile the shared target selector.
+bool g_rl_oracle_ai = false;
 #include "aschar.as"
 #include "situationawareness.as"
 

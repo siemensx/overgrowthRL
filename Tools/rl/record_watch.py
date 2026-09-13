@@ -29,6 +29,10 @@ The AVFoundation screen index is machine-specific.  On this Mac it is 4
 (``Capture screen 0``); use ``ffmpeg -f avfoundation -list_devices true -i ''``
 to discover it on another machine.  macOS Screen Recording permission for the
 terminal running this command is required.
+
+The recorder refuses to replace an existing output stem by default. Pick a
+new stem for every run; pass ``--overwrite`` only when deliberately replacing
+all files belonging to that stem.
 """
 
 from __future__ import annotations
@@ -81,6 +85,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--keep-master", action="store_true",
         help="also retain the full cropped recording at --out")
+    parser.add_argument(
+        "--overwrite", action="store_true",
+        help="allow replacing existing files for this output stem (default: refuse)")
     parser.add_argument(
         "--ffmpeg", default=None,
         help="FFmpeg executable; default: PATH lookup")
@@ -267,10 +274,11 @@ def episode_output_path(output: Path, episode: int) -> Path:
 
 def split_episode(
     ffmpeg: str, master: Path, output: Path, start: float, end: float,
+    overwrite: bool,
 ) -> None:
     duration = max(0.05, end - start)
     command = [
-        ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+        ffmpeg, "-hide_banner", "-loglevel", "error", "-y" if overwrite else "-n",
         "-ss", f"{max(0.0, start):.3f}", "-i", str(master),
         "-t", f"{duration:.3f}", "-an",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
@@ -293,9 +301,24 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
     output = Path(args.out).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
+    output_suffix = output.suffix or ".mp4"
+    output_stem = output.stem if output.suffix else output.name
+    summary_path = output.with_name(f"{output_stem}_episodes.json")
+    collision_paths = [
+        output,
+        summary_path,
+        *output.parent.glob(f"{output_stem}_ep*{output_suffix}"),
+    ]
+    existing = sorted(path for path in collision_paths if path.exists())
+    if existing and not args.overwrite:
+        rendered = "\n".join(f"  {path}" for path in existing)
+        raise SystemExit(
+            "refusing to overwrite existing recording output(s):\n"
+            f"{rendered}\n"
+            "choose a new --out stem, or pass --overwrite explicitly"
+        )
     watch_script = repo_root / "Tools" / "rl" / "ppo" / "watch.py"
     events_path = output.with_name(f".{output.stem}_episode_events.jsonl")
-    summary_path = output.with_name(f"{output.stem}_episodes.json")
     fd, master_name = tempfile.mkstemp(prefix=f".{output.stem}_master_", suffix=".mp4", dir=output.parent)
     os.close(fd)
     master = Path(master_name)
@@ -379,7 +402,7 @@ def main() -> int:
             episode["video_start_seconds"] = start
             episode["video_end_seconds"] = end
             episode_path = episode_output_path(output, episode["episode"])
-            split_episode(ffmpeg, master, episode_path, start, end)
+            split_episode(ffmpeg, master, episode_path, start, end, args.overwrite)
             episode["video_path"] = str(episode_path)
             print(f"saved {episode_path} ({episode_path.stat().st_size:,} bytes) {episode['outcome']}", flush=True)
 

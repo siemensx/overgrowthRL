@@ -107,6 +107,7 @@ class OvergrowthEnv:
         log_attacks: bool = False,
         auto_camera: bool = False,
         spectator_fov: float | None = None,
+        extra_config_lines: list[str] | None = None,
     ):
         # act_period (OGRL-20260816-021 Sec 1.3(a)/2.2(a), Stage 6): decision
         # rate divisor -- 1 = every physics tick is a decision (120Hz, the
@@ -117,6 +118,7 @@ class OvergrowthEnv:
         self.log_attacks = log_attacks
         self.auto_camera = bool(auto_camera)
         self.spectator_fov = float(spectator_fov) if spectator_fov is not None else None
+        self.extra_config_lines = list(extra_config_lines or [])
         # render=True is "watch mode" (Tools/rl/ppo/watch.py): a real window,
         # no --benchmark fast-forward, so wall-clock time and in-game time
         # match -- letting a human actually watch the character move at
@@ -252,6 +254,7 @@ class OvergrowthEnv:
             # at character-spawn time, and the launch config is the path already
             # verified to reach GetConfigValue* (the wariness A/B).
             config_lines.append(f"rl_throw_aggression: {self.throw_aggression_launch}")
+        config_lines.extend(self.extra_config_lines)
         config_str = "\n".join(config_lines)
         command = [str(self.binary_path), "--write-dir", str(self._write_dir), "--working-dir", str(self.repo_root)]
         if self.render:
