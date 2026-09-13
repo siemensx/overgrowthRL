@@ -345,18 +345,21 @@ void ApplyRLOracleControl() {
         // instead of letting the camera decide which body receives a strike.
         target_id = closest_id;
         MovementObject@ target = ReadCharacterID(closest_id);
-        vec3 facing = target.position - this_mo.position;
-        facing.y = 0.0f;
-        if(length_squared(facing) > 0.0001f) {
-            this_mo.SetRotationFromFacing(normalize(facing));
-        }
+        // Do not force the body to face the target on every brain tick. The
+        // oracle's direct movement is a world-space vector and may be a legal
+        // retreat or lateral escape from a second attacker. UpdateAnimation
+        // already resolves the combat look target and movement-facing rules;
+        // overriding it here made a world-space retreat render as a forward
+        // run, sideways/backwards through the crowd.
         if(g_rl_oracle_block_throw && g_rl_oracle_has_thrown) {
-            // Convert only while the locked victim is actually ragdolled.
-            // Once it recovers, return to counter-only play so a fresh strike
-            // cannot be active-blocked by the same victim while another
-            // hostile closes in. The throw and the follow-up strike are both
-            // still resolved by the normal engine animation events.
-            ai_attacking = target.GetIntVar("state") == _ragdoll_state;
+            // A ground attack cannot be started while the victim is in the
+            // ragdoll state. Re-arm offense during the real hit-reaction or
+            // recovered movement state after a legal throw, then let
+            // WantsToAttack() suppress it if another hostile is attacking.
+            int target_state = target.GetIntVar("state");
+            ai_attacking = target_state == _movement_state ||
+                           target_state == _ground_state ||
+                           target_state == _hit_reaction_state;
         }
     } else {
         SetChaseTarget(-1);
@@ -375,6 +378,19 @@ void ApplyRLOracleControl() {
             target_distance = "" + distance(this_mo.position, trace_target.position);
             target_health = "" + trace_target.GetFloatVar("blood_health");
         }
+        vec3 trace_move = GetTargetVelocity();
+        trace_move.y = 0.0f;
+        vec3 trace_facing = this_mo.GetFacing();
+        trace_facing.y = 0.0f;
+        float trace_forward = 0.0f;
+        float trace_right = 0.0f;
+        if(length_squared(trace_move) > 0.0001f && length_squared(trace_facing) > 0.0001f) {
+            trace_move = normalize(trace_move);
+            trace_facing = normalize(trace_facing);
+            vec3 trace_right_axis(-trace_facing.z, 0.0f, trace_facing.x);
+            trace_forward = dot(trace_move, trace_facing);
+            trace_right = dot(trace_move, trace_right_axis);
+        }
         Log(info, "RLORACLE id=" + this_mo.GetID() +
                   " t=" + time +
                   " target=" + closest_id +
@@ -385,7 +401,9 @@ void ApplyRLOracleControl() {
                   " self_ko=" + knocked_out +
                   " goal=" + GetGoalString(goal) +
                   " subgoal=" + GetSubGoalString(sub_goal) +
-                  " ai_attacking=" + (ai_attacking ? 1 : 0));
+                  " ai_attacking=" + (ai_attacking ? 1 : 0) +
+                  " move_forward=" + trace_forward +
+                  " move_right=" + trace_right);
 
         if(time >= g_rl_oracle_next_state_trace_time) {
             g_rl_oracle_next_state_trace_time = time + 0.25f;
@@ -540,7 +558,8 @@ bool GetRLOracleHasCloseHostile(float range) {
                 other.GetIntVar("knocked_out") != _awake) {
             continue;
         }
-        if(other.GetIntVar("state") == _ragdoll_state) {
+        if(other.GetIntVar("state") == _ragdoll_state ||
+                other.GetID() == chase_target_id) {
             continue;
         }
         if(distance_squared(this_mo.position, other.position) < range_squared) {
@@ -2893,6 +2912,27 @@ bool WantsToAttack() {
         }
     }
 
+    // A standing opponent that is facing the controlled rabbit can absorb an
+    // unarmed strike with the normal passive guard. Do not spend a long,
+    // uncancellable animation into that guard when the direct oracle can
+    // legally circle to the opponent's exposed side instead. Hit-reaction,
+    // ragdoll, and active-block-stun targets remain valid punish windows.
+    if(g_rl_oracle_ai && this_mo.controlled && g_rl_oracle_direct_move &&
+            g_rl_oracle_flank && chase_target_id != -1) {
+        MovementObject@ target = ReadCharacterID(chase_target_id);
+        int target_state = target.GetIntVar("state");
+        if(target_state == _movement_state && target.GetFloatVar("block_stunned") <= 0.0f) {
+            vec3 to_self = this_mo.position - target.position;
+            to_self.y = 0.0f;
+            vec3 target_facing = target.GetFacing();
+            target_facing.y = 0.0f;
+            if(length_squared(to_self) > 0.0001f && length_squared(target_facing) > 0.0001f &&
+                    dot(normalize(target_facing), normalize(to_self)) <= 0.15f) {
+                return false;
+            }
+        }
+    }
+
     // Give the block-to-throw sequence priority over starting another attack.
     // This only applies to the controlled character in the diagnostic profile;
     // native enemies and fair RL evaluation retain their normal policy path.
@@ -3772,6 +3812,24 @@ vec3 GetAttackMovement() {
 
         if(target_distance > 0.001f) {
             vec3 approach = to_target / target_distance;
+            bool flank_maneuver = false;
+            if(g_rl_oracle_flank && target.GetIntVar("state") == _movement_state) {
+                vec3 target_facing = target.GetFacing();
+                target_facing.y = 0.0f;
+                if(length_squared(target_facing) > 0.001f) {
+                    target_facing = normalize(target_facing);
+                    vec3 target_right(-target_facing.z, 0.0f, target_facing.x);
+                    float side = (target.GetID() % 2 == 0) ? 1.0f : -1.0f;
+                    vec3 flank_point = target.position - target_facing * 0.7f +
+                                       target_right * side * 0.55f;
+                    vec3 to_flank = flank_point - this_mo.position;
+                    to_flank.y = 0.0f;
+                    if(length_squared(to_flank) > 0.25f * 0.25f) {
+                        approach = normalize(to_flank);
+                        flank_maneuver = true;
+                    }
+                }
+            }
             int threat_id = GetRLOracleAttackThreat();
             if(g_rl_oracle_evasive_roll) {
                 array<int> threat_characters;
@@ -3835,7 +3893,7 @@ vec3 GetAttackMovement() {
             // materially shortens the period during which a hostile can
             // punish an already-started animation.
             float oracle_attack_distance = g_rl_oracle_block_throw ? 1.05f : 0.82f;
-            if(target_distance > oracle_attack_distance) {
+            if(target_distance > oracle_attack_distance || flank_maneuver) {
                 return approach;
             }
             return escape;
@@ -4055,13 +4113,17 @@ void ChooseAttack(bool front, string &out attack_str) {
             MovementObject@ target = ReadCharacterID(chase_target_id);
             if(target.GetIntVar("knocked_out") != _awake ||
                     target.GetIntVar("state") == _ragdoll_state) {
-                attack_str = "low";
+                // GetAttackPath maps moving + ragdoll to the character's
+                // moving_low attack (soccerkick for a rabbit), which is the
+                // legal high-force finisher. A sweep is weaker and was being
+                // selected precisely during the short ragdoll conversion
+                // window.
+                attack_str = "moving";
             } else {
-                // Use the low sweep as the shortest deterministic ground
-                // strike. The stationary close path still kept the rabbit in
-                // an uncancellable kneestrike for several seconds in trace;
-                // sweep gives the engine a legal low attack with a smaller
-                // exposure window.
+                // Use the low sweep as the deterministic ground strike during
+                // ordinary movement. It has a shorter exposure window than
+                // the stationary close path; finisher selection above handles
+                // ragdolled victims separately.
                 attack_str = "low";
             }
             return;
@@ -4095,6 +4157,31 @@ void ResetWaypointTarget() {
 }
 
 WalkDir WantsToWalkBackwards() {
+    if(g_rl_oracle_ai && this_mo.controlled && g_rl_oracle_direct_move && goal == _attack) {
+        // GetTargetVelocity() is world-space for enemycontrol. Keep the
+        // rendered locomotion mode consistent with that vector when the
+        // combat pose is looking at a different target.
+        vec3 move = GetTargetVelocity();
+        move.y = 0.0f;
+        vec3 facing = this_mo.GetFacing();
+        facing.y = 0.0f;
+        float move_len = length(move);
+        float facing_len = length(facing);
+        if(move_len > 0.25f && facing_len > 0.001f) {
+            move /= move_len;
+            facing /= facing_len;
+            vec3 right(-facing.z, 0.0f, facing.x);
+            float forward = dot(move, facing);
+            float lateral = abs(dot(move, right));
+            if(forward < -0.55f && forward < -lateral) {
+                return WALK_BACKWARDS;
+            }
+            if(lateral > 0.65f) {
+                return STRAFE;
+            }
+        }
+    }
+
     if(goal == _patrol && waypoint_target_id == -1) {
         if(repulsor_delay > 0) {
             return WALK_BACKWARDS;

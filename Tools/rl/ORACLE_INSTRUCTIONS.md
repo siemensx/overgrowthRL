@@ -54,6 +54,13 @@ python3 Tools/rl/engine_ai_baseline.py \
 test the jump-kick profile. The oracle may choose legal throws, but it never
 calls a damage function or edits health, position, velocity, or physics state.
 
+For the direct-movement diagnostic, `--flank` is now an actual exposed-side
+approach: it circles toward a deterministic rear quarter and suppresses a
+strike while the target is still facing the rabbit. Without `--flank`, the
+oracle is allowed to attack a standing target head-on and will often hit the
+normal passive guard. The direct movement vector is world-space, while the
+engine still supplies the normal combat-facing/locomotion animation.
+
 ### Counter-throw diagnostic
 
 To test the specific “active-block, then hold grab/throw” hypothesis, use
@@ -85,10 +92,15 @@ opponent may escape or a second attacker may land during the same frame.
 
 The first revised 20-episode spacing batch (seeds 906000–906019, stock
 unarmed guards, difficulty 1.0) produced 1/20 wins, 11 losses, 8 timeouts,
-and 0.35 hostile KOs per episode. That is diagnostic evidence that the legal
-block→throw chain works, not a 90% ceiling. A repeated single-seed launch is
-not expected to be bit-identical here because opponent AngelScript contains
-stochastic behavior and reset does not reset every global random stream.
+and 0.35 hostile KOs per episode. Later source-audit samples produced 0/10
+with the follow-up transition fix, 0/10 with direct exposed-side flanking,
+and 0/10 after selecting the rabbit's moving-low finisher for ragdolls; these
+small samples are not evidence of a monotonic improvement. A 20-episode 1v1
+flank sample produced 8 wins, 4 losses, and 8 timeouts. The changes fixed
+observable controller inconsistencies, but did not establish a 90% 1v3
+controller. A repeated single-seed launch is not expected to be bit-identical
+here because opponent AngelScript contains stochastic behavior and reset does
+not reset every global random stream.
 
 Both tools use unique shared-memory names, stop cleanly on SIGTERM, write
 results atomically, and refuse to overwrite an existing result. Keep each JSON
