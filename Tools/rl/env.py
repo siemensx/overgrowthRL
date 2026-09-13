@@ -108,6 +108,7 @@ class OvergrowthEnv:
         auto_camera: bool = False,
         spectator_fov: float | None = None,
         extra_config_lines: list[str] | None = None,
+        keep_artifacts: bool = False,
     ):
         # act_period (OGRL-20260816-021 Sec 1.3(a)/2.2(a), Stage 6): decision
         # rate divisor -- 1 = every physics tick is a decision (120Hz, the
@@ -119,6 +120,7 @@ class OvergrowthEnv:
         self.auto_camera = bool(auto_camera)
         self.spectator_fov = float(spectator_fov) if spectator_fov is not None else None
         self.extra_config_lines = list(extra_config_lines or [])
+        self.keep_artifacts = bool(keep_artifacts)
         # render=True is "watch mode" (Tools/rl/ppo/watch.py): a real window,
         # no --benchmark fast-forward, so wall-clock time and in-game time
         # match -- letting a human actually watch the character move at
@@ -339,9 +341,10 @@ class OvergrowthEnv:
         # cleanly the process closed; _cleanup_stale_write_dirs() above
         # catches anything that still slips past this (an abrupt kill).
         import shutil
-        shutil.rmtree(self._write_dir, ignore_errors=True)
-        log_path = self._write_dir.parent / f"{self._write_dir.name}.log"
-        log_path.unlink(missing_ok=True)
+        if not self.keep_artifacts:
+            shutil.rmtree(self._write_dir, ignore_errors=True)
+            log_path = self._write_dir.parent / f"{self._write_dir.name}.log"
+            log_path.unlink(missing_ok=True)
 
     def __enter__(self) -> "OvergrowthEnv":
         return self

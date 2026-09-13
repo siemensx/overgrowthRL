@@ -72,6 +72,17 @@ bool g_rl_daa = g_rl_throw_aggression > 1.0f;
 bool g_rl_oracle_ai = GetConfigValueBool("rl_oracle_ai");
 bool g_rl_oracle_jumpkick = GetConfigValueBool("rl_oracle_jumpkick");
 bool g_rl_oracle_direct_move = GetConfigValueBool("rl_oracle_direct_move");
+bool g_rl_oracle_flank = GetConfigValueBool("rl_oracle_flank");
+bool g_rl_oracle_evasive_roll = GetConfigValueBool("rl_oracle_evasive_roll");
+bool g_rl_oracle_block_throw = GetConfigValueBool("rl_oracle_block_throw");
+bool g_rl_oracle_trace = GetConfigValueBool("rl_oracle_trace");
+float g_rl_oracle_next_trace_time = 0.0f;
+float g_rl_oracle_next_state_trace_time = 0.0f;
+float g_rl_oracle_next_block_trace_time = 0.0f;
+float g_rl_oracle_next_throw_trace_time = 0.0f;
+int g_rl_oracle_target_id = -1;
+bool g_rl_oracle_has_thrown = false;
+float g_rl_oracle_last_throw_time = -10.0f;
 
 // DAA state. Stock enemycontrol has none of these.
 bool can_jump_kick = true;          // one AI jump-kick per approach, re-armed on landing
@@ -257,26 +268,74 @@ void ApplyRLOracleControl() {
     SetGoal(_attack);
     SetSubGoal(_rush_and_attack);
     target_attack_range = 0.0f;
-    ai_attacking = true;
+    // In the counter-throw profile, keep the player passive until the first
+    // legal counter has happened. After that throw, re-enable the ordinary
+    // attack selector so the target can actually be converted while it is in
+    // the game's real hit-reaction/ragdoll window. Without this transition,
+    // the diagnostic could block and throw forever but never deal follow-up
+    // strike damage.
+    ai_attacking = !g_rl_oracle_block_throw;
 
     array<int> characters;
     GetCharacters(characters);
-    int closest_id = -1;
+    int closest_id = g_rl_oracle_target_id;
+    bool target_locked = false;
+
+    if(closest_id != -1 && ObjectExists(closest_id)) {
+        MovementObject@ locked_target = ReadCharacterID(closest_id);
+        target_locked = locked_target.GetID() != this_mo.GetID() &&
+                        !this_mo.OnSameTeam(locked_target) &&
+                        locked_target.GetIntVar("knocked_out") == _awake;
+    }
+
+    if(!target_locked) {
+        closest_id = -1;
+        g_rl_oracle_target_id = -1;
+    }
+
     float closest_distance = 1000000.0f;
 
+    if(!target_locked) {
+        for(int i = 0, len = characters.size(); i < len; ++i) {
+            MovementObject@ char = ReadCharacterID(characters[i]);
+            if(char.GetID() == this_mo.GetID() || this_mo.OnSameTeam(char) ||
+                    char.GetIntVar("knocked_out") != _awake) {
+                continue;
+            }
+            float candidate_distance = distance_squared(this_mo.position, char.position);
+            if(candidate_distance < closest_distance ||
+                    (candidate_distance == closest_distance && (closest_id == -1 || char.GetID() < closest_id))) {
+                closest_distance = candidate_distance;
+                closest_id = char.GetID();
+            }
+        }
+    }
+
+    // A hostile in its attack state is temporarily unable to use the normal
+    // unarmed passive guard. Prefer that punish window over a target that is
+    // merely closer, while keeping the nearest attacker as the tie-breaker.
+    int attacking_id = -1;
+    float attacking_distance = 8.0f * 8.0f;
     for(int i = 0, len = characters.size(); i < len; ++i) {
         MovementObject@ char = ReadCharacterID(characters[i]);
         if(char.GetID() == this_mo.GetID() || this_mo.OnSameTeam(char) ||
-                char.GetIntVar("knocked_out") != _awake) {
+                char.GetIntVar("knocked_out") != _awake ||
+                char.GetIntVar("state") != _attack_state) {
             continue;
         }
         float candidate_distance = distance_squared(this_mo.position, char.position);
-        if(candidate_distance < closest_distance ||
-                (candidate_distance == closest_distance && char.GetID() < closest_id)) {
-            closest_distance = candidate_distance;
-            closest_id = char.GetID();
+        if(candidate_distance < attacking_distance ||
+                (candidate_distance == attacking_distance &&
+                 (attacking_id == -1 || char.GetID() < attacking_id))) {
+            attacking_distance = candidate_distance;
+            attacking_id = char.GetID();
         }
     }
+    if(attacking_id != -1 && state != _attack_state) {
+        closest_id = attacking_id;
+    }
+
+    g_rl_oracle_target_id = closest_id;
 
     if(closest_id != -1) {
         SetChaseTarget(closest_id);
@@ -291,11 +350,205 @@ void ApplyRLOracleControl() {
         if(length_squared(facing) > 0.0001f) {
             this_mo.SetRotationFromFacing(normalize(facing));
         }
+        if(g_rl_oracle_block_throw && g_rl_oracle_has_thrown) {
+            // Convert only while the locked victim is actually ragdolled.
+            // Once it recovers, return to counter-only play so a fresh strike
+            // cannot be active-blocked by the same victim while another
+            // hostile closes in. The throw and the follow-up strike are both
+            // still resolved by the normal engine animation events.
+            ai_attacking = target.GetIntVar("state") == _ragdoll_state;
+        }
     } else {
         SetChaseTarget(-1);
         target_id = -1;
         ai_attacking = false;
     }
+
+    if(g_rl_oracle_trace && time >= g_rl_oracle_next_trace_time) {
+        g_rl_oracle_next_trace_time = time + 0.25f;
+        string target_state = "none";
+        string target_distance = "-1";
+        string target_health = "-1";
+        if(closest_id != -1) {
+            MovementObject@ trace_target = ReadCharacterID(closest_id);
+            target_state = "" + trace_target.GetIntVar("state");
+            target_distance = "" + distance(this_mo.position, trace_target.position);
+            target_health = "" + trace_target.GetFloatVar("blood_health");
+        }
+        Log(info, "RLORACLE id=" + this_mo.GetID() +
+                  " t=" + time +
+                  " target=" + closest_id +
+                  " dist=" + target_distance +
+                  " target_state=" + target_state +
+                  " target_blood=" + target_health +
+                  " self_state=" + this_mo.GetIntVar("state") +
+                  " self_ko=" + knocked_out +
+                  " goal=" + GetGoalString(goal) +
+                  " subgoal=" + GetSubGoalString(sub_goal) +
+                  " ai_attacking=" + (ai_attacking ? 1 : 0));
+
+        if(time >= g_rl_oracle_next_state_trace_time) {
+            g_rl_oracle_next_state_trace_time = time + 0.25f;
+            string states = "";
+            for(int i = 0, len = characters.size(); i < len; ++i) {
+                MovementObject@ other = ReadCharacterID(characters[i]);
+                if(other.GetID() == this_mo.GetID() || this_mo.OnSameTeam(other)) {
+                    continue;
+                }
+                states += " id=" + other.GetID() +
+                          ":state=" + other.GetIntVar("state") +
+                          ":dist=" + distance(this_mo.position, other.position) +
+                          ":threat=" + other.GetFloatVar("threat_amount") +
+                          ":target=" + other.GetIntVar("target_id") +
+                          ":bstun=" + other.GetFloatVar("block_stunned") +
+                          ":bstun_by=" + other.GetIntVar("block_stunned_by_id") +
+                          ":prepare=" + other.rigged_object().anim_client().GetTimeUntilEvent("blockprepare") +
+                          ":impact=" + other.rigged_object().anim_client().GetTimeUntilEvent("attackimpact");
+            }
+            Log(info, "RLSTATE self=" + this_mo.GetID() + " t=" + time + states);
+        }
+    }
+}
+
+// Return the nearest awake hostile whose attack animation is about to reach
+// its blockprepare event. UpdateState runs after UpdateBrain, so checking only
+// state == _attack_state is often one tick too late for a controlled defender.
+// The oracle may use this privileged diagnostic signal to choose a legal
+// defensive movement/block; it does not alter the attacker or damage.
+int GetRLOracleAttackThreat() {
+    if(!g_rl_oracle_ai || !this_mo.controlled) {
+        return -1;
+    }
+
+    array<int> characters;
+    GetCharacters(characters);
+    int threat_id = -1;
+    float threat_distance = 3.8f * 3.8f;
+
+    for(int i = 0, len = characters.size(); i < len; ++i) {
+        MovementObject@ other = ReadCharacterID(characters[i]);
+        if(other.GetID() == this_mo.GetID() || this_mo.OnSameTeam(other) ||
+                other.GetIntVar("knocked_out") != _awake ||
+                other.GetIntVar("state") != _attack_state) {
+            continue;
+        }
+
+        float prepare_time = other.rigged_object().anim_client().GetTimeUntilEvent("blockprepare");
+        float impact_time = other.rigged_object().anim_client().GetTimeUntilEvent("attackimpact");
+        // At difficulty 1.0 the legal active-block window is 0.2 seconds,
+        // while this collector samples the script about every 0.0667 seconds.
+        // Arm on the next decision rather than at the leading edge: a block
+        // started at prepare=0.16 can expire just before blockprepare.
+        // Once blockprepare has passed, an active block cannot retroactively
+        // catch that attack.
+        if(prepare_time < 0.0f || prepare_time > 0.14f || impact_time <= 0.0f) {
+            continue;
+        }
+
+        float candidate_distance = distance_squared(this_mo.position, other.position);
+        if(candidate_distance < threat_distance ||
+                (candidate_distance == threat_distance &&
+                 (threat_id == -1 || other.GetID() < threat_id))) {
+            threat_distance = candidate_distance;
+            threat_id = other.GetID();
+        }
+    }
+
+    return threat_id;
+}
+
+// Return whether any awake hostile has already entered its attack animation.
+// A strike cannot be cancelled once UpdateGroundAttackControls starts it, so
+// the privileged controller must refuse to begin a new long animation while
+// another opponent is attacking. This is still a legal policy choice; the
+// engine remains responsible for timing the active block and resolving hits.
+bool GetRLOracleAnyHostileAttacking() {
+    if(!g_rl_oracle_ai || !this_mo.controlled) {
+        return false;
+    }
+
+    array<int> characters;
+    GetCharacters(characters);
+    for(int i = 0, len = characters.size(); i < len; ++i) {
+        MovementObject@ other = ReadCharacterID(characters[i]);
+        if(other.GetID() == this_mo.GetID() || this_mo.OnSameTeam(other) ||
+                other.GetIntVar("knocked_out") != _awake) {
+            continue;
+        }
+        // An attacker that just hit our active block is still in its attack
+        // state, but its block stun is the counter window we want to punish,
+        // not an incoming threat.
+        if(other.GetIntVar("state") == _attack_state &&
+                other.GetFloatVar("block_stunned") <= 0.0f) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Return the closest legal enemy-throw target. The target must already be in
+// the game's throwable state, normally because this character's active block
+// produced block_stunned_by_id. Holding grab alone is not enough in the real
+// combat pipeline, so this helper deliberately preserves that rule.
+int GetRLOracleThrowTarget() {
+    if(!g_rl_oracle_ai || !this_mo.controlled || knocked_out != _awake) {
+        return -1;
+    }
+
+    array<int> characters;
+    GetCharacters(characters);
+    int throw_id = -1;
+    float throw_distance = 1.6f * 1.6f;
+
+    for(int i = 0, len = characters.size(); i < len; ++i) {
+        MovementObject@ other = ReadCharacterID(characters[i]);
+        if(other.GetID() == this_mo.GetID() || this_mo.OnSameTeam(other) ||
+                other.GetIntVar("knocked_out") != _awake ||
+                other.GetIntVar("state") == _ragdoll_state) {
+            continue;
+        }
+
+        if(other.GetFloatVar("block_stunned") <= 0.0f ||
+                other.GetIntVar("block_stunned_by_id") != this_mo.GetID()) {
+            continue;
+        }
+
+        float candidate_distance = distance_squared(this_mo.position, other.position);
+        if(candidate_distance < throw_distance ||
+                (candidate_distance == throw_distance &&
+                 (throw_id == -1 || other.GetID() < throw_id))) {
+            throw_distance = candidate_distance;
+            throw_id = other.GetID();
+        }
+    }
+
+    return throw_id;
+}
+
+bool GetRLOracleHasCloseHostile(float range) {
+    if(!g_rl_oracle_ai || !this_mo.controlled) {
+        return false;
+    }
+
+    array<int> characters;
+    GetCharacters(characters);
+    float range_squared = range * range;
+    for(int i = 0, len = characters.size(); i < len; ++i) {
+        MovementObject@ other = ReadCharacterID(characters[i]);
+        if(other.GetID() == this_mo.GetID() || this_mo.OnSameTeam(other) ||
+                other.GetIntVar("knocked_out") != _awake) {
+            continue;
+        }
+        if(other.GetIntVar("state") == _ragdoll_state) {
+            continue;
+        }
+        if(distance_squared(this_mo.position, other.position) < range_squared) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool ActiveDodging(int attacker_id) {
@@ -425,6 +678,8 @@ bool WantsToDragBody() {
 void ResetMind() {
     goal = _patrol;
     situation.clear();
+    g_rl_oracle_has_thrown = false;
+    g_rl_oracle_last_throw_time = -10.0f;
     // Jump-kick wariness (rl_jumpkick_wariness, default 0 = stock behaviour).
     //
     // will_avoid_jump_kick fires on
@@ -2302,6 +2557,8 @@ void UpdateBrain(const Timestep &in ts) {
         SetSubGoal(_rush_and_attack);
         target_attack_range = 0.0f;
         ai_attacking = true;
+        SetChaseTarget(g_rl_oracle_target_id);
+        target_id = g_rl_oracle_target_id;
     }
 
     if(ReadObjectFromID(this_mo.GetID()).IsSelected() && GetConfigValueBool("debug_mouse_path_test")) {
@@ -2499,15 +2756,27 @@ bool WantsToThrowEnemy() {
         return false;
     }
 
-    if(g_rl_oracle_ai && chase_target_id != -1 && combat_allowed &&
+    if(g_rl_oracle_ai && this_mo.controlled && combat_allowed &&
             knocked_out == _awake) {
-        MovementObject@ target = ReadCharacterID(chase_target_id);
-        if(target.GetIntVar("knocked_out") == _awake &&
-                distance_squared(this_mo.position, target.position) < 1.6f * 1.6f) {
+        int throw_target_id = GetRLOracleThrowTarget();
+        if(throw_target_id != -1) {
+            g_rl_oracle_has_thrown = true;
+            g_rl_oracle_last_throw_time = time;
+            last_throw_attempt_time = time;
             // A throw is a legal player action and the strongest deterministic
             // close-range conversion available in the existing combat API.
             // The oracle chooses it from engine state; it does not call WasHit
             // or otherwise apply damage directly.
+            if(g_rl_oracle_trace && time >= g_rl_oracle_next_throw_trace_time) {
+                g_rl_oracle_next_throw_trace_time = time + 0.05f;
+                MovementObject@ throw_target = ReadCharacterID(throw_target_id);
+                Log(info, "RLTHROWENEMY id=" + this_mo.GetID() +
+                          " t=" + time +
+                          " target=" + throw_target_id +
+                          " dist=" + distance(this_mo.position, throw_target.position) +
+                          " block_stunned=" + throw_target.GetFloatVar("block_stunned") +
+                          " block_stunned_by=" + throw_target.GetIntVar("block_stunned_by_id"));
+            }
             return true;
         }
     }
@@ -2524,6 +2793,10 @@ bool WantsToCounterThrow() {
 bool WantsToRoll() {
     bool result = wants_to_roll;
     wants_to_roll = false;
+    if(g_rl_oracle_ai && this_mo.controlled && g_rl_oracle_evasive_roll &&
+            GetRLOracleAttackThreat() != -1) {
+        return true;
+    }
     return result;
 }
 
@@ -2554,11 +2827,12 @@ bool WantsToJump() {
     // Deliberately kept off against an ARMED target (target_has_weapon) and
     // when startled, exactly as DAA has it -- jumping into a spear is how an
     // aggression mod turns into a suicide mod.
-    if((g_rl_daa || (g_rl_oracle_ai && g_rl_oracle_jumpkick)) && species == _rabbit && on_ground && can_jump_kick && !startled &&
+    if((g_rl_daa || (g_rl_oracle_ai && this_mo.controlled && g_rl_oracle_jumpkick && !g_rl_oracle_block_throw)) && species == _rabbit && on_ground && can_jump_kick && !startled &&
             !target_has_weapon && goal == _attack && chase_target_id != -1) {
         MovementObject@ jk_target = ReadCharacterID(chase_target_id);
-        if(distance_squared(this_mo.position, jk_target.position) < 12.0f &&
-                (g_rl_oracle_ai || temp_health <= 0.6f || group_fighting_wait)) {
+        float jump_kick_range = (g_rl_oracle_ai && this_mo.controlled) ? 1.8f : 12.0f;
+        if(distance_squared(this_mo.position, jk_target.position) < jump_kick_range * jump_kick_range &&
+                ((g_rl_oracle_ai && this_mo.controlled) || temp_health <= 0.6f || group_fighting_wait)) {
             sub_goal = _rush_and_attack;
             target_attack_range = 0.5f;
             ai_attacking = true;
@@ -2575,6 +2849,54 @@ bool WantsToJump() {
 
 bool WantsToAttack() {
     if(species == _wolf && block_stunned > 0.5) {
+        return false;
+    }
+
+    if(g_rl_oracle_ai && this_mo.controlled && g_rl_oracle_block_throw &&
+            !g_rl_oracle_has_thrown) {
+        return false;
+    }
+
+    // Do not start an attack that cannot be cancelled while any hostile is
+    // already in an attack animation. The previous oracle only checked the
+    // final 140 ms before impact, which allowed a strike to start first and
+    // then made the later active block request ineffective.
+    if(g_rl_oracle_ai && this_mo.controlled &&
+            GetRLOracleAnyHostileAttacking()) {
+        return false;
+    }
+
+    // After the first counter, only take a fresh strike when the immediate
+    // space is clear. In a 1v3 pile-up, attacking merely because no opponent
+    // is in the exact blockprepare window recreates the same long-animation
+    // death that this ablation is meant to test.
+    if(g_rl_oracle_ai && this_mo.controlled && g_rl_oracle_block_throw &&
+            g_rl_oracle_has_thrown) {
+        bool target_down = false;
+        bool target_recently_countered = false;
+        bool target_block_stunned = false;
+        if(chase_target_id != -1) {
+            MovementObject@ target = ReadCharacterID(chase_target_id);
+            target_down = target.GetIntVar("state") == _ragdoll_state;
+            target_recently_countered = target.GetIntVar("state") == _hit_reaction_state &&
+                                        time <= g_rl_oracle_last_throw_time + 0.8f;
+            target_block_stunned = target.GetFloatVar("block_stunned") > 0.0f &&
+                                   target.GetIntVar("block_stunned_by_id") == this_mo.GetID();
+        }
+        // A legal throw often leaves the target in hit-reaction briefly. Allow
+        // one follow-up strike during that real animation window, even if a
+        // second hostile is nearby. This is still only an action choice: the
+        // engine decides whether the strike connects and applies damage.
+        if(!target_down && !target_recently_countered && !target_block_stunned &&
+                GetRLOracleHasCloseHostile(2.4f)) {
+            return false;
+        }
+    }
+
+    // Give the block-to-throw sequence priority over starting another attack.
+    // This only applies to the controlled character in the diagnostic profile;
+    // native enemies and fair RL evaluation retain their normal policy path.
+    if(g_rl_oracle_ai && this_mo.controlled && GetRLOracleAttackThreat() != -1) {
         return false;
     }
 
@@ -2661,6 +2983,34 @@ bool WantsToStartActiveBlock(const Timestep &in ts) {
         return false;
     }
 
+    // This is the timing-critical part of the privileged diagnostic. The
+    // normal ShouldDefend() path uses the AI's sampled prediction and can
+    // arrive after the attacker's blockprepare event. Start the ordinary
+    // active-block mechanic while that event is still inside the legal block
+    // window; no hit, damage, or attacker state is changed here.
+    if(g_rl_oracle_ai && this_mo.controlled &&
+            GetRLOracleAttackThreat() != -1) {
+        // A stale normal-AI countdown may still have going_to_block set from
+        // an earlier attack. The exact oracle event supersedes that countdown;
+        // otherwise the old delay can run past blockprepare and leave this
+        // character with only a passive block at impact.
+        going_to_block = false;
+        block_delay = 0.0f;
+        if(g_rl_oracle_trace && time >= g_rl_oracle_next_block_trace_time) {
+            g_rl_oracle_next_block_trace_time = time + 0.05f;
+            int threat_id = GetRLOracleAttackThreat();
+            MovementObject@ threat = ReadCharacterID(threat_id);
+            Log(info, "RLBLOCK id=" + this_mo.GetID() +
+                      " t=" + time +
+                      " threat=" + threat_id +
+                      " prepare=" + threat.rigged_object().anim_client().GetTimeUntilEvent("blockprepare") +
+                      " impact=" + threat.rigged_object().anim_client().GetTimeUntilEvent("attackimpact") +
+                      " self_state=" + state +
+                      " active=" + (active_blocking ? 1 : 0));
+        }
+        return true;
+    }
+
     bool should_block = ShouldDefend(BLOCK);
 
     if(should_block && !going_to_block) {
@@ -2671,7 +3021,7 @@ bool WantsToStartActiveBlock(const Timestep &in ts) {
             going_to_block = true;
         }
 
-        if(g_rl_oracle_ai) {
+        if(g_rl_oracle_ai && this_mo.controlled && !g_rl_oracle_block_throw) {
             // The privileged diagnostic has the exact target animation event
             // and removes only reaction uncertainty. The active block itself
             // remains the ordinary game mechanic.
@@ -2695,7 +3045,7 @@ bool WantsToStartActiveBlock(const Timestep &in ts) {
         // DebugText("temp_block_skill", "temp_block_skill: " + temp_block_skill, 2.0f);
         temp_block_skill *= mix(0.1, 1.0, game_difficulty * game_difficulty);
 
-        if(RangedRandomFloat(0.0f, 1.0f) > temp_block_skill) {
+        if(!g_rl_oracle_block_throw && RangedRandomFloat(0.0f, 1.0f) > temp_block_skill) {
             block_delay += 0.4f;
         }
     }
@@ -3422,9 +3772,43 @@ vec3 GetAttackMovement() {
 
         if(target_distance > 0.001f) {
             vec3 approach = to_target / target_distance;
-            // Keep a small lateral escape vector when a second awake hostile
-            // is already on top of us. The chosen target remains the attack
-            // target; this just avoids standing in the three-body crush.
+            int threat_id = GetRLOracleAttackThreat();
+            if(g_rl_oracle_evasive_roll) {
+                array<int> threat_characters;
+                GetCharacters(threat_characters);
+                vec3 threat_escape;
+                for(int i = 0, len = threat_characters.size(); i < len; ++i) {
+                    MovementObject@ threat = ReadCharacterID(threat_characters[i]);
+                    if(threat.GetID() == this_mo.GetID() || this_mo.OnSameTeam(threat) ||
+                            threat.GetIntVar("knocked_out") != _awake ||
+                            threat.GetIntVar("state") != _attack_state) {
+                        continue;
+                    }
+                    vec3 away = this_mo.position - threat.position;
+                    away.y = 0.0f;
+                    float away_distance = length(away);
+                    if(away_distance > 0.001f && away_distance < 4.0f) {
+                        threat_escape += away / away_distance * (4.0f - away_distance) / 4.0f;
+                    }
+                }
+                if(length_squared(threat_escape) > 0.001f) {
+                    return normalize(threat_escape);
+                }
+            }
+            if(threat_id != -1 && threat_id != chase_target_id) {
+                MovementObject@ threat = ReadCharacterID(threat_id);
+                vec3 away = this_mo.position - threat.position;
+                away.y = 0.0f;
+                float away_distance = length(away);
+                if(away_distance > 0.001f && away_distance < 3.8f) {
+                    return normalize(away / away_distance + approach * 0.25f);
+                }
+            }
+            // Keep the chosen target in front while opening space from every
+            // other hostile well before it reaches striking distance. The
+            // former 2.4 m threshold reacted only after the three bodies had
+            // already collapsed into one pile, where one active block could
+            // not stop two simultaneous impacts.
             array<int> characters;
             GetCharacters(characters);
             vec3 escape;
@@ -3437,20 +3821,47 @@ vec3 GetAttackMovement() {
                 vec3 from_other = this_mo.position - other.position;
                 from_other.y = 0.0f;
                 float other_distance = length(from_other);
-                if(other_distance > 0.001f && other_distance < 2.4f) {
-                    escape += from_other / other_distance * (2.4f - other_distance) / 2.4f;
+                if(other_distance > 0.001f && other_distance < 4.0f) {
+                    escape += from_other / other_distance * (4.0f - other_distance) / 4.0f;
                 }
             }
             if(length_squared(escape) > 0.001f) {
-                approach = normalize(approach + escape * 0.7f);
+                approach = normalize(approach + escape * 1.1f);
             }
 
-            if(target_distance > 1.05f) {
+            // Stay inside the close-attack threshold for the deterministic
+            // oracle. At ~1.1 m the rabbit selects the long frontkick or
+            // roundhouse path; at <1.0 m it can use stationary_close, which
+            // materially shortens the period during which a hostile can
+            // punish an already-started animation.
+            float oracle_attack_distance = g_rl_oracle_block_throw ? 1.05f : 0.82f;
+            if(target_distance > oracle_attack_distance) {
                 return approach;
             }
             return escape;
         }
         return vec3(0.0f);
+    }
+
+    if(g_rl_oracle_ai && g_rl_oracle_flank && this_mo.controlled && chase_target_id != -1) {
+        MovementObject@ target = ReadCharacterID(chase_target_id);
+        vec3 to_target = target.position - this_mo.position;
+        to_target.y = 0.0f;
+        float target_distance = length(to_target);
+        if(target_distance > 0.001f && target_distance < 5.0f &&
+                target.GetIntVar("state") != _attack_state) {
+            vec3 target_facing = target.GetFacing();
+            target_facing.y = 0.0f;
+            if(length_squared(target_facing) > 0.001f) {
+                target_facing = normalize(target_facing);
+                vec3 target_right(-target_facing.z, 0.0f, target_facing.x);
+                // Circle to the target's rear quarter instead of repeatedly
+                // entering its forward passive-guard cone. The game still
+                // decides whether the resulting legal strike connects.
+                vec3 flank_point = target.position - target_facing * 0.65f + target_right * 0.45f;
+                return GetMovementToPoint(flank_point, 0.2f, 0.0f, 0.0f);
+            }
+        }
     }
 
     if(combat_allowed || chase_allowed) {
@@ -3640,15 +4051,18 @@ void ChooseAttack(bool front, string &out attack_str) {
     attack_str = "";
 
     if(on_ground) {
-        if(g_rl_oracle_ai && chase_target_id != -1) {
+        if(g_rl_oracle_ai && this_mo.controlled && chase_target_id != -1) {
             MovementObject@ target = ReadCharacterID(chase_target_id);
-            float attack_distance = distance(this_mo.position, target.position);
-            if(target.GetIntVar("knocked_out") != _awake) {
+            if(target.GetIntVar("knocked_out") != _awake ||
+                    target.GetIntVar("state") == _ragdoll_state) {
                 attack_str = "low";
-            } else if(attack_distance > 1.25f) {
-                attack_str = "moving";
             } else {
-                attack_str = "stationary";
+                // Use the low sweep as the shortest deterministic ground
+                // strike. The stationary close path still kept the rabbit in
+                // an uncancellable kneestrike for several seconds in trace;
+                // sweep gives the engine a legal low attack with a smaller
+                // exposure window.
+                attack_str = "low";
             }
             return;
         }

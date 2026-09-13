@@ -9457,6 +9457,12 @@ void GetAttackPath(string &in attack_str, string &out attack_path_str, bool orig
         attack_path_str = character_getter.GetAttackPath("moving_low");
     } else if(primary_weapon_id != -1 && attack_str == "stationary" && ReadItemID(primary_weapon_id).GetLabel() == "sword") {
         MovingAttack(attack_path_str, orig_mirrored, attack_distance);
+    } else if(g_rl_oracle_ai && this_mo.controlled && attack_str == "stationary" && !ragdoll_enemy) {
+        // The diagnostic oracle is allowed to choose the short close-range
+        // attack path explicitly. The old distance-based branch selected a
+        // long frontkick whenever the target was just over 1 m away, even
+        // though the target could move into the same animation before impact.
+        attack_path_str = character_getter.GetAttackPath("stationary_close");
     } else if(attack_str == "stationary" ||
             (attack_str == "moving" && (ducking_enemy || ragdoll_enemy) && weapon_slots[primary_weapon_slot] == -1)) {
         if(attack_distance < GetCloseAttackRange()) {
@@ -10579,6 +10585,15 @@ int GetAttackTarget(float range, uint16 flags) {
         // target so the rendered/virtual camera cannot silently redirect a
         // strike to another body in a 1v3 pile-up.
         if(g_rl_oracle_ai && target_id != -1) {
+            MovementObject@ oracle_target = ReadCharacterID(target_id);
+            if(oracle_target.GetIntVar("state") != _ragdoll_state &&
+                    distance_squared(this_mo.position, oracle_target.position) > 1.0f * 1.0f) {
+                // Do not launch an attack from the edge of the broad search
+                // sphere. The target can close the remaining distance during
+                // a long animation, turning an apparent safe opening into an
+                // uncancellable commitment before the next oracle sample.
+                return -1;
+            }
             for(int i = 0, len = matching_characters.size(); i < len; ++i) {
                 if(matching_characters[i] == target_id) {
                     return target_id;

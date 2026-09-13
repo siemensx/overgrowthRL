@@ -54,6 +54,42 @@ python3 Tools/rl/engine_ai_baseline.py \
 test the jump-kick profile. The oracle may choose legal throws, but it never
 calls a damage function or edits health, position, velocity, or physics state.
 
+### Counter-throw diagnostic
+
+To test the specific “active-block, then hold grab/throw” hypothesis, use
+`--block-throw`. It withholds free-form attacks until the first legal counter,
+arms the ordinary active-block mechanic from the opponent's real
+`blockprepare`/`attackimpact` events, selects only a target with
+`block_stunned_by_id == player_id`, and then allows a follow-up strike only
+while that victim is ragdolled. This is still privileged because target IDs
+and animation timers are hidden from the public RL observation.
+
+For a visible, real-time run with a wider spectator view:
+
+```bash
+cd /Users/pavlov/Documents/GitHub/badbunny/overgrowthRL
+python3 Tools/rl/engine_ai_baseline.py \
+  --controller oracle --level arenas/t_train_101.xml \
+  --opponents 3 --difficulty 1.0 --armed-count 0 \
+  --frame-stack 4 --act-period 4 --episodes 1 --max-steps 1200 \
+  --no-jumpkick --block-throw --render --auto-camera \
+  --spectator-fov 110 --trace \
+  --out Tools/rl/runs/oracle-baseline/watch_blockthrow_$(date +%Y%m%d-%H%M%S).json
+```
+
+The timestamped result path is intentional. The runner refuses to overwrite
+an existing JSON result, and `--trace` keeps the engine log under
+`Tools/rl/runs/oracle-baseline/engine-traces/`. A throw is not guaranteed by
+holding grab: the real game requires a successful active block first, and an
+opponent may escape or a second attacker may land during the same frame.
+
+The first revised 20-episode spacing batch (seeds 906000–906019, stock
+unarmed guards, difficulty 1.0) produced 1/20 wins, 11 losses, 8 timeouts,
+and 0.35 hostile KOs per episode. That is diagnostic evidence that the legal
+block→throw chain works, not a 90% ceiling. A repeated single-seed launch is
+not expected to be bit-identical here because opponent AngelScript contains
+stochastic behavior and reset does not reset every global random stream.
+
 Both tools use unique shared-memory names, stop cleanly on SIGTERM, write
 results atomically, and refuse to overwrite an existing result. Keep each JSON
 beside its run evidence; do not copy it over an earlier result.

@@ -92,8 +92,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weapon-type", type=int, default=0)
     parser.add_argument("--species", type=int, default=0)
     parser.add_argument("--throw-aggression", type=float, default=1.0)
+    parser.add_argument("--controller", choices=["oracle", "native"], default="oracle",
+                        help="oracle uses the privileged deterministic controller; native uses ordinary enemycontrol")
     parser.add_argument("--no-jumpkick", action="store_true", help="privileged diagnostic ablation: use ground combat only")
     parser.add_argument("--navmesh-movement", action="store_true", help="privileged diagnostic ablation: use enemycontrol navigation")
+    parser.add_argument("--flank", action="store_true", help="privileged diagnostic ablation: approach the target's rear quarter")
+    parser.add_argument("--evasive-roll", action="store_true", help="privileged diagnostic ablation: roll away from a hostile attack state")
+    parser.add_argument("--block-throw", action="store_true", help="privileged diagnostic ablation: withhold attacks and convert successful active blocks into legal throws")
+    parser.add_argument("--render", action="store_true", help="open a visible, real-time Overgrowth window")
+    parser.add_argument("--auto-camera", action="store_true", help="use the diagnostic chase camera")
+    parser.add_argument("--spectator-fov", type=float, default=110.0)
+    parser.add_argument("--trace", action="store_true", help="retain engine logs and attack/oracle trace files")
     parser.add_argument("--frame-stack", type=int, default=4)
     parser.add_argument("--act-period", type=int, default=4)
     parser.add_argument("--max-steps", type=int, default=1200)
@@ -108,6 +117,9 @@ def main() -> int:
     signal.signal(signal.SIGTERM, _raise_keyboard_interrupt)
     run_dir = Path(args.repo_root) / "Tools" / "rl" / "runs" / "oracle-baseline"
     run_dir.mkdir(parents=True, exist_ok=True)
+    trace_dir = run_dir / "engine-traces"
+    if args.trace:
+        trace_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="engine-ai-level-", dir=run_dir) as level_dir_name:
         level_path = prepare_level(args.level, Path(level_dir_name))
         scenario = {
@@ -119,21 +131,35 @@ def main() -> int:
             "weapon_type": args.weapon_type,
             "throw_aggression": args.throw_aggression,
         }
+        extra_config_lines = []
+        if args.controller == "oracle":
+            extra_config_lines = [
+                "rl_oracle_ai: true",
+                f"rl_oracle_jumpkick: {'false' if args.no_jumpkick else 'true'}",
+                f"rl_oracle_direct_move: {'false' if args.navmesh_movement else 'true'}",
+                f"rl_oracle_flank: {'true' if args.flank else 'false'}",
+                f"rl_oracle_evasive_roll: {'true' if args.evasive_roll else 'false'}",
+                f"rl_oracle_block_throw: {'true' if args.block_throw else 'false'}",
+            ]
+            if args.trace:
+                extra_config_lines.append("rl_oracle_trace: true")
+
         env = OvergrowthEnv(
             repo_root=args.repo_root,
             level=str(level_path),
             seed=args.seed_base,
             layout=DEFAULT_LAYOUT,
             frame_stack=args.frame_stack,
-            render=False,
-            time_scale_mult=100,
+            render=args.render,
+            time_scale_mult=1 if args.render else 100,
             act_period=args.act_period,
             shm_name=f"/ogrl_engine_ai_{os.getpid()}",
-            extra_config_lines=[
-                "rl_oracle_ai: true",
-                f"rl_oracle_jumpkick: {'false' if args.no_jumpkick else 'true'}",
-                f"rl_oracle_direct_move: {'false' if args.navmesh_movement else 'true'}",
-            ],
+            log_attacks=args.trace,
+            auto_camera=args.auto_camera or args.render,
+            spectator_fov=args.spectator_fov,
+            extra_config_lines=extra_config_lines,
+            write_dir_parent=trace_dir if args.trace else None,
+            keep_artifacts=args.trace,
         )
         episodes = []
         try:
@@ -179,8 +205,10 @@ def main() -> int:
     timeouts = sum(episode["outcome"] == "timed out" for episode in episodes)
     summary = {
         "source": "Tools/rl/engine_ai_baseline.py",
-        "profile": "privileged-engine-enemycontrol-oracle",
-        "warning": "not a fair RL baseline; player slot uses hidden engine AI state, omniscient target acquisition, and ignores RL actions",
+        "profile": "privileged-engine-enemycontrol-oracle" if args.controller == "oracle" else "native-engine-enemycontrol",
+        "warning": ("not a fair RL baseline; player slot uses hidden engine state, omniscient target acquisition, and ignores RL actions"
+                    if args.controller == "oracle" else
+                    "diagnostic native enemycontrol in the player slot; not an expert ceiling and not a canonical RL score"),
         "level": args.level,
         "scenario": scenario,
         "seed_base": args.seed_base,
@@ -188,8 +216,15 @@ def main() -> int:
         "episodes_completed": len(episodes),
         "frame_stack": args.frame_stack,
         "act_period": args.act_period,
+        "controller": args.controller,
+        "render": args.render,
+        "trace": args.trace,
+        "trace_dir": str(trace_dir.resolve()) if args.trace else None,
         "no_jumpkick": args.no_jumpkick,
         "navmesh_movement": args.navmesh_movement,
+        "flank": args.flank,
+        "evasive_roll": args.evasive_roll,
+        "block_throw": args.block_throw,
         "max_steps": args.max_steps,
         "wins": wins,
         "losses": losses,
