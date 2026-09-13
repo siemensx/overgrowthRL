@@ -106,6 +106,7 @@ class OvergrowthEnv:
         equivalence_trace_path: str | Path | None = None,
         log_attacks: bool = False,
         auto_camera: bool = False,
+        spectator_fov: float | None = None,
     ):
         # act_period (OGRL-20260816-021 Sec 1.3(a)/2.2(a), Stage 6): decision
         # rate divisor -- 1 = every physics tick is a decision (120Hz, the
@@ -115,6 +116,7 @@ class OvergrowthEnv:
         self.act_period = act_period
         self.log_attacks = log_attacks
         self.auto_camera = bool(auto_camera)
+        self.spectator_fov = float(spectator_fov) if spectator_fov is not None else None
         # render=True is "watch mode" (Tools/rl/ppo/watch.py): a real window,
         # no --benchmark fast-forward, so wall-clock time and in-game time
         # match -- letting a human actually watch the character move at
@@ -231,6 +233,10 @@ class OvergrowthEnv:
                 # state; legacy controlled-character target selection can
                 # nevertheless read the camera, so this is diagnostic-only.
                 config_lines.append("auto_camera: true")
+                config_lines.append("rl_spectator_camera: true")
+                config_lines.append("rl_spectator_camera_smooth: 0.92")
+                if self.spectator_fov is not None:
+                    config_lines.append(f"chase_camera_fov: {self.spectator_fov:g}")
         # Ground-truth attack telemetry (aschar.as's g_rl_log_attacks). Off for
         # training -- it costs log volume and nothing reads it there -- and
         # switched on only by the analysis tools that parse it.

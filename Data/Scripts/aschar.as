@@ -10899,6 +10899,16 @@ void ApplyCameraControls(const Timestep &in ts) {
         SetGrabMouse(true);
     }
 
+    // Render-only diagnostic camera profile. It does not add camera state to
+    // the policy, but legacy controlled-character target selection can read
+    // the camera, so this profile is never used by canonical headless evals.
+    bool rl_spectator_camera = this_mo.controlled && GetConfigValueFloat("rl_spectator_camera") > 0.5f;
+    float rl_spectator_smooth = GetConfigValueFloat("rl_spectator_camera_smooth");
+    if(rl_spectator_smooth <= 0.0f) {
+        rl_spectator_smooth = 0.92f;
+    }
+    rl_spectator_smooth = max(0.5f, min(0.995f, rl_spectator_smooth));
+
     if(dialogue_control || level.DialogueCameraControl() ) {
         level_cam_weight = 1.0;
         level_cam_rotation.x = camera.GetXRotation();
@@ -10986,7 +10996,8 @@ void ApplyCameraControls(const Timestep &in ts) {
     } else {  // Handle assisted camera AI
         // Interpolate camera facing
         vec3 target_chase_cam_pos = cam_pos - camera.GetFacing() * cam_distance;
-        autocam.chase_cam_pos = mix(target_chase_cam_pos, autocam.chase_cam_pos, pow(0.9f, ts.frames()));
+        float chase_inertia = rl_spectator_camera ? rl_spectator_smooth : 0.9f;
+        autocam.chase_cam_pos = mix(target_chase_cam_pos, autocam.chase_cam_pos, pow(chase_inertia, ts.frames()));
         vec3 facing = normalize(cam_pos - autocam.chase_cam_pos);
 
         if(target_id != -1) {
@@ -11169,7 +11180,8 @@ void ApplyCameraControls(const Timestep &in ts) {
     }
 
     // Apply camera rotation with inertia
-    float inertia = pow(kCameraRotationInertia, ts.frames());
+    float rotation_inertia = rl_spectator_camera ? rl_spectator_smooth : kCameraRotationInertia;
+    float inertia = pow(rotation_inertia, ts.frames());
     cam_rotation = cam_rotation * inertia +
         target_rotation * (1.0f - inertia);
     cam_rotation2 = cam_rotation2 * inertia +
@@ -11190,7 +11202,8 @@ void ApplyCameraControls(const Timestep &in ts) {
     }
 
     // Apply camera position inertia
-    cam_pos = mix(cam_pos, old_cam_pos, pow(0.8f, ts.frames()));
+    float position_inertia = rl_spectator_camera ? rl_spectator_smooth : 0.8f;
+    cam_pos = mix(cam_pos, old_cam_pos, pow(position_inertia, ts.frames()));
 
     camera.SetVelocity(this_mo.velocity);
 
@@ -11245,7 +11258,7 @@ void ApplyCameraControls(const Timestep &in ts) {
     cam_distance = mix(target_cam_distance, cam_distance, pow(0.95f, ts.frames()));
 
     float camera_vibration_mult = 2.0f;
-    float camera_vibration = camera_shake * camera_vibration_mult;
+    float camera_vibration = rl_spectator_camera ? 0.0f : camera_shake * camera_vibration_mult;
 
     level_cam_weight = 0.0;
     level_cam_weight = mix(0.0, level_cam_weight, pow(0.95, ts.frames()));

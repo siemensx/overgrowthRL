@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import signal
 import sys
 import os
@@ -113,7 +114,13 @@ def parse_args():
     p.add_argument("--difficulty", type=float, default=None, help="0..1 opponent skill; default: whatever the level script picks")
     p.add_argument("--auto-camera", action="store_true",
                    help="render-only spectator camera: keep the active combat target in view")
+    p.add_argument("--spectator-fov", type=float, default=110.0,
+                   help="render-only chase-camera FOV in degrees (default: 110; engine range 1..179)")
+    p.add_argument("--episode-events", default=None, help="JSONL path for rendered recorder episode boundaries")
     args = p.parse_args()
+
+    if not 1.0 <= args.spectator_fov <= 179.0:
+        p.error("--spectator-fov must be between 1 and 179 degrees")
 
     if args.stage >= 0:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -138,6 +145,18 @@ def parse_args():
     args.frame_stack = args.frame_stack if args.frame_stack is not None else 1
     args.act_period = args.act_period if args.act_period is not None else 1
     return args
+
+
+def append_episode_event(path: str | None, event: str, episode: int, seed: int, **values) -> None:
+    if not path:
+        return
+    event_path = Path(path).expanduser().resolve()
+    event_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"event": event, "episode": episode, "seed": seed,
+              "wall_time": time.time(), "monotonic": time.monotonic(), **values}
+    with event_path.open("a", encoding="utf-8") as stream:
+        stream.write(json.dumps(record, sort_keys=True) + "\n")
+        stream.flush()
 
 
 def deterministic_action(policy: ActorCritic, obs_tensor: torch.Tensor) -> np.ndarray:
@@ -199,6 +218,7 @@ def main():
         jumpkick_wariness=args.jumpkick_wariness,
         throw_aggression_launch=args.throw_aggression,
         auto_camera=args.auto_camera,
+        spectator_fov=args.spectator_fov,
     )
     try:
         for episode in range(args.episodes):
@@ -207,6 +227,8 @@ def main():
                   "throw_aggression": args.throw_aggression}
             if args.difficulty is not None:
                 kw["difficulty"] = args.difficulty
+            append_episode_event(args.episode_events, "start", episode, args.seed + episode,
+                                 opponents=args.opponents, armed_count=args.armed_count)
             raw_obs = env.reset(seed=args.seed + episode, **kw)
             if episode == 0:
                 # env.py's first reset() only consumes the engine's own initial
@@ -253,7 +275,11 @@ def main():
                 if time.monotonic() - episode_start > args.max_episode_real_seconds:
                     break  # wall-clock cap, not a tick-count one -- see module docstring
             outcome = "WON" if won else ("LOST" if done else "timed out")
-            print(f"episode {episode}: steps={step + 1} real_seconds={time.monotonic() - episode_start:.1f} reward={episode_reward:.2f} {outcome}")
+            real_seconds = time.monotonic() - episode_start
+            print(f"episode {episode}: steps={step + 1} real_seconds={real_seconds:.1f} reward={episode_reward:.2f} {outcome}")
+            append_episode_event(args.episode_events, "end", episode, args.seed + episode,
+                                 outcome=outcome, steps=step + 1, reward=episode_reward,
+                                 real_seconds=real_seconds)
 
             if not args.no_ghost:
                 ghost_path = ghost_dir / f"ghost_step{checkpoint['global_step']}_ep{episode}_{int(time.time())}.csv"
