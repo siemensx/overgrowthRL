@@ -127,8 +127,9 @@ import Foundation
 let target = TARGET_OWNER.lowercased()
 let main = CGMainDisplayID()
 let displayBounds = CGDisplayBounds(main)
-let scaleX = CGFloat(CGDisplayPixelsWide(main)) / (displayBounds.size.width > 0 ? displayBounds.size.width : 1.0)
-let scaleY = CGFloat(CGDisplayPixelsHigh(main)) / (displayBounds.size.height > 0 ? displayBounds.size.height : 1.0)
+let mode = CGDisplayCopyDisplayMode(main)
+let scaleX = mode.map { CGFloat($0.pixelWidth) / CGFloat($0.width) } ?? 1.0
+let scaleY = mode.map { CGFloat($0.pixelHeight) / CGFloat($0.height) } ?? 1.0
 let options = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
 let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
 
