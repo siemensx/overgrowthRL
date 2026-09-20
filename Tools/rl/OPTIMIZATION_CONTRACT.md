@@ -8,9 +8,17 @@ place in the order. A lever that is not on this list does not get pulled
 without being added here first.
 
 Throughput reference: 715 steps/s active on the Windows trainer. 10M steps ≈ 4 h.
-Bench = `evaluate.py`, 200 episodes, seeds 900000–900199, t_train_101, 1v3,
-unarmed, d=1.0, greedy, 1200-step cap. Baseline noise on identical seeds is
-±4 wins (five measurements of the same checkpoint: 76–83).
+Bench = `evaluate.py`, seeds 900000+, t_train_101, 1v3, unarmed, d=1.0,
+1200-step cap. **Corrected 2026-09-20:** the engine is not deterministic
+(identical checkpoint, identical seeds: 44 then 59), so the honest noise at
+n=200, p≈0.35 is **±13 wins** (Wilson), not the ±4 a lucky 5-sample spread of
+the baseline suggested. Every bench is now **400 greedy + 200 sampled**
+(±9 / ±13), and the periodic eval snapshots the checkpoint it benched
+(`checkpoints/snapshots/<run>_<step>.pt`) so any number can be re-benched.
+A policy whose button probabilities sit near 0.5 is a knife-edge under
+greedy decoding (`walk` crossed 0.5 in sel0's last 1.3M steps and the
+greedy bench moved 38 wins); report sampled alongside greedy until Phase 4.2
+replaces the independent Bernoullis.
 
 ## Phase 0 — correctness, before a single training step (zero budget)
 
@@ -24,9 +32,19 @@ arms differ in exactly one thing.
 | 0.3 | `train_vec.py:706` rebuilds `won` from `opponent_knockout > 0`; `vec_env.py` already computes all-hostiles-down. Two definitions of the one number that gates everything. | `vec_env` sets `info["won"]`; every collector consumes only that field; delete the reconstruction | grep shows one definition; a same-step "last KO + timeout" synthetic case labels correctly |
 | 0.4 | `GetAttackTarget()` picks the RL character's attack target by **camera** facing. Under RL no look axes exist and headless never sets auto-camera, so the yaw is frozen at spawn for the whole episode. Every attack in 829M steps went to whichever enemy aligned with a value the policy neither sees nor controls. Invisible in 1v1; decisive in 1v3. Confirmed against stock WolfireGames/overgrowth. | `rl_target_select` launch config: 0 stock, 1 self-facing dot, 2 nearest (native AI rule). Gated on `IsExternalRLController`. Human play unchanged. | zero-training 3×200 A/B on 829M (running); then Phase 1 |
 | 0.5 | `target_kl` early stop checks approx-KL AFTER `optimizer.step()`, so the pathological minibatch is applied before the guard fires. 46 updates in 40k had KL>1 with clip_fraction ≈ 1/128. | compute KL before the step and `break` before applying (SB3 order). Add exact per-head KL: Gaussian ×2, Bernoulli ×6, joint, plus the sampled estimator, logged every update. | first-minibatch invariant (37-details audit): on minibatch 0 of epoch 0, `new_log_prob − old_log_prob` must be ~0 (|max| < 1e-4) for 500k steps. Any violation = rollout/update reconstruction bug, stop everything. Then: fraction of KL-spike mass attributable to a single Bernoulli head. |
+| 0.7 | The continuous log-prob was rebuilt at update time from `atanh(clamp(tanh(raw)))`; any \|raw\| > 3.8 shifts that sample by nats. ~1 per 3584-step update — enough to trip the sampled-KL guard (0.09 vs 0.02) on **100% of updates** at median minibatch 9/28. `mb0_max_abs_logratio` read 5.9. | buffer stores the pre-tanh sample; update evaluates there; guard gates on exact per-minibatch KL | `mb0_max_abs_logratio` = 0.0 in smoke; `early_stop_minibatch` distribution on Phase 1b |
 | 0.6 | No deterministic eval ever ran after 277M because the gate pre-filter never fired. 550M steps with zero automated measurements of the target metric. | periodic 200-episode deterministic bench every 25M steps regardless of gate state, written to `events.jsonl` and `eval/` | first event appears at +25M on the next run |
 
 ## Phase 1 — actuator: target selection (the lever with the highest prior)
+
+**Result 2026-09-20 (research-artifacts/OGRL-20260920-001-phase1):** both arms
+ended BELOW the 261M start on every measure after 10M (greedy 83 → 44/59 and
+76 → 62; sampled 67 → 53 and 60; in-run sampled 0.34 → 0.28 and 0.36 → 0.26).
+No selector effect distinguishable. The run was invalid as a learner test:
+the target_kl guard fired on 100% of updates at median minibatch 9/28 because
+of the tanh-clamp log-prob reconstruction (0.5 below, now 0.7). **Phase 1b**
+re-runs the same two arms on the fixed learner at the OLD hyperparameters so
+the delta is attributable, with the corrected bench.
 
 The 829M policy is an equilibrium under the frozen-camera selector; a flat
 zero-training A/B does not kill this. Retrain is required.
