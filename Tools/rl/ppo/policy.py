@@ -290,6 +290,8 @@ class ActorCritic(nn.Module):
         mean, log_std, logits = self.actor_params(obs)
         cont = action[..., :CONTINUOUS_DIM].clamp(-1.0 + _TANH_EPS, 1.0 - _TANH_EPS)
         raw = torch.atanh(cont) if raw_continuous is None else raw_continuous
+        if raw_continuous is not None:
+            cont = torch.tanh(raw)
         cont_lp = _normal_log_prob(raw, mean, log_std) - torch.log(1.0 - cont.pow(2) + _TANH_EPS)
         disc_lp = _bernoulli_log_prob(action[..., CONTINUOUS_DIM:], logits)
         return cont_lp, disc_lp
@@ -335,6 +337,11 @@ class ActorCritic(nn.Module):
                 # (the training buffer) must pass it; this branch remains only
                 # for collectors that do not store it.
                 raw_continuous = torch.atanh(continuous_action)
+            else:
+                # Evaluate the tanh Jacobian on exactly what the rollout used
+                # (tanh(raw), unclamped); the clamped stored action differs on
+                # saturated samples and left mb0 |log-ratio| at 0.47 (run23).
+                continuous_action = torch.tanh(raw_continuous)
             discrete_action = action[..., CONTINUOUS_DIM:]
 
         # Tanh-squash log-prob correction (SAC, Haarnoja et al. 2018 appendix C):
