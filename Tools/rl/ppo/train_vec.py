@@ -212,6 +212,10 @@ def parse_args():
                    help="number of remote workers to wait for before training starts")
     p.add_argument("--gate-eval-episodes", type=int, default=30,
                    help="deterministic episodes run before the armed ladder may advance")
+    p.add_argument("--engine-config-line", action="append", default=[],
+                   help="extra engine launch-config line for every worker, repeatable. Phase 1 uses "
+                        "'rl_target_select: 2'. Recorded in run.json so the actuator an arm trained "
+                        "under is never ambiguous.")
     p.add_argument("--periodic-eval-steps", type=int, default=25_000_000,
                    help="run a 200-episode deterministic bench at the current stage every N global steps "
                         "REGARDLESS of the gate. run21 went 550M steps with zero automated measurements "
@@ -455,6 +459,7 @@ def main():
         k_standby=args.k_standby, act_period=args.act_period,
         soft_reset=args.soft_reset, hard_reset_every=args.hard_reset_every, scenario_fn=sampler.sample_episode,
         native_trace_dir=None if args.no_native_capture else (logger.run_dir / "native-traces"),
+        engine_config_lines=list(args.engine_config_line),
     )
     obs_dim = vec_env.observation_dim
 

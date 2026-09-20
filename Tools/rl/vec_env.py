@@ -97,6 +97,8 @@ class VecOvergrowthEnv:
                                       # has actually passed.
         scenario_fn: "Callable[[], dict] | None" = None,  # OGRL-20260817-028 Sec3: called once per reset,
         native_trace_dir: str | Path | None = None,
+        engine_config_lines: list[str] | None = None,       # extra launch-config lines for EVERY engine
+                                                            # (e.g. "rl_target_select: 2"); see env.py extra_config_lines
                                                             # returning {"difficulty","opponents","weapons","species"}
                                                             # (curriculum.ScenarioSampler.sample_episode()'s exact
                                                             # shape). None reproduces the pre-curriculum behavior
@@ -123,6 +125,7 @@ class VecOvergrowthEnv:
         self.hard_reset_every = hard_reset_every
         self.scenario_fn = scenario_fn
         self.native_trace_dir = Path(native_trace_dir) if native_trace_dir else None
+        self.engine_config_lines = list(engine_config_lines or [])
         if self.native_trace_dir is not None:
             self.native_trace_dir.mkdir(parents=True, exist_ok=True)
         self._episode_steps = [0] * n_envs
@@ -177,6 +180,7 @@ class VecOvergrowthEnv:
                 reward_config=reward_config, frame_stack=frame_stack, act_period=act_period,
                 equivalence_digest_path=(self.native_trace_dir / f"{shm_suffix}.jsonl") if self.native_trace_dir is not None else None,
                 equivalence_trace_path=(self.native_trace_dir / f"{shm_suffix}.input.jsonl") if self.native_trace_dir is not None else None,
+                extra_config_lines=list(self.engine_config_lines),
             )
 
         # Parallel launch: each OvergrowthEnv.__init__ blocks on its own

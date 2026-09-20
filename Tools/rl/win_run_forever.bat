@@ -1,5 +1,7 @@
 @echo off
 REM run21 supervisor -- restarts training forever, snapshots checkpoints, rolls logs.
+REM n_envs/k_standby = 14/4: throughput_sweep.py 2026-09-19 on this laptop (12C/14T),
+REM real trainer, median cycle sps: n14k4 828 > n10k2 773 (old) > n12k2 712 > n10k4 683 > n8k2 669.
 REM
 REM SINGLE INSTANCE ONLY. Two supervisors are fatal: each one runs
 REM "taskkill /F /IM Overgrowth.exe" between cycles, so supervisor B kills
@@ -31,6 +33,8 @@ if not exist "%PY%" (
   exit /b 1
 )
 set FAST=0
+REM Phase 1 actuator (OPTIMIZATION_CONTRACT 0.4/1.x): 0 stock camera, 1 self-facing, 2 nearest.
+if "%TARGET_SELECT%"=="" set TARGET_SELECT=2
 set REPO=C:\ogrl\overgrowthRL
 set CKPT=%REPO%\Tools\rl\ppo\checkpoints\run21_win.pt
 set SNAP=%REPO%\Tools\rl\ppo\checkpoints\snapshots
@@ -60,7 +64,7 @@ set OGRL_ALLOW_NENVS_CHANGE=1
 %PY% -u Tools\rl\ppo\train_vec.py ^
   --repo-root %REPO% ^
   --levels arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml ^
-  --shm-prefix /ogrl_w%RANDOM% --n-envs 10 --k-standby 2 --seed 21 ^
+  --shm-prefix /ogrl_w%RANDOM% --n-envs 14 --k-standby 4 --seed 21 ^
   --checkpoint-path %CKPT% %RESUME% --run-id run21_win ^
   --total-timesteps 4000000000 --n-steps 256 --n-epochs 1 --minibatch-size 128 ^
   --entropy-coef 0.003 --entropy-coef-final 0.003 --entropy-anneal-steps 1000000 ^
@@ -68,6 +72,7 @@ set OGRL_ALLOW_NENVS_CHANGE=1
   --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 50 ^
   --d-max-start 1.0 --d-max-cap 1.0 --d-step 0.1 --d-min 1.0 ^
   --opponents-cap 3 --opp-keep-solo 0.0 --armed-stage 0 --gate-eval-episodes 30 ^
+  --engine-config-line "rl_target_select: %TARGET_SELECT%" --periodic-eval-steps 25000000 ^
   --no-tapes --no-native-capture >> C:\ogrl\run21_win.log 2>&1
 
 for /f %%s in ('powershell -NoProfile -Command "[int][double]::Parse((Get-Date -UFormat %%s))"') do set T1=%%s
