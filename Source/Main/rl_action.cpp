@@ -121,7 +121,17 @@ bool Enabled() {
 }
 
 bool IsExternalController(int controller_id) {
-    return g_enabled && controller_id == g_controller_id && controller_id > 0;
+    // 2026-09-19: was `&& controller_id > 0`, present since the runtime was
+    // first written. Training drives the player with
+    // --rl-action-controller-id 0, so this predicate returned false for the
+    // trained character on every step of every run -- and everything the
+    // scripts gate on it (playercontrol.as's body-frame movement axes, the
+    // rl_target_select attack selector) silently fell through to the human
+    // keyboard path: camera-relative movement and camera-facing target
+    // selection against a camera no look axis ever moved. The equality test
+    // against g_controller_id is the whole check; play_match (RL on 1, human
+    // on 0) still resolves correctly without the extra guard.
+    return g_enabled && controller_id == g_controller_id && controller_id >= 0;
 }
 
 void ResetForEpisode() {

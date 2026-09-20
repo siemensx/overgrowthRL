@@ -10573,6 +10573,8 @@ int GetThrowTarget() {
     return best_target;
 }
 
+bool g_rl_target_select_logged = false;
+
 int GetAttackTarget(float range, uint16 flags) {
     array<int> nearby_characters;
     GetCharactersInSphere(this_mo.position, range + _leg_sphere_size, nearby_characters);
@@ -10616,6 +10618,12 @@ int GetAttackTarget(float range, uint16 flags) {
         //                     2 = nearest, the same rule the native AI uses
         int rl_target_select = IsExternalRLController(this_mo.controller_id)
                              ? GetConfigValueInt("rl_target_select") : 0;
+        if(!g_rl_target_select_logged) {
+            g_rl_target_select_logged = true;
+            Log(info, "RL: GetAttackTarget selector=" + rl_target_select
+                + " external=" + (IsExternalRLController(this_mo.controller_id) ? 1 : 0)
+                + " candidates=" + matching_characters.size());
+        }
         if(rl_target_select == 2) {
             return GetClosestCharacterInArray(this_mo.position, matching_characters, range + _leg_sphere_size);
         }
