@@ -112,6 +112,7 @@ def main():
     p_joint = []
     n_greedy_pressed = defaultdict(int)
     cont_abs_sum = np.zeros(2)
+    sat_n = np.zeros(2); logratio_sum = np.zeros(2); logratio_max = np.zeros(2)
     steps = 0
     outcomes = {"won": 0, "lost": 0, "timeout": 0}
 
@@ -137,6 +138,15 @@ def main():
                 p_joint.append(pj)
                 n_greedy_pressed[int(g.sum())] += 1
                 cont_abs_sum += np.abs(torch.tanh(mean).numpy())
+                # Rollout/update log-prob mismatch: at rollout the log-prob uses the
+                # raw Gaussian sample; at update it is rebuilt from atanh(clamp(tanh(raw))).
+                # Any |raw| > atanh(1-1e-3) = 3.8 is reconstructed as 3.8 exactly.
+                raw = (mean + torch.randn_like(mean) * log_std.exp()).numpy()
+                a = np.tanh(raw); ac = np.clip(a, -1+1e-3, 1-1e-3); rec = np.arctanh(ac)
+                sig = log_std.exp().numpy(); mu = mean.numpy()
+                lp_old = -0.5*((raw-mu)/sig)**2; lp_new = -0.5*((rec-mu)/sig)**2
+                lr = lp_new - lp_old
+                sat_n += (np.abs(a) > 1-1e-3); logratio_sum += lr; logratio_max = np.minimum(logratio_max, lr)
                 steps += 1
 
                 det_cont = torch.tanh(mean).numpy()
@@ -196,6 +206,10 @@ def main():
     print(f"\nP(sampled action == greedy action): mean {pj.mean():.4f}  median {np.median(pj):.4f}")
     print(f"greedy buttons pressed per step: {dict(sorted(n_greedy_pressed.items()))}")
     print(f"continuous |tanh(mean)|: {result['continuous_abs_mean']}  log_std {result['continuous_log_std']}")
+    print(f"SATURATION: fraction of sampled moves with |a|>1-1e-3 (log-prob rebuilt wrong at update): "
+          f"x={sat_n[0]/steps:.3f} y={sat_n[1]/steps:.3f}   mean log_ratio [{logratio_sum[0]/steps:.2f},{logratio_sum[1]/steps:.2f}]  worst [{logratio_max[0]:.1f},{logratio_max[1]:.1f}]")
+    result["saturation"] = {"frac_x": float(sat_n[0]/steps), "frac_y": float(sat_n[1]/steps),
+                            "worst_logratio": [float(logratio_max[0]), float(logratio_max[1])]}
 
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
