@@ -214,3 +214,36 @@ python Tools\rl\ppo\watch.py --checkpoint Tools\rl\ppo\checkpoints\run21_win.pt 
 
 `--stage 0..6` replays any curriculum rung. Five episodes cannot distinguish a
 broken policy from a normal one — at a 0.4 win rate, P(0 wins in 5) is 7.5%.
+
+## 2026-09-19 — Phase 1 of the optimization contract is running
+
+Read `Tools/rl/OPTIMIZATION_CONTRACT.md` first. What is on the trainer tonight:
+
+- `C:\ogrl\phase1.bat` (repo: `Tools/rl/win_phase1.bat`), started 21:49 via task `OGRL_Phase1`
+  (task then DISABLED so its ONCE trigger cannot refire; the running process is unaffected).
+- Arms, sequential: `run22_sel0` (control: stock camera targeting) then `run22_sel2` (nearest).
+  Each resumes from `run21_baseline_260m.pt` (261,284,572), 10M steps, n_envs 14 / k_standby 4,
+  body-frame movement (engine fix), all Phase-0 fixes. ~3.5 h per arm including benches.
+- Results: `Tools\rl\runs\run22_sel<N>\eval\periodic_<step>.json` at +5M and +10M (200 episodes,
+  seeds 900000+, 1v3 unarmed d=1.0, greedy). The 10M file is the arm's number. Also one line per
+  bench in `runs\run22_sel<N>\events.jsonl` (`kind: periodic_eval`), and `[periodic-eval]` in
+  `C:\ogrl\run22_sel<N>.log`. Baseline to beat: 77/200 (same machine, 09-19).
+- Supervisor log: `C:\ogrl\phase1.log`. Per-arm trainer log: `C:\ogrl\run22_sel<N>.log`.
+- New per-update telemetry in `metrics.jsonl` -> `ppo`: `exact_kl`, `exact_kl_heads[8]`,
+  `max_sample_kl`, `max_sample_kl_head`, `mb0_max_abs_logratio` (must stay ~1e-5),
+  `early_stop_minibatch` (-1 = guard never fired; otherwise the minibatch index it fired at).
+
+If it is not running when you look: `phase1.log` says which arm exited and when; the trainer
+log's tail has the traceback. Re-run an arm with `set ARMS=2` then `C:\ogrl\phase1.bat` -- an
+existing `run22_sel<N>.pt` is resumed, not restarted. `run_forever.bat` is NOT the thing to
+start; it is the old run21 supervisor.
+
+### Two more sync traps (cost ~40 min tonight)
+
+7. **Sync `Data/Scripts` as a whole, every time.** `aschar.as` referenced `g_rl_oracle_ai`,
+   declared in `enemycontrol.as` on the Mac since 09-12; Windows had the 09-08 copy. A script
+   compile error makes the headless engine spin forever at 100% CPU with only three lines on
+   stdout. The real error is in `<write-dir>\logfile.txt`, not the stdout capture. The
+   `Tools/rl` tree has the same rule (`env.py` lacked `extra_config_lines`). Ship trees, not files.
+8. The Windows git checkout is upstream Wolfire (`245fe482`); `Tools/rl` and the RL scripts are
+   untracked there. There is no history to recover an overwritten Windows-only file from.
