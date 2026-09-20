@@ -221,7 +221,11 @@ def parse_args():
                    help="run a 200-episode deterministic bench at the current stage every N global steps "
                         "REGARDLESS of the gate. run21 went 550M steps with zero automated measurements "
                         "because the gate pre-filter never fired. 0 disables.")
-    p.add_argument("--periodic-eval-episodes", type=int, default=200)
+    p.add_argument("--periodic-eval-episodes", type=int, default=400,
+                   help="greedy episodes per periodic bench (n=400 -> +-9 wins). A sampled bench of "
+                        "--periodic-eval-sampled episodes runs alongside; the benched checkpoint is "
+                        "snapshotted to checkpoints/snapshots/<run>_<step>.pt so it can be re-benched.")
+    p.add_argument("--periodic-eval-sampled", type=int, default=200)
     p.add_argument("--gate-min-step-gap", type=int, default=3_000_000,
                    help="minimum global steps between deterministic gate evals. The stochastic "
                         "pre-filter clears its 600-episode bar roughly every 220k steps, and a "
@@ -913,34 +917,55 @@ def main():
                 _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer,
                                  reward_normalizer, global_step,
                                  curriculum=sampler.curriculum_state())
-                _out = Path(logger.run_dir) / "eval" / f"periodic_{global_step}.json"
-                _out.parent.mkdir(parents=True, exist_ok=True)
-                _cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "evaluate.py"),
-                        "--checkpoint", args.checkpoint_path, "--repo-root", args.repo_root,
-                        "--level", levels_list[0], "--frame-stack", str(args.frame_stack),
-                        "--act-period", str(args.act_period), "--episodes", str(args.periodic_eval_episodes),
-                        "--seed-base", "900000",
-                        "--difficulty-bands", "1.0", "--opponents", str(_sp["opponents"]),
-                        "--max-episode-steps", str(args.max_episode_steps),
-                        "--armed-count", str(_sp["armed_count"]), "--weapon-type", str(_sp["weapon_type"]),
-                        "--throw-aggression", str(_sp["throw_aggression"]),
-                        "--shm-name", f"{args.shm_prefix}p", "--device", "cpu", "--no-control",
-                        "--out", str(_out)]
-                _wr, _n = 0.0, 0
+                # Snapshot the exact checkpoint being benched so the number can be
+                # re-benched later (Phase 1's +8.7M checkpoints were overwritten and
+                # a 82 -> 44/59 swing could not be re-examined).
+                _snapdir = Path(args.checkpoint_path).parent / "snapshots"
+                _snapdir.mkdir(parents=True, exist_ok=True)
+                _snap = _snapdir / f"{run_id}_{global_step}.pt"
                 try:
-                    subprocess.run(_cmd, capture_output=True, timeout=7200)
-                    if _out.exists():
-                        _b = json.loads(_out.read_text())["bands"][0]["policy"]
-                        _wr, _n = _b["win_rate"], _b["episodes"]
+                    shutil.copyfile(args.checkpoint_path, _snap)
                 except Exception as _e:
-                    print(f"[periodic-eval] failed: {_e}", flush=True)
+                    print(f"[periodic-eval] snapshot failed: {_e}", flush=True)
+                _results = {}
+                for _mode, _neps, _flag in (("greedy", args.periodic_eval_episodes, []),
+                                            ("sampled", args.periodic_eval_sampled, ["--stochastic"])):
+                    if _neps <= 0:
+                        continue
+                    _out = Path(logger.run_dir) / "eval" / f"periodic_{global_step}_{_mode}.json"
+                    _out.parent.mkdir(parents=True, exist_ok=True)
+                    _cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "evaluate.py"),
+                            "--checkpoint", str(_snap if _snap.exists() else args.checkpoint_path),
+                            "--repo-root", args.repo_root,
+                            "--level", levels_list[0], "--frame-stack", str(args.frame_stack),
+                            "--act-period", str(args.act_period), "--episodes", str(_neps),
+                            "--seed-base", "900000",
+                            "--difficulty-bands", "1.0", "--opponents", str(_sp["opponents"]),
+                            "--max-episode-steps", str(args.max_episode_steps),
+                            "--armed-count", str(_sp["armed_count"]), "--weapon-type", str(_sp["weapon_type"]),
+                            "--throw-aggression", str(_sp["throw_aggression"]),
+                            "--shm-name", f"{args.shm_prefix}p{_mode[0]}", "--device", "cpu", "--no-control",
+                            "--out", str(_out)] + _flag
+                    for _cl in args.engine_config_line:
+                        _cmd += ["--config-line", _cl]
+                    _wr, _n = 0.0, 0
+                    try:
+                        subprocess.run(_cmd, capture_output=True, timeout=7200)
+                        if _out.exists():
+                            _b = json.loads(_out.read_text())["bands"][0]["policy"]
+                            _wr, _n = _b["win_rate"], _b["episodes"]
+                    except Exception as _e:
+                        print(f"[periodic-eval] {_mode} failed: {_e}", flush=True)
+                    _results[_mode] = (_wr, _n)
+                _g = _results.get("greedy", (0.0, 0)); _s = _results.get("sampled", (0.0, 0))
                 logger.log_event(
                     "periodic_eval",
-                    f"{run_id} periodic bench at {_sp['label']}: deterministic {_wr:.3f} over {_n}",
+                    f"{run_id} periodic bench at {_sp['label']}: greedy {_g[0]:.3f} over {_g[1]}, sampled {_s[0]:.3f} over {_s[1]}",
                     body=f"at global_step={global_step:,}  opponents={_sp['opponents']}  seeds 900000+  "
-                         f"wins={int(round(_wr * _n))}/{_n}  (gate bar {sampler.armed_gate_win_rate:.2f})")
-                print(f"[periodic-eval] global_step={global_step:,} {_sp['label']}: DETERMINISTIC "
-                      f"{_wr:.3f} over {_n} ({int(round(_wr * _n))} wins)", flush=True)
+                         f"greedy wins={int(round(_g[0] * _g[1]))}/{_g[1]}  sampled wins={int(round(_s[0] * _s[1]))}/{_s[1]}  "
+                         f"snapshot={_snap.name}  (gate bar {sampler.armed_gate_win_rate:.2f})")
+                print(f"[periodic-eval] global_step={global_step:,} {_sp['label']}: GREEDY {_g[0]:.3f} over {_g[1]} "
+                      f"({int(round(_g[0] * _g[1]))} wins)  SAMPLED {_s[0]:.3f} over {_s[1]} ({int(round(_s[0] * _s[1]))} wins)", flush=True)
 
             _pend = sampler.gate_pending()
             if _pend is not None and global_step - _last_gate_step < args.gate_min_step_gap:

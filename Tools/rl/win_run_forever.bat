@@ -61,6 +61,9 @@ if not exist "%CKPT%" (
 echo [%date% %time%] launching train_vec >> C:\ogrl\supervisor.log
 for /f %%s in ('powershell -NoProfile -Command "[int][double]::Parse((Get-Date -UFormat %%s))"') do set T0=%%s
 set OGRL_ALLOW_NENVS_CHANGE=1
+set OGRL_ENGINE_PRIORITY=normal
+set OGRL_ENGINE_AFFINITY=0xFFF
+start "" /B powershell -NoProfile -Command "Start-Sleep 40; Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -like '*train_vec*' } | ForEach-Object { (Get-Process -Id $_.ProcessId).PriorityClass = 'AboveNormal' }"
 %PY% -u Tools\rl\ppo\train_vec.py ^
   --repo-root %REPO% ^
   --levels arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml ^
