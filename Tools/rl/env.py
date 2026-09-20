@@ -15,6 +15,7 @@ calling step(), not pass raw logits.
 from __future__ import annotations
 
 import os
+import sys
 import subprocess
 import tempfile
 import threading
@@ -294,7 +295,32 @@ class OvergrowthEnv:
         command = noaslr.wrap_command(command)
         log_path = self._write_dir.parent / f"{self._write_dir.name}.log"
         self._log_file = open(log_path, "w")
-        self._process = subprocess.Popen(command, cwd=self.repo_root, stdout=self._log_file, stderr=subprocess.STDOUT)
+        popen_kwargs = {}
+        if sys.platform == "win32":
+            # 2026-09-20: engines launched from a scheduled task inherit
+            # BelowNormal priority (measured: every Overgrowth.exe and the
+            # trainer at BelowNormal while Chrome/Defender/Update run Normal).
+            # The sync collector waits on the slowest of N engines every step,
+            # so any preempted engine is the straggler for all of them.
+            #   OGRL_ENGINE_PRIORITY: normal (default) | above | high | inherit
+            #   OGRL_ENGINE_AFFINITY: hex mask, e.g. 0xFFF to keep 12C/14T
+            #       Core Ultra engines off the two LP E-cores (CPUs 12-13)
+            pri = os.environ.get("OGRL_ENGINE_PRIORITY", "normal").lower()
+            flags = {"normal": 0x00000020, "above": 0x00008000, "high": 0x00000080}.get(pri, 0)
+            if flags:
+                popen_kwargs["creationflags"] = flags
+        self._process = subprocess.Popen(command, cwd=self.repo_root, stdout=self._log_file, stderr=subprocess.STDOUT, **popen_kwargs)
+        if sys.platform == "win32":
+            mask = os.environ.get("OGRL_ENGINE_AFFINITY")
+            if mask:
+                try:
+                    import ctypes
+                    h = ctypes.windll.kernel32.OpenProcess(0x0200 | 0x0400, False, self._process.pid)  # SET_INFORMATION|QUERY_INFORMATION
+                    if h:
+                        ctypes.windll.kernel32.SetProcessAffinityMask(h, ctypes.c_size_t(int(mask, 16)))
+                        ctypes.windll.kernel32.CloseHandle(h)
+                except Exception as _e:  # never let a scheduling tweak break a launch
+                    print(f"[env] affinity {mask} not applied: {_e}", flush=True)
 
         deadline = time.monotonic() + self._launch_timeout
         last_error = None

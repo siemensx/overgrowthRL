@@ -282,14 +282,14 @@ class ActorCritic(nn.Module):
         parameters, for exact KL against a frozen copy of the rollout policy."""
         return self._actor_params(self._features(obs))
 
-    def head_log_probs(self, obs: torch.Tensor, action: torch.Tensor):
+    def head_log_probs(self, obs: torch.Tensor, action: torch.Tensor, raw_continuous: torch.Tensor | None = None):
         """Per-head log-probs of an already-taken FULL action: returns
         (continuous [B,2] incl. the tanh correction, discrete [B,6]). Summed
         they equal get_action_and_value's joint log_prob; split out so a KL
         spike can be attributed to the head that produced it."""
         mean, log_std, logits = self.actor_params(obs)
         cont = action[..., :CONTINUOUS_DIM].clamp(-1.0 + _TANH_EPS, 1.0 - _TANH_EPS)
-        raw = torch.atanh(cont)
+        raw = torch.atanh(cont) if raw_continuous is None else raw_continuous
         cont_lp = _normal_log_prob(raw, mean, log_std) - torch.log(1.0 - cont.pow(2) + _TANH_EPS)
         disc_lp = _bernoulli_log_prob(action[..., CONTINUOUS_DIM:], logits)
         return cont_lp, disc_lp
@@ -298,7 +298,8 @@ class ActorCritic(nn.Module):
         features = self.critic_trunk(self._features(obs))
         return self.critic_out(features).squeeze(-1)
 
-    def get_action_and_value(self, obs: torch.Tensor, action: torch.Tensor | None = None):
+    def get_action_and_value(self, obs: torch.Tensor, action: torch.Tensor | None = None,
+                             raw_continuous: torch.Tensor | None = None, return_raw: bool = False):
         """action, if given, is the FULL 8-dim env action already taken
         (tanh-squashed continuous dims + 0/1 discrete dims) -- used during
         the PPO update pass to re-evaluate log-prob/entropy under the
@@ -321,7 +322,19 @@ class ActorCritic(nn.Module):
             discrete_action = torch.bernoulli(torch.sigmoid(discrete_logits))
         else:
             continuous_action = action[..., :CONTINUOUS_DIM].clamp(-1.0 + _TANH_EPS, 1.0 - _TANH_EPS)
-            raw_continuous = torch.atanh(continuous_action)
+            if raw_continuous is None:
+                # Reconstruction path. WRONG for |raw| > atanh(1-1e-3) = 3.8: the
+                # stored tanh'd action rounds to +/-1, the clamp pins it at 1-1e-3,
+                # and atanh gives 3.8 where the rollout sampled, say, 5.0 -- a
+                # log-prob shift of several nats on that one sample. Measured on
+                # run22 (2026-09-20): ~1 such sample per 3584-step update, each
+                # one enough to push its minibatch's sampled approx_kl over
+                # target_kl on its own (0.09 vs 0.02), which fired the early stop
+                # on 100% of updates at a median of minibatch 9 of 28 while the
+                # exact KL never exceeded 0.015. Callers that have the raw sample
+                # (the training buffer) must pass it; this branch remains only
+                # for collectors that do not store it.
+                raw_continuous = torch.atanh(continuous_action)
             discrete_action = action[..., CONTINUOUS_DIM:]
 
         # Tanh-squash log-prob correction (SAC, Haarnoja et al. 2018 appendix C):
@@ -338,4 +351,6 @@ class ActorCritic(nn.Module):
 
         joint_action = torch.cat([continuous_action, discrete_action], dim=-1)
         value = self.critic_out(self.critic_trunk(shared_features)).squeeze(-1)
+        if return_raw:
+            return joint_action, log_prob, entropy, value, raw_continuous
         return joint_action, log_prob, entropy, value

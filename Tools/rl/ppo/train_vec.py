@@ -21,6 +21,7 @@ import math
 import shutil
 import signal
 import subprocess
+import os
 import sys
 import json
 import time
@@ -311,6 +312,18 @@ def main():
     args.entropy_coef_start = args.entropy_coef
     if min(args.collection_torch_threads, args.update_torch_threads, args.torch_interop_threads) < 1:
         raise ValueError("PyTorch thread counts must be positive")
+    if sys.platform == "win32":
+        # The trainer itself also inherits BelowNormal from the scheduled task;
+        # its single-threaded rollout inference sits on the collector's critical
+        # path. OGRL_TRAINER_PRIORITY: normal (default) | above | high | inherit
+        try:
+            import ctypes
+            _pri = os.environ.get("OGRL_TRAINER_PRIORITY", "normal").lower()
+            _cls = {"normal": 0x20, "above": 0x8000, "high": 0x80}.get(_pri)
+            if _cls:
+                ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), _cls)
+        except Exception as _e:
+            print(f"[trainer] priority not applied: {_e}", flush=True)
     torch.set_num_interop_threads(args.torch_interop_threads)
     torch.set_num_threads(args.collection_torch_threads)
     device = torch.device(args.device)
@@ -665,7 +678,7 @@ def main():
             for _ in range(args.n_steps):
                 obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device)
                 with torch.no_grad():
-                    actions, log_probs, _entropy, values = policy.get_action_and_value(obs_tensor)
+                    actions, log_probs, _entropy, values, raw_cont = policy.get_action_and_value(obs_tensor, return_raw=True)
                 actions_np = actions.cpu().numpy()
                 actions_this_update.append(actions_np)
 
@@ -714,7 +727,8 @@ def main():
                     with torch.no_grad():
                         bootstrap_values = policy.get_value(torch.as_tensor(trunc_normed, dtype=torch.float32, device=device)).cpu().numpy()
                     normalized_rewards[trunc_idx] = normalized_rewards[trunc_idx] + args.gamma * bootstrap_values
-                buffer.add(obs, actions_np, log_probs.cpu().numpy(), values.cpu().numpy(), normalized_rewards, stop_flags.astype(np.float32))
+                buffer.add(obs, actions_np, log_probs.cpu().numpy(), values.cpu().numpy(), normalized_rewards, stop_flags.astype(np.float32),
+                           raw_cont=raw_cont.cpu().numpy())
 
                 for i in np.where(stop_flags)[0]:
                     episode_rewards_this_update.append(episode_reward[i])
@@ -1008,6 +1022,7 @@ def main():
                     "max_sample_kl_head": stats.get("max_sample_kl_head", ""),
                     "mb0_max_abs_logratio": stats.get("mb0_max_abs_logratio", 0.0),
                     "early_stop_minibatch": stats.get("early_stop_minibatch", -1),
+                    "exact_kl_mb_max": stats.get("exact_kl_mb_max", 0.0),
                 },
                 # kl_spike (OGRL-20260817-028 Sec8.2): run9 had a single
                 # approx_kl of 12.87 against a 0.02 target, buried in a

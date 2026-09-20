@@ -114,7 +114,9 @@ def main() -> int:
     ap.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[2]))
     ap.add_argument("--resume-from", required=True)
     ap.add_argument("--levels", default="arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml")
-    ap.add_argument("--grid", nargs="+", default=["10x2", "10x4", "12x2", "12x4", "8x2", "14x2"])
+    ap.add_argument("--grid", nargs="+", default=["10x2", "10x4", "12x2", "12x4", "8x2", "14x2"],
+                    help="points as NxK, optionally with env overrides after a colon: "
+                         "14x4:OGRL_ENGINE_PRIORITY=above,OGRL_ENGINE_AFFINITY=0xFFF")
     ap.add_argument("--warmup", type=float, default=150.0)
     ap.add_argument("--measure", type=float, default=360.0)
     ap.add_argument("--update-threads", type=int, default=4)
@@ -125,14 +127,25 @@ def main() -> int:
     kill_engines()
     results = []
     for g in args.grid:
-        n, k = (int(x) for x in g.lower().split("x"))
-        results.append(run_point(args, n, k, args.tag))
+        spec, _, envs = g.partition(":")
+        n, k = (int(x) for x in spec.lower().split("x"))
+        overrides = dict(kv.split("=", 1) for kv in envs.split(",") if kv)
+        saved = {kk: os.environ.get(kk) for kk in overrides}
+        os.environ.update(overrides)
+        try:
+            r = run_point(args, n, k, args.tag + ("_" + "_".join(v for v in overrides.values()) if overrides else ""))
+        finally:
+            for kk, vv in saved.items():
+                if vv is None: os.environ.pop(kk, None)
+                else: os.environ[kk] = vv
+        r["env"] = overrides
+        results.append(r)
         out = Path(args.out) if args.out else Path(args.repo_root) / "Tools" / "rl" / "runs" / f"throughput_sweep_{args.tag}.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(results, indent=1))
     print(f"\n{'config':10s} {'sps_med':>8s} {'sps_p10':>8s} {'wall_sps':>8s} {'coll_med':>8s} {'idle/wkr':>8s} {'miss':>6s} {'rows':>5s}")
     for r in sorted(results, key=lambda r: -(r.get("sps_median") or 0)):
-        print(f"n{r['n_envs']}k{r['k_standby']:<6d} {r.get('sps_median',0):8.1f} {r.get('sps_p10',0):8.1f} {r.get('wall_sps',0):8.1f} "
+        print(f"n{r['n_envs']}k{r['k_standby']:<3d}{','.join(r.get('env',{}).values())[:22]:22s} {r.get('sps_median',0):8.1f} {r.get('sps_p10',0):8.1f} {r.get('wall_sps',0):8.1f} "
               f"{r.get('collection_sps_median',0):8.1f} {r.get('barrier_idle_per_worker_s',0):8.2f} {(r.get('pool_miss_rate') or 0):6.2f} {r['rows_measured']:5d}")
     return 0
 

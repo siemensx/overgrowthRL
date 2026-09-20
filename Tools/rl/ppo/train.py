@@ -272,7 +272,8 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
              "exact_kl_heads": [0.0] * 8,    # per head, same
              "max_sample_kl": 0.0,           # largest single-sample (ratio-1-log_ratio) seen this update
              "max_sample_kl_head": "",       # which head's log-ratio dominated that sample
-             "early_stop_minibatch": -1}     # index at which the pre-step guard fired, -1 = never
+             "early_stop_minibatch": -1,     # index at which the pre-step guard fired, -1 = never
+             "exact_kl_mb_max": 0.0}         # largest single-minibatch exact KL this update (the guard's input)
     n_minibatch_updates = 0
     stop_early = False
     # Frozen copy of the rollout policy for exact KL. 480K params, eval-only:
@@ -296,13 +297,14 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
             mb_old_values = batch["values"][mb_idx]
             mb_advantages = batch["advantages"][mb_idx]
             mb_returns = batch["returns"][mb_idx]
+            mb_raw = batch["raw_cont"][mb_idx] if "raw_cont" in batch else None
 
             # Per-minibatch advantage normalization (not per-buffer) --
             # standard practice, keeps the effective learning signal scale
             # consistent across minibatches of possibly different composition.
             mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
-            _action, new_log_probs, entropy, new_values = policy.get_action_and_value(mb_obs, mb_actions)
+            _action, new_log_probs, entropy, new_values = policy.get_action_and_value(mb_obs, mb_actions, raw_continuous=mb_raw)
             log_ratio = new_log_probs - mb_old_log_probs
             ratio = log_ratio.exp()
 
@@ -319,11 +321,14 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
                 heads = _exact_head_kls(old_params, new_params)          # [B,8]
                 exact_sum += heads.mean(dim=0)
                 exact_n += 1
+                mb_exact_kl = float(heads.sum(dim=-1).mean().item())
+                stats["exact_kl_mb_max"] = max(stats.get("exact_kl_mb_max", 0.0), mb_exact_kl)
                 worst = int(per_sample_kl.argmax().item())
                 if per_sample_kl[worst].item() > stats["max_sample_kl"]:
                     stats["max_sample_kl"] = per_sample_kl[worst].item()
-                    c_new, d_new = policy.head_log_probs(mb_obs[worst:worst + 1], mb_actions[worst:worst + 1])
-                    c_old, d_old = old_policy.head_log_probs(mb_obs[worst:worst + 1], mb_actions[worst:worst + 1])
+                    _r = None if mb_raw is None else mb_raw[worst:worst + 1]
+                    c_new, d_new = policy.head_log_probs(mb_obs[worst:worst + 1], mb_actions[worst:worst + 1], _r)
+                    c_old, d_old = old_policy.head_log_probs(mb_obs[worst:worst + 1], mb_actions[worst:worst + 1], _r)
                     head_lr = torch.cat([c_new - c_old, d_new - d_old], dim=-1).squeeze(0).abs()
                     stats["max_sample_kl_head"] = _HEAD_NAMES[int(head_lr.argmax().item())]
             mb_index += 1
@@ -332,7 +337,14 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
             # offending minibatch and only THEN stopped -- so the update that
             # revealed the pathology was already in the weights. Minibatch 0 is
             # exempt (ratio is 1 by construction there).
-            if (args.target_kl is not None and mb_index > 1 and approx_kl > args.target_kl):
+            #
+            # 2026-09-20: gate on the EXACT closed-form KL of this minibatch, not
+            # the sampled (ratio-1)-log_ratio estimator. On run22 the estimator
+            # tripped the guard on 100% of updates at a median of minibatch 9/28
+            # -- single-sample outliers in the continuous head -- while the exact
+            # KL never exceeded 0.015. Two thirds of every update was thrown away
+            # on noise. The sampled value is still logged as approx_kl.
+            if (args.target_kl is not None and mb_index > 1 and mb_exact_kl > args.target_kl):
                 stats["early_stop_minibatch"] = mb_index - 1
                 stop_early = True
                 break
