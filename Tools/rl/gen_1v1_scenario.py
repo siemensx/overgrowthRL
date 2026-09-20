@@ -370,6 +370,32 @@ void SetUpLevel(""", 1)
         raise RuntimeError("anchor N2 (Init tail) not found -- stock script changed shape")
     out = out.replace(anchor_init, anchor_init + "    SetPlaceholderPreviews();\n", 1)
 
+    # 7. Human play of the training scenario (2026-09-19). Without an RL
+    # transport nothing ever sends set_rl_difficulty / set_rl_opponents, so
+    # a keyboard session got the stock "near player skill" difficulty and one
+    # opponent -- not the fight the agent is benchmarked on. These two launch
+    # config keys let a human load the exact 1v3 / difficulty-1.0 cell:
+    #   --config "rl_human_difficulty: 1.0\nrl_human_opponents: 3"
+    # GetConfigValue* returns 0 for an unset key (the pattern enemycontrol.as's
+    # rl_throw_aggression already relies on), so training launches, which never
+    # set these, are untouched. Must land before SetUpLevel(curr_difficulty).
+    anchor_human = "    SetPlaceholderPreviews();\n    SetUpLevel(curr_difficulty);\n"
+    if anchor_human not in out:
+        raise RuntimeError("anchor 7 (Init SetUpLevel) not found -- anchor N2 edit did not land where expected")
+    out = out.replace(anchor_human, """    SetPlaceholderPreviews();
+    // RL (OGRL 2026-09-19): human-play overrides, see gen_1v1_scenario.py step 7.
+    if(GetConfigValueFloat("rl_human_difficulty") > 0.0f){
+        rl_difficulty = min(GetConfigValueFloat("rl_human_difficulty"), 1.0f);
+    }
+    if(GetConfigValueInt("rl_human_opponents") > 0){
+        rl_opponents = GetConfigValueInt("rl_human_opponents");
+    }
+    if(rl_difficulty >= 0.0f || rl_opponents != 1){
+        Log(info, "RL: human-play overrides -> rl_difficulty=" + rl_difficulty + " rl_opponents=" + rl_opponents);
+    }
+    SetUpLevel(curr_difficulty);
+""", 1)
+
     return out
 
 
