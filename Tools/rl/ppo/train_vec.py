@@ -212,6 +212,11 @@ def parse_args():
                    help="number of remote workers to wait for before training starts")
     p.add_argument("--gate-eval-episodes", type=int, default=30,
                    help="deterministic episodes run before the armed ladder may advance")
+    p.add_argument("--periodic-eval-steps", type=int, default=25_000_000,
+                   help="run a 200-episode deterministic bench at the current stage every N global steps "
+                        "REGARDLESS of the gate. run21 went 550M steps with zero automated measurements "
+                        "because the gate pre-filter never fired. 0 disables.")
+    p.add_argument("--periodic-eval-episodes", type=int, default=200)
     p.add_argument("--gate-min-step-gap", type=int, default=3_000_000,
                    help="minimum global steps between deterministic gate evals. The stochastic "
                         "pre-filter clears its 600-episode bar roughly every 220k steps, and a "
@@ -549,6 +554,7 @@ def main():
                                                    # caller; this is a placeholder until that's plumbed through,
                                                    # not a claim of per-episode reproducibility
     _last_gate_step = -10**18   # see --gate-min-step-gap
+    _next_periodic_eval = (global_step // max(1, args.periodic_eval_steps) + 1) * args.periodic_eval_steps if args.periodic_eval_steps > 0 else None
     previous_cycle_end = time.monotonic()  # for perf.cycle_seconds -- the full update-to-update wall time,
                                             # not just collection_seconds (OGRL-20260816-020's sps blind spot)
     run_status = "interrupted"  # pessimistic default -- only overwritten to "completed" right after a clean loop
@@ -688,22 +694,29 @@ def main():
                 # see train.py's single-env version for the full rationale.
                 # Only the truncated (not terminal) workers need a bootstrap
                 # value folded into their reward this step.
+                # 2026-09-19 (0.2): V(s') is learned on NORMALIZED rewards, so it
+                # is added to the normalized reward, after the normalizer has seen
+                # the raw environment reward -- the SB3 VecNormalize ordering.
+                # Adding it to the raw reward and normalizing the sum scaled the
+                # bootstrap a second time and fed value estimates into the reward
+                # RMS. 11-15% of run21 episodes ended in a timeout.
+                stop_flags = terminals | truncateds
+                normalized_rewards = reward_normalizer.normalize(rewards, stop_flags)
                 trunc_idx = np.where(truncateds)[0]
                 if len(trunc_idx) > 0:
                     trunc_raw = np.stack([infos[i]["terminal_observation"] for i in trunc_idx])
                     trunc_normed = obs_normalizer.normalize(trunc_raw, update=False)
                     with torch.no_grad():
                         bootstrap_values = policy.get_value(torch.as_tensor(trunc_normed, dtype=torch.float32, device=device)).cpu().numpy()
-                    rewards[trunc_idx] = rewards[trunc_idx] + args.gamma * bootstrap_values
-
-                stop_flags = terminals | truncateds
-                normalized_rewards = reward_normalizer.normalize(rewards, stop_flags)
+                    normalized_rewards[trunc_idx] = normalized_rewards[trunc_idx] + args.gamma * bootstrap_values
                 buffer.add(obs, actions_np, log_probs.cpu().numpy(), values.cpu().numpy(), normalized_rewards, stop_flags.astype(np.float32))
 
                 for i in np.where(stop_flags)[0]:
                     episode_rewards_this_update.append(episode_reward[i])
                     episode_lengths_this_update.append(episode_length[i])
-                    won = bool(infos[i]["reward_components"].get("opponent_knockout", 0.0) > 0.0)
+                    # Canonical all-hostiles-down flag from vec_env (0.3). The old
+                    # reconstruction from opponent_knockout > 0 is gone.
+                    won = bool(infos[i]["won"])
                     outcome = "won" if won else ("lost" if terminals[i] else "timeout")
                     outcomes_this_update[outcome] += 1
                     episode_components_this_update.append(dict(episode_components[i]))
@@ -874,6 +887,42 @@ def main():
             # advance only if that clears the bar. This is the number that
             # corresponds to what a human sees; the stochastic one promoted the
             # policy six rungs into fights it could not score in.
+            # --- Periodic deterministic bench (0.6) ------------------------
+            if _next_periodic_eval is not None and global_step >= _next_periodic_eval:
+                _next_periodic_eval += args.periodic_eval_steps
+                _sp = sampler.stage_params()
+                _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer,
+                                 reward_normalizer, global_step,
+                                 curriculum=sampler.curriculum_state())
+                _out = Path(logger.run_dir) / "eval" / f"periodic_{global_step}.json"
+                _out.parent.mkdir(parents=True, exist_ok=True)
+                _cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "evaluate.py"),
+                        "--checkpoint", args.checkpoint_path, "--repo-root", args.repo_root,
+                        "--level", levels_list[0], "--frame-stack", str(args.frame_stack),
+                        "--act-period", str(args.act_period), "--episodes", str(args.periodic_eval_episodes),
+                        "--seed-base", "900000",
+                        "--difficulty-bands", "1.0", "--opponents", str(_sp["opponents"]),
+                        "--max-episode-steps", str(args.max_episode_steps),
+                        "--armed-count", str(_sp["armed_count"]), "--weapon-type", str(_sp["weapon_type"]),
+                        "--throw-aggression", str(_sp["throw_aggression"]),
+                        "--shm-name", f"{args.shm_prefix}p", "--device", "cpu", "--no-control",
+                        "--out", str(_out)]
+                _wr, _n = 0.0, 0
+                try:
+                    subprocess.run(_cmd, capture_output=True, timeout=7200)
+                    if _out.exists():
+                        _b = json.loads(_out.read_text())["bands"][0]["policy"]
+                        _wr, _n = _b["win_rate"], _b["episodes"]
+                except Exception as _e:
+                    print(f"[periodic-eval] failed: {_e}", flush=True)
+                logger.log_event(
+                    "periodic_eval",
+                    f"{run_id} periodic bench at {_sp['label']}: deterministic {_wr:.3f} over {_n}",
+                    body=f"at global_step={global_step:,}  opponents={_sp['opponents']}  seeds 900000+  "
+                         f"wins={int(round(_wr * _n))}/{_n}  (gate bar {sampler.armed_gate_win_rate:.2f})")
+                print(f"[periodic-eval] global_step={global_step:,} {_sp['label']}: DETERMINISTIC "
+                      f"{_wr:.3f} over {_n} ({int(round(_wr * _n))} wins)", flush=True)
+
             _pend = sampler.gate_pending()
             if _pend is not None and global_step - _last_gate_step < args.gate_min_step_gap:
                 _pend = None    # nomination stands; it fires when the cooldown expires
@@ -945,6 +994,15 @@ def main():
                     "learning_rate": args.learning_rate, "entropy_coef": args.entropy_coef,
                     "nan_skips": stats["nan_skips"],  # 2026-08-17: non-finite-loss/grad minibatches skipped
                                                         # this update, see ppo_update's NaN guard in train.py
+                    # 2026-09-19 (OPTIMIZATION_CONTRACT 0.5): exact closed-form KL vs the
+                    # frozen rollout policy, per head, plus where the sampled estimator's
+                    # worst single sample came from. approx_kl alone hid 46 spikes >1.
+                    "exact_kl": stats.get("exact_kl", 0.0),
+                    "exact_kl_heads": stats.get("exact_kl_heads", []),
+                    "max_sample_kl": stats.get("max_sample_kl", 0.0),
+                    "max_sample_kl_head": stats.get("max_sample_kl_head", ""),
+                    "mb0_max_abs_logratio": stats.get("mb0_max_abs_logratio", 0.0),
+                    "early_stop_minibatch": stats.get("early_stop_minibatch", -1),
                 },
                 # kl_spike (OGRL-20260817-028 Sec8.2): run9 had a single
                 # approx_kl of 12.87 against a 0.02 target, buried in a

@@ -112,8 +112,7 @@ def main() -> int:
                     if te or tr:
                         sc = infos[i].get("scenario", {}) or {}
                         ep.append({"opponents": sc.get("opponents", 1),
-                                   "won": bool(infos[i]["reward_components"].get("opponent_knockout", 0) > 0
-                                               and te),
+                                   "won": bool(infos[i].get("won", False) and te),   # canonical field (0.3)
                                    "difficulty": sc.get("difficulty")})
                 raw_obs = raw_next
             with torch.no_grad():

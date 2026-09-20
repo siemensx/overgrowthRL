@@ -24,6 +24,7 @@ typical vectorized-simulator PPO setup).
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import signal
 import sys
@@ -34,6 +35,7 @@ import numpy as np
 import os
 import shutil
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Tools/rl, for env/obs_schema/reward/curriculum
@@ -242,12 +244,45 @@ def main():
         log_file.close()
 
 
+_HEAD_NAMES = ("move_x", "move_y", "jump", "crouch", "attack", "grab", "drop", "walk")
+
+
+def _exact_head_kls(old_params, new_params) -> torch.Tensor:
+    """Closed-form KL(old || new) per action head, [B, 8]: two diagonal
+    Gaussians (tanh is a bijection, so the untransformed KL is the exact KL of
+    the squashed distributions) and six Bernoullis. This is the number the
+    sampled (ratio-1)-log_ratio estimator is approximating -- and, unlike it,
+    cannot be blown up by one rare sampled outcome."""
+    (m0, ls0, lg0), (m1, ls1, lg1) = old_params, new_params
+    v0, v1 = (2.0 * ls0).exp(), (2.0 * ls1).exp()
+    kl_g = (ls1 - ls0) + (v0 + (m0 - m1).pow(2)) / (2.0 * v1) - 0.5            # [B,2]
+    p0 = torch.sigmoid(lg0)
+    kl_b = (p0 * (F.logsigmoid(lg0) - F.logsigmoid(lg1))
+            + (1.0 - p0) * (F.logsigmoid(-lg0) - F.logsigmoid(-lg1)))            # [B,6]
+    return torch.cat([kl_g, kl_b], dim=-1)
+
+
 def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dict, args) -> dict:
     n = batch["obs"].shape[0]
     indices = np.arange(n)
-    stats = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0, "clip_fraction": 0.0, "nan_skips": 0}
+    stats = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0, "clip_fraction": 0.0, "nan_skips": 0,
+             # --- 2026-09-19 diagnostics (OPTIMIZATION_CONTRACT 0.5) ---
+             "mb0_max_abs_logratio": 0.0,   # first minibatch, before any step: must be ~0 or the rollout was not reconstructed
+             "exact_kl": 0.0,                # closed-form joint KL(rollout || current), mean over minibatches seen
+             "exact_kl_heads": [0.0] * 8,    # per head, same
+             "max_sample_kl": 0.0,           # largest single-sample (ratio-1-log_ratio) seen this update
+             "max_sample_kl_head": "",       # which head's log-ratio dominated that sample
+             "early_stop_minibatch": -1}     # index at which the pre-step guard fired, -1 = never
     n_minibatch_updates = 0
     stop_early = False
+    # Frozen copy of the rollout policy for exact KL. 480K params, eval-only:
+    # one extra forward per minibatch, negligible against the update itself.
+    old_policy = copy.deepcopy(policy).eval()
+    for prm in old_policy.parameters():
+        prm.requires_grad_(False)
+    exact_sum = torch.zeros(8)
+    exact_n = 0
+    mb_index = 0
 
     for epoch in range(args.n_epochs):
         if stop_early:
@@ -272,8 +307,35 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
             ratio = log_ratio.exp()
 
             with torch.no_grad():
-                approx_kl = ((ratio - 1.0) - log_ratio).mean().item()
+                per_sample_kl = (ratio - 1.0) - log_ratio
+                approx_kl = per_sample_kl.mean().item()
                 clip_fraction = ((ratio - 1.0).abs() > args.clip_coef).float().mean().item()
+                if mb_index == 0:
+                    # Identical weights, same normalized obs, same action: the ratio
+                    # must be exactly 1 here. Anything else is a reconstruction bug.
+                    stats["mb0_max_abs_logratio"] = log_ratio.abs().max().item()
+                new_params = policy.actor_params(mb_obs)
+                old_params = old_policy.actor_params(mb_obs)
+                heads = _exact_head_kls(old_params, new_params)          # [B,8]
+                exact_sum += heads.mean(dim=0)
+                exact_n += 1
+                worst = int(per_sample_kl.argmax().item())
+                if per_sample_kl[worst].item() > stats["max_sample_kl"]:
+                    stats["max_sample_kl"] = per_sample_kl[worst].item()
+                    c_new, d_new = policy.head_log_probs(mb_obs[worst:worst + 1], mb_actions[worst:worst + 1])
+                    c_old, d_old = old_policy.head_log_probs(mb_obs[worst:worst + 1], mb_actions[worst:worst + 1])
+                    head_lr = torch.cat([c_new - c_old, d_new - d_old], dim=-1).squeeze(0).abs()
+                    stats["max_sample_kl_head"] = _HEAD_NAMES[int(head_lr.argmax().item())]
+            mb_index += 1
+
+            # Pre-step trust-region guard (SB3 order). The old code applied the
+            # offending minibatch and only THEN stopped -- so the update that
+            # revealed the pathology was already in the weights. Minibatch 0 is
+            # exempt (ratio is 1 by construction there).
+            if (args.target_kl is not None and mb_index > 1 and approx_kl > args.target_kl):
+                stats["early_stop_minibatch"] = mb_index - 1
+                stop_early = True
+                break
 
             surrogate1 = mb_advantages * ratio
             surrogate2 = mb_advantages * torch.clamp(ratio, 1.0 - args.clip_coef, 1.0 + args.clip_coef)
@@ -324,13 +386,12 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
             stats["clip_fraction"] += clip_fraction
             n_minibatch_updates += 1
 
-            if args.target_kl is not None and approx_kl > args.target_kl:
-                stop_early = True
-                break
-
-    for key in stats:
-        if key != "nan_skips":  # a count, not something to average
-            stats[key] /= max(1, n_minibatch_updates)
+    for key in ("policy_loss", "value_loss", "entropy", "approx_kl", "clip_fraction"):
+        stats[key] /= max(1, n_minibatch_updates)
+    if exact_n:
+        per_head = (exact_sum / exact_n)
+        stats["exact_kl_heads"] = [float(x) for x in per_head]
+        stats["exact_kl"] = float(per_head.sum())
     return stats
 
 

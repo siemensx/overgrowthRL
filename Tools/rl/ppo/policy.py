@@ -276,6 +276,24 @@ class ActorCritic(nn.Module):
         discrete_dist = Bernoulli(logits=self.discrete_logits(features))
         return continuous_dist, discrete_dist
 
+    # --- diagnostics (2026-09-19, OPTIMIZATION_CONTRACT 0.5) --------------------
+    def actor_params(self, obs: torch.Tensor):
+        """(mean, log_std, discrete_logits) for a batch -- the raw distribution
+        parameters, for exact KL against a frozen copy of the rollout policy."""
+        return self._actor_params(self._features(obs))
+
+    def head_log_probs(self, obs: torch.Tensor, action: torch.Tensor):
+        """Per-head log-probs of an already-taken FULL action: returns
+        (continuous [B,2] incl. the tanh correction, discrete [B,6]). Summed
+        they equal get_action_and_value's joint log_prob; split out so a KL
+        spike can be attributed to the head that produced it."""
+        mean, log_std, logits = self.actor_params(obs)
+        cont = action[..., :CONTINUOUS_DIM].clamp(-1.0 + _TANH_EPS, 1.0 - _TANH_EPS)
+        raw = torch.atanh(cont)
+        cont_lp = _normal_log_prob(raw, mean, log_std) - torch.log(1.0 - cont.pow(2) + _TANH_EPS)
+        disc_lp = _bernoulli_log_prob(action[..., CONTINUOUS_DIM:], logits)
+        return cont_lp, disc_lp
+
     def get_value(self, obs: torch.Tensor) -> torch.Tensor:
         features = self.critic_trunk(self._features(obs))
         return self.critic_out(features).squeeze(-1)

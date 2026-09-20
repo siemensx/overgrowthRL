@@ -163,6 +163,8 @@ def parse_args():
     p.add_argument("--species", type=int, default=0)
     p.add_argument("--stochastic", action="store_true", help="sample from the policy's distribution instead of its deterministic mode")
     p.add_argument("--no-control", action="store_true", help="skip the matched random-policy control (not recommended -- see module docstring)")
+    p.add_argument("--config-line", action="append", default=[],
+                   help="extra engine launch-config line(s), e.g. 'rl_target_select: 1'. Repeatable.")
     p.add_argument("--shm-name", default=None)
     p.add_argument("--device", default="cpu", choices=["cpu", "mps"])
     p.add_argument("--out", default=None, help="write the full result JSON here regardless of --run-id")
@@ -222,9 +224,10 @@ def main():
         layout=layout, frame_stack=args.frame_stack, act_period=args.act_period, render=False,
         jumpkick_wariness=args.jumpkick_wariness,
         throw_aggression_launch=args.throw_aggression,
+        extra_config_lines=list(args.config_line),
     )
     bands = [float(x) for x in args.difficulty_bands.split(",") if x.strip()]
-    result = {"global_step": global_step, "checkpoint": args.checkpoint, "episodes": args.episodes,
+    result = {"global_step": global_step, "checkpoint": args.checkpoint, "episodes": args.episodes, "config_lines": list(args.config_line),
               "seed_base": args.seed_base, "stochastic": args.stochastic, "level": args.level,
               "frame_stack": args.frame_stack, "act_period": args.act_period, "bands": [], "overall": None}
     try:

@@ -10601,13 +10601,43 @@ int GetAttackTarget(float range, uint16 flags) {
             }
         }
 
+        // RL (OGRL 2026-09-19): the controlled character's attack target is
+        // chosen by CAMERA facing. A human looks where they strike, so that
+        // is the right selector for a human. The RL controller sends no look
+        // axes, and in a headless session camera.GetAutoCamera() is false,
+        // so target_rotation is frozen at its spawn value for the whole
+        // episode: every attack went to whichever enemy happened to align
+        // with a yaw the policy neither observes nor controls. Invisible in
+        // 1v1 (one candidate); in 1v3 it decides which body a jumpkick lands
+        // on. playercontrol.as already re-frames MOVEMENT on this_mo.GetFacing()
+        // for the RL controller; this does the same for target selection.
+        //   rl_target_select: 0 = stock camera dot (default, what run21 trained on)
+        //                     1 = dot with this_mo.GetFacing() from this_mo.position
+        //                     2 = nearest, the same rule the native AI uses
+        int rl_target_select = IsExternalRLController(this_mo.controller_id)
+                             ? GetConfigValueInt("rl_target_select") : 0;
+        if(rl_target_select == 2) {
+            return GetClosestCharacterInArray(this_mo.position, matching_characters, range + _leg_sphere_size);
+        }
+        vec3 sel_pos = camera.GetPos();
+        vec3 sel_facing = camera.GetFacing();
+        if(rl_target_select == 1) {
+            sel_pos = this_mo.position;
+            sel_facing = this_mo.GetFacing();
+            sel_facing.y = 0.0f;
+            if(length_squared(sel_facing) < 0.0001f) {
+                sel_facing = vec3(0.0f, 0.0f, 1.0f);
+            }
+            sel_facing = normalize(sel_facing);
+        }
+
         int best_target = -1;
         float best_dot = -1.0;
 
         for(int i = 0, len = matching_characters.size(); i < len; ++i) {
             MovementObject@ mo = ReadCharacterID(matching_characters[i]);
-            vec3 cam_dir = normalize(mo.position - camera.GetPos());
-            float cam_dot_val = dot(cam_dir, camera.GetFacing());
+            vec3 cam_dir = normalize(mo.position - sel_pos);
+            float cam_dot_val = dot(cam_dir, sel_facing);
 
             if(cam_dot_val > best_dot) {
                 best_dot = cam_dot_val;

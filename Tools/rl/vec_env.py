@@ -239,12 +239,20 @@ class VecOvergrowthEnv:
         # itself, which is a real open item for a future session.
         if soft and self.hard_reset_every > 0 and env.episode_count > 0 and (env.episode_count % self.hard_reset_every) == 0:
             soft = False  # periodic safety valve (Sec1.2) -- fires on episode_count 0, N, 2N, ...
+        # 2026-09-19: armed_count / weapon_type / throw_aggression were sampled
+        # by the curriculum and then DROPPED here -- the armed ladder had never
+        # reached the collector, so any stage past A would have trained unarmed
+        # while the gate certified armed. Same bug class that already cost this
+        # project three runs: the collector must consume the whole scenario.
         obs = env.reset(
             seed=seed, soft=soft,
             difficulty=scenario.get("difficulty"),
             opponents=scenario.get("opponents", 1),
             weapons=scenario.get("weapons", 0.0),
             species=scenario.get("species", 0),
+            armed_count=int(scenario.get("armed_count", 0) or 0),
+            weapon_type=int(scenario.get("weapon_type", 0) or 0),
+            throw_aggression=float(scenario.get("throw_aggression", 1.0) or 1.0),
         )
         with self._perf_lock:
             self._reset_seconds_accum += env.last_reset_seconds
@@ -395,6 +403,10 @@ class VecOvergrowthEnv:
                 won = self._episode_kos[i] >= need
             terminal = bool(done or won)
             truncated = (not terminal) and self._episode_steps[i] >= self.max_episode_steps
+            # The ONE definition of a win. train_vec used to rebuild it from
+            # opponent_knockout > 0, which mislabels a timeout whose final step
+            # happens to land a KO; every collector now consumes this field.
+            info["won"] = bool(won)
             terminal_obs = obs  # pre-reset observation, for the truncation bootstrap / info parity
             # Attribute this transition to the episode currently in slot i --
             # i.e. the one THIS step's outcome belongs to, sampled at the

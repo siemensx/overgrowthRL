@@ -123,6 +123,7 @@ class AsyncVecOvergrowthEnv:
         self._reset_counter = 0
         self._reset_counter_lock = threading.Lock()
         self._episode_steps = [0] * n_envs
+        self._episode_kos = [0] * n_envs   # hostile KO events this episode, per slot (all must fall)
         self._episode_counts = [0] * n_envs
         self._episode_scenario: list[dict] = [{} for _ in range(n_envs)]
         self._episode_seed: list[int | None] = [None] * n_envs
@@ -201,6 +202,7 @@ class AsyncVecOvergrowthEnv:
 
         results = list(self._pool.map(reset_one, range(self.n_envs)))
         self._episode_steps = [0] * self.n_envs
+        self._episode_kos = [0] * self.n_envs
         self._current_obs = np.stack([result[0] for result in results]).astype(np.float32, copy=False)
         return self._current_obs.copy()
 
@@ -212,18 +214,30 @@ class AsyncVecOvergrowthEnv:
         env = self.envs[index]
         obs, reward, done, info = env.step(action)
         self._episode_steps[index] += 1
-        won = info["reward_components"]["opponent_knockout"] > 0
+        # 2026-09-19: same all-hostiles-down rule as vec_env.py. This path used
+        # any-single-KO, which at 3 opponents would have labelled a 1-KO death
+        # as a win -- flagged in research-log 2026-09-12 and never fixed.
+        rc = info["reward_components"]
+        kos = rc.get("hostile_kos_this_step")
+        if kos is None:
+            won = rc["opponent_knockout"] > 0          # pre-instrumentation fallback
+        else:
+            self._episode_kos[index] += int(round(kos))
+            need = max(1, int((self._episode_scenario[index] or {}).get("opponents", 1) or 1))
+            won = self._episode_kos[index] >= need
         terminal = bool(done or won)
         truncated = (not terminal) and self._episode_steps[index] >= self.max_episode_steps
         terminal_observation = obs
 
         info = dict(info)
+        info["won"] = bool(won)
         info["scenario"] = self._episode_scenario[index]
         info["seed"] = self._episode_seed[index]
         info["native_trace_path"] = str(env.equivalence_digest_path) if env.equivalence_digest_path is not None else None
 
         if terminal or truncated:
             self._episode_steps[index] = 0
+            self._episode_kos[index] = 0
             self._episode_counts[index] += 1
             next_obs, _scenario = self._reset_env(index, env)
         else:
