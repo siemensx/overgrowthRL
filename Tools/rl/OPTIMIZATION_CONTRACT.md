@@ -383,6 +383,7 @@ n_envs=14, k_standby=4
 OGRL_ENGINE_PRIORITY=above
 OGRL_ENGINE_AFFINITY=0xFFF
 collection torch threads=2, update torch threads=4, inter-op threads=1
+hard-reset-every=20 for future unattended launches
 ```
 
 The remote launcher now accepts these settings explicitly in
