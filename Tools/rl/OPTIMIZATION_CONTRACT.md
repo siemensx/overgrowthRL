@@ -439,3 +439,14 @@ resume smoke and, if it remains healthy, the unattended run. Do not adopt t8,
 n18 resume, inter-op changes, or any new soft-reset semantics. Any long run must
 still be started by Scheduled Task, with checkpoint monotonicity and run-specific
 shared-memory names intact.
+
+#### Validator correction after deployment
+
+The Windows RSS probe was deployed at `2c93f36f` and rerun on the valid oval
+fixture for 100 soft resets. Working set rose from 486.9 MB to 510.6 MB, a
+23.7 MB increase below the 50 MB ceiling; self id stayed 2 with zero measured
+object-id growth. Hard reset median was 1297.0 ms and soft reset median 203.0
+ms; scenario distribution mismatches were 0/10. Replay/physics equivalence
+still failed at step 0 with position deviation 0.80832 and velocity deviation
+4.95399. The memory gate passes; the replay gate remains unresolved and soft
+reset is not a newly adopted lever.
