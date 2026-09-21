@@ -27,19 +27,24 @@ class VecRolloutBuffer:
         # log-prob at the value the rollout actually sampled, not at
         # atanh(clamp(tanh(raw))) -- see policy.get_action_and_value.
         self.raw_cont = np.zeros((n_steps, n_envs, 2), dtype=np.float32)
+        # 1 = a real transition; 0 = a placeholder from a recovered (rebuilt)
+        # worker whose "next observation" belongs to a different episode. Such
+        # rows are excluded from the PPO loss (review, 2026-09-20).
+        self.valid = np.ones((n_steps, n_envs), dtype=np.float32)
         self.log_probs = np.zeros((n_steps, n_envs), dtype=np.float32)
         self.values = np.zeros((n_steps, n_envs), dtype=np.float32)
         self.rewards = np.zeros((n_steps, n_envs), dtype=np.float32)
         self.terminals = np.zeros((n_steps, n_envs), dtype=np.float32)
         self.ptr = 0
 
-    def add(self, obs, action, log_prob, value, reward, terminal, raw_cont=None) -> None:
+    def add(self, obs, action, log_prob, value, reward, terminal, raw_cont=None, valid=None) -> None:
         """All arguments except obs/action are (n_envs,)-shaped; obs is
         (n_envs, obs_dim), action is (n_envs, action_dim), raw_cont is
         (n_envs, 2) or None (remote collectors that do not carry it)."""
         i = self.ptr
         self.obs[i] = obs
         self.actions[i] = action
+        self.valid[i] = 1.0 if valid is None else valid
         if raw_cont is not None:
             self.raw_cont[i] = raw_cont
         else:
@@ -91,6 +96,7 @@ class VecRolloutBuffer:
             return np.concatenate([mine] + [r[name] for r in remotes], axis=1)
         out.obs = cat("obs", self.obs)
         out.actions = cat("actions", self.actions)
+        out.valid = np.concatenate([self.valid] + [r.get("valid", np.ones_like(r["log_probs"])) for r in remotes], axis=1)
         out.raw_cont = np.concatenate([self.raw_cont] + [
             r.get("raw_cont", np.arctanh(np.clip(r["actions"][..., :2], -1 + 1e-3, 1 - 1e-3))) for r in remotes], axis=1)
         out.log_probs = cat("log_probs", self.log_probs)
@@ -114,6 +120,7 @@ class VecRolloutBuffer:
             "obs": torch.as_tensor(flatten(self.obs), device=self.device),
             "actions": torch.as_tensor(flatten(self.actions), device=self.device),
             "raw_cont": torch.as_tensor(flatten(self.raw_cont), device=self.device),
+            "valid": torch.as_tensor(flatten(self.valid), device=self.device),
             "log_probs": torch.as_tensor(flatten(self.log_probs), device=self.device),
             "values": torch.as_tensor(flatten(self.values), device=self.device),
             "advantages": torch.as_tensor(flatten(advantages), device=self.device),

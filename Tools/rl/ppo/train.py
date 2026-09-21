@@ -265,6 +265,9 @@ def _exact_head_kls(old_params, new_params) -> torch.Tensor:
 def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dict, args) -> dict:
     n = batch["obs"].shape[0]
     indices = np.arange(n)
+    if "valid" in batch:
+        indices = indices[batch["valid"].cpu().numpy() > 0.5]   # drop recovered-worker placeholders
+        n = len(indices)
     stats = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0, "clip_fraction": 0.0, "nan_skips": 0,
              # --- 2026-09-19 diagnostics (OPTIMIZATION_CONTRACT 0.5) ---
              "mb0_max_abs_logratio": 0.0,   # first minibatch, before any step: must be ~0 or the rollout was not reconstructed
@@ -273,7 +276,8 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
              "max_sample_kl": 0.0,           # largest single-sample (ratio-1-log_ratio) seen this update
              "max_sample_kl_head": "",       # which head's log-ratio dominated that sample
              "early_stop_minibatch": -1,     # index at which the pre-step guard fired, -1 = never
-             "exact_kl_mb_max": 0.0}         # largest single-minibatch exact KL this update (the guard's input)
+             "exact_kl_mb_max": 0.0,         # largest single-minibatch exact KL this update (the guard's input)
+             "shared_grad_actor_norm": 0.0, "shared_grad_value_norm": 0.0, "shared_grad_cos": 0.0}
     n_minibatch_updates = 0
     stop_early = False
     # Frozen copy of the rollout policy for exact KL. 480K params, eval-only:
@@ -289,7 +293,7 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
         if stop_early:
             break
         np.random.shuffle(indices)
-        for start in range(0, n, args.minibatch_size):
+        for start in range(0, len(indices), args.minibatch_size):
             mb_idx = indices[start:start + args.minibatch_size]
             mb_obs = batch["obs"][mb_idx]
             mb_actions = batch["actions"][mb_idx]
@@ -363,6 +367,22 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
 
             entropy_loss = entropy.mean()
             loss = policy_loss + args.value_coef * value_loss - args.entropy_coef * entropy_loss
+
+            if mb_index == 1 and hasattr(policy, "shared_parameters"):
+                # Actor-vs-critic gradient geometry on the SHARED encoder, once per
+                # update (two extra backward passes on one minibatch). If the value
+                # gradient is comparable in norm and anti-aligned with the policy
+                # gradient, the critic is rewriting the actor's features (review,
+                # 2026-09-20). Logged, never applied.
+                _sp = [q for q in policy.shared_parameters() if q.requires_grad]
+                if _sp:
+                    _ga = torch.autograd.grad(policy_loss - args.entropy_coef * entropy_loss, _sp, retain_graph=True, allow_unused=True)
+                    _gv = torch.autograd.grad(args.value_coef * value_loss, _sp, retain_graph=True, allow_unused=True)
+                    _fa = torch.cat([(g if g is not None else torch.zeros_like(q)).flatten() for g, q in zip(_ga, _sp)])
+                    _fv = torch.cat([(g if g is not None else torch.zeros_like(q)).flatten() for g, q in zip(_gv, _sp)])
+                    stats["shared_grad_actor_norm"] = float(_fa.norm())
+                    stats["shared_grad_value_norm"] = float(_fv.norm())
+                    stats["shared_grad_cos"] = float(torch.dot(_fa, _fv) / (_fa.norm() * _fv.norm() + 1e-12))
 
             optimizer.zero_grad()
             loss.backward()

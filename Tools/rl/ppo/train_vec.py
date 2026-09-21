@@ -226,6 +226,9 @@ def parse_args():
                         "--periodic-eval-sampled episodes runs alongside; the benched checkpoint is "
                         "snapshotted to checkpoints/snapshots/<run>_<step>.pt so it can be re-benched.")
     p.add_argument("--periodic-eval-sampled", type=int, default=200)
+    p.add_argument("--critic-detach-shared", action="store_true",
+                   help="value loss stops at the shared feature tensor (critic trunk still learns). "
+                        "The causal test for critic->actor representation interference (review 2026-09-20).")
     p.add_argument("--gate-min-step-gap", type=int, default=3_000_000,
                    help="minimum global steps between deterministic gate evals. The stochastic "
                         "pre-filter clears its 600-episode bar roughly every 220k steps, and a "
@@ -488,6 +491,7 @@ def main():
     # layout + frame_stack directly (they need to know where the entity
     # region lives within each stacked frame), not just a flat obs_dim.
     policy = ActorCritic(layout, frame_stack=args.frame_stack).to(device)
+    policy.detach_critic_features = bool(args.critic_detach_shared)
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.learning_rate, eps=1e-5)
     obs_normalizer = ObservationNormalizer(layout, frame_stack=args.frame_stack)
     reward_normalizer = RewardNormalizer(args.gamma, n_envs=args.n_envs)
@@ -560,6 +564,11 @@ def main():
             _g["lr"] = args.learning_rate
         obs_normalizer.load_state_dict(resumed_checkpoint["obs_normalizer"])
         reward_normalizer.load_state_dict(resumed_checkpoint["reward_normalizer"])
+        # The per-worker running discounted return belongs to episodes that no
+        # longer exist after a resume (workers start fresh); keep the RMS
+        # statistics, zero the accumulator (review, 2026-09-20).
+        if hasattr(reward_normalizer, "_running_return"):
+            reward_normalizer._running_return[...] = 0.0
         # OGRL-20260906-078: restore where the curriculum had climbed to.
         # Without this every resume restarts d_max at --d-max-start, so an
         # unattended run that restarts a few times re-climbs difficulty from
@@ -737,8 +746,9 @@ def main():
                     with torch.no_grad():
                         bootstrap_values = policy.get_value(torch.as_tensor(trunc_normed, dtype=torch.float32, device=device)).cpu().numpy()
                     normalized_rewards[trunc_idx] = normalized_rewards[trunc_idx] + args.gamma * bootstrap_values
+                _valid = np.array([0.0 if infos[i].get("worker_recovered") else 1.0 for i in range(len(infos))], dtype=np.float32)
                 buffer.add(obs, actions_np, log_probs.cpu().numpy(), values.cpu().numpy(), normalized_rewards, stop_flags.astype(np.float32),
-                           raw_cont=raw_cont.cpu().numpy())
+                           raw_cont=raw_cont.cpu().numpy(), valid=_valid)
 
                 for i in np.where(stop_flags)[0]:
                     episode_rewards_this_update.append(episode_reward[i])
@@ -1054,6 +1064,9 @@ def main():
                     "mb0_max_abs_logratio": stats.get("mb0_max_abs_logratio", 0.0),
                     "early_stop_minibatch": stats.get("early_stop_minibatch", -1),
                     "exact_kl_mb_max": stats.get("exact_kl_mb_max", 0.0),
+                    "shared_grad_actor_norm": stats.get("shared_grad_actor_norm", 0.0),
+                    "shared_grad_value_norm": stats.get("shared_grad_value_norm", 0.0),
+                    "shared_grad_cos": stats.get("shared_grad_cos", 0.0),
                 },
                 # kl_spike (OGRL-20260817-028 Sec8.2): run9 had a single
                 # approx_kl of 12.87 against a 0.02 target, buried in a

@@ -142,6 +142,8 @@ Phase 0 (all six) ──► zero-training selector A/B (running)
 Phase 6 runs alongside on the trainer's idle windows; Phase 7 before the first >24 h run.
 ```
 
-Stop rule for every arm: bench at 5M and 10M; an arm still under 0.50 at 10M
-and not moving is killed. No arm gets a 50–100M budget until a 10–15M arm has
-moved the hard cell by more than the ±4-win noise floor.
+Stop rule for every arm: bench at 5M and 10M (two independent 200-episode
+greedy replicates + 200 sampled, checkpoint snapshotted); an arm still under
+0.50 at 10M and not moving is killed. No arm gets a 50–100M budget until a
+10–15M arm has moved the hard cell by more than the noise floor — ±13 wins at
+n=200, ±9 at n=400 — on BOTH greedy and sampled.

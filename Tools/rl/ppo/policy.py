@@ -226,6 +226,12 @@ class ActorCritic(nn.Module):
             nn.Tanh(),
         )
         self.critic_out = _layer_init(nn.Linear(hidden_dim, 1), gain=1.0)
+        # 2026-09-20 (review): entity_encoder + proprioception_branch are SHARED
+        # by actor and critic and both losses go through one backward pass, so
+        # value-loss gradients rewrite the features the actor reads. With this
+        # on, the critic trunk learns on a detached copy of the shared features
+        # -- the causal test for critic->actor representation interference.
+        self.detach_critic_features = False
 
     def _features(self, obs: torch.Tensor) -> torch.Tensor:
         """obs: (batch, frame_stack * frame_floats), the exact flat layout
@@ -275,6 +281,10 @@ class ActorCritic(nn.Module):
         continuous_dist = Normal(mean, log_std.exp())
         discrete_dist = Bernoulli(logits=self.discrete_logits(features))
         return continuous_dist, discrete_dist
+
+    def shared_parameters(self):
+        """The parameters both heads read through: entity encoder + proprioception branch."""
+        return list(self.entity_encoder.parameters()) + list(self.proprioception_branch.parameters())
 
     # --- diagnostics (2026-09-19, OPTIMIZATION_CONTRACT 0.5) --------------------
     def actor_params(self, obs: torch.Tensor):
@@ -357,7 +367,8 @@ class ActorCritic(nn.Module):
         entropy = _normal_entropy(log_std).sum(dim=-1).expand(discrete_logits.shape[:-1]) + _bernoulli_entropy(discrete_logits).sum(dim=-1)
 
         joint_action = torch.cat([continuous_action, discrete_action], dim=-1)
-        value = self.critic_out(self.critic_trunk(shared_features)).squeeze(-1)
+        _cf = shared_features.detach() if self.detach_critic_features else shared_features
+        value = self.critic_out(self.critic_trunk(_cf)).squeeze(-1)
         if return_raw:
             return joint_action, log_prob, entropy, value, raw_continuous
         return joint_action, log_prob, entropy, value
