@@ -32,7 +32,8 @@ param(
   [string] $EngineAffinity  = "0xFFF",
   [int]    $CollectionThreads = 2,
   [int]    $UpdateThreads     = 4,
-  [int]    $InteropThreads    = 1
+  [int]    $InteropThreads    = 1,
+  [int]    $HardResetEvery    = 20
 )
 
 $py   = "C:\Users\pavlov\AppData\Local\Programs\Python\Python312\python.exe"
@@ -55,7 +56,7 @@ $envline
   --total-timesteps $TotalTimesteps ^
   --entropy-coef $EntropyCoef --entropy-coef-final $EntropyFinal --entropy-anneal-steps $EntropyAnneal ^
   --stall-target-weight $StallWeight --stall-ramp-steps $StallRamp ^
-  --act-period 4 --frame-stack 4 --soft-reset --hard-reset-every 50 ^
+  --act-period 4 --frame-stack 4 --soft-reset --hard-reset-every $HardResetEvery ^
   --collection-torch-threads $CollectionThreads --update-torch-threads $UpdateThreads --torch-interop-threads $InteropThreads ^
   --opponents-cap $OpponentsCap --opp-gate-win-rate $OppGateWinRate ^
   --opp-gate-window $OppGateWindow --opp-gate-min-samples $OppGateMin --opp-keep-solo $OppKeepSolo ^
