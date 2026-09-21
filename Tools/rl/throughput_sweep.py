@@ -59,7 +59,8 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
            "--n-steps", "256", "--n-epochs", "1", "--minibatch-size", "128",
            "--entropy-coef", "0.003", "--entropy-coef-final", "0.003", "--entropy-anneal-steps", "1000000",
            "--learning-rate", "0.0003", "--target-kl", "0.02", "--max-episode-steps", "1200",
-           "--frame-stack", "4", "--act-period", "4", "--soft-reset", "--hard-reset-every", "50",
+           "--frame-stack", "4", "--act-period", "4", "--soft-reset",
+           "--hard-reset-every", str(args.hard_reset_every),
            "--d-max-start", "1.0", "--d-max-cap", "1.0", "--d-step", "0.1", "--d-min", "1.0",
            "--opponents-cap", "3", "--opp-keep-solo", "0.0", "--armed-stage", "0",
            "--gate-eval-episodes", "30", "--gate-min-step-gap", "999999999999",
@@ -132,6 +133,8 @@ def main() -> int:
     ap.add_argument("--update-threads", type=int, default=4)
     ap.add_argument("--interop-threads", type=int, default=1,
                     help="PyTorch inter-op threads")
+    ap.add_argument("--hard-reset-every", type=int, default=50,
+                    help="periodic hard-reset interval for soft-reset throughput tests")
     ap.add_argument("--tag", default=time.strftime("%Y%m%d_%H%M"))
     ap.add_argument("--out", default=None)
     ap.add_argument("--extra", nargs="*", default=[])
