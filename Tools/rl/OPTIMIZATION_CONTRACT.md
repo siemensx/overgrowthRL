@@ -500,3 +500,29 @@ global step 264,022,748 at about 796 cycle steps/s, with zero NaN skips, no KL
 spike, no pool misses, and `mb0_max_abs_logratio=2.48e-5`. The task is designed
 to survive SSH disconnect and logoff; its progress is monitored from telemetry,
 not from the agent session.
+
+#### Windows-only benchmark freeze
+
+The apples-to-apples benchmark protocol is frozen in the outer artifact
+`research-artifacts/OGRL-20260921-005-benchmark/`. Policy quality uses the
+paired `Tools/rl/benchmark_compare.py` harness, which joins per-episode results
+by held-out seed and reports a bootstrap interval. It must run on Windows for
+the Windows claim; a Mac trial was aborted and is not evidence for trainer
+throughput.
+
+The accepted speed evidence is narrower than a historical total-system claim:
+on the same Windows Release binary (SHA-256
+`6985E73DD06C572D8F474E53ADF1D20D03ED039352D70EA904CCCD3A89D769D0`) and the
+same three-map diagnostic cell, clean normal/no-affinity measured 700.120 wall
+steps/s and above+`0xFFF` measured 833.627 wall steps/s. The optimized stack is
+adopted provisionally. The old `715 active SPS` number is not ratioed against
+833.627 because its denominator is not proven identical.
+
+The production confirmation is still required after an idle window: a
+six-map, n14/k4 ABBA sequence and reversed-order repeat, with wall
+`delta_global_step / monotonic_elapsed_seconds` as the primary metric and
+cycle median/p10, phase timings, reset latency, pool misses, CPU placement,
+and thermal performance-limit samples as diagnostics. Historical `run23_sel0`
+telemetry is preserved as an anchor but is not a causal A/B because it used
+three maps, collection threads=1, and hard-reset-every=50; current run25 uses
+six maps, threads=2/4/1, and hard-reset-every=20.
