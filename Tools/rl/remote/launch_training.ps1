@@ -33,7 +33,8 @@ param(
   [int]    $CollectionThreads = 2,
   [int]    $UpdateThreads     = 4,
   [int]    $InteropThreads    = 1,
-  [int]    $HardResetEvery    = 20
+  [int]    $HardResetEvery    = 20,
+  [string] $Purpose           = "Windows optimized throughput continuation"
 )
 
 $py   = "C:\Users\pavlov\AppData\Local\Programs\Python\Python312\python.exe"
@@ -62,7 +63,7 @@ $envline
   --opp-gate-window $OppGateWindow --opp-gate-min-samples $OppGateMin --opp-keep-solo $OppKeepSolo ^
   --device cpu --run-id $RunId --seed $Seed ^
   --no-tapes --no-native-capture ^
-  --purpose "Stage C: entropy revival + stall tax + map axis, resumed from run15" ^
+  --purpose "$Purpose" ^
   --checkpoint-path "$repo\Tools\rl\ppo\checkpoints\$RunId.pt" ^
   > "$log" 2>&1
 echo EXIT %ERRORLEVEL% >> "$log"
