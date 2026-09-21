@@ -82,11 +82,13 @@ _ARMED = [0, 0, 1.0]   # armed_count, weapon_type, throw_aggression -- set from 
 def run_episodes(
     env: OvergrowthEnv, act_fn, episodes: int, seed_base: int, difficulty: float,
     opponents: int, weapons: float, species: int, max_episode_steps: int, obs_normalizer, layout,
+    emit_episodes: bool = False,
 ) -> dict:
     outcomes = {"won": 0, "lost": 0, "timeout": 0}
     lengths = []
     component_totals = defaultdict(list)
     emergence = EmergenceAccumulator()
+    episode_records = []
     for ep in range(episodes):
         seed = seed_base + ep
         raw_obs = env.reset(seed=seed, soft=False, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
@@ -125,17 +127,27 @@ def run_episodes(
                 break
         outcomes["won" if won else ("lost" if done else "timeout")] += 1
         lengths.append(step + 1)
+        if emit_episodes:
+            episode_records.append({
+                "seed": seed,
+                "outcome": "won" if won else ("lost" if done else "timeout"),
+                "won": bool(won),
+                "steps": step + 1,
+            })
         for k, v in ep_components.items():
             component_totals[k].append(v)
     n = episodes
     win_rate = outcomes["won"] / n
     ci = wilson_ci(outcomes["won"], n)
-    return {
+    result = {
         "episodes": n, "outcomes": outcomes, "win_rate": win_rate, "win_rate_ci95": list(ci),
         "episode_length_mean": float(np.mean(lengths)), "episode_length_median": float(np.median(lengths)),
         "reward_components_mean": {k: float(np.mean(v)) for k, v in component_totals.items()},
         "emergence": emergence.snapshot(),
     }
+    if emit_episodes:
+        result["episode_results"] = episode_records
+    return result
 
 
 def parse_args():
@@ -168,6 +180,8 @@ def parse_args():
     p.add_argument("--shm-name", default=None)
     p.add_argument("--device", default="cpu", choices=["cpu", "mps"])
     p.add_argument("--out", default=None, help="write the full result JSON here regardless of --run-id")
+    p.add_argument("--emit-episodes", action="store_true",
+                   help="include per-episode seed/outcome records for paired checkpoint comparisons")
     args = p.parse_args()
     _ARMED[0], _ARMED[1], _ARMED[2] = args.armed_count, args.weapon_type, args.throw_aggression
     if args.from_run:
@@ -235,13 +249,15 @@ def main():
         for d in bands:
             print(f"\n=== difficulty {d} ===")
             policy_result = run_episodes(env, policy_act, args.episodes, args.seed_base, d, args.opponents,
-                                          args.weapons, args.species, args.max_episode_steps, obs_normalizer, layout)
+                                          args.weapons, args.species, args.max_episode_steps, obs_normalizer, layout,
+                                          emit_episodes=args.emit_episodes)
             all_policy_won += policy_result["outcomes"]["won"]
             all_policy_n += policy_result["episodes"]
             band_entry = {"band": d, "policy": policy_result}
             if not args.no_control:
                 control_result = run_episodes(env, control_act, args.episodes, args.seed_base, d, args.opponents,
-                                               args.weapons, args.species, args.max_episode_steps, None, layout)
+                                               args.weapons, args.species, args.max_episode_steps, None, layout,
+                                               emit_episodes=args.emit_episodes)
                 p_random = control_result["win_rate"]
                 normalized_skill = ((policy_result["win_rate"] - p_random) / (1 - p_random)) if p_random < 1.0 else None
                 band_entry["random_control"] = control_result
