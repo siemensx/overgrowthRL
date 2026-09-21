@@ -39,6 +39,12 @@ def kill_engines() -> None:
 def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
     repo = Path(args.repo_root)
     run_id = f"sweep_{tag}_n{n_envs}k{k_standby}"
+    # A hard taskkill can leave a named semaphore behind on Windows.  The old
+    # n/k-only prefix reused that semaphore on the next point, which made a
+    # perfectly good control fail during startup and could make the following
+    # point attach to stale IPC.  The run-specific prefix is deliberately
+    # unique for every point, including repeated n/k comparisons.
+    shm_prefix = f"/ogrl_{run_id}"
     run_dir = repo / "Tools" / "rl" / "runs" / run_id
     if run_dir.exists():
         shutil.rmtree(run_dir)
@@ -47,7 +53,7 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
         ckpt.unlink()
     cmd = [sys.executable, "-u", str(repo / "Tools" / "rl" / "ppo" / "train_vec.py"),
            "--repo-root", str(repo), "--levels", args.levels,
-           "--shm-prefix", f"/ogrl_sw{n_envs}{k_standby}", "--n-envs", str(n_envs), "--k-standby", str(k_standby),
+           "--shm-prefix", shm_prefix, "--n-envs", str(n_envs), "--k-standby", str(k_standby),
            "--seed", "7", "--checkpoint-path", str(ckpt), "--resume-from", args.resume_from,
            "--run-id", run_id, "--total-timesteps", "4000000000",
            "--n-steps", "256", "--n-epochs", "1", "--minibatch-size", "128",

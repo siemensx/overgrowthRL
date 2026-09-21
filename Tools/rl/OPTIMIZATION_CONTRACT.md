@@ -147,3 +147,174 @@ greedy replicates + 200 sampled, checkpoint snapshotted); an arm still under
 0.50 at 10M and not moving is killed. No arm gets a 50–100M budget until a
 10–15M arm has moved the hard cell by more than the noise floor — ±13 wins at
 n=200, ±9 at n=400 — on BOTH greedy and sampled.
+
+## Takeover addendum — Claude Code session and Windows optimization ledger
+
+Added 2026-09-21 under `OGRL-20260921-001`. This is the continuation contract
+after the Claude Code session titled **Project setup on Windows training
+machine** exhausted its context. The complete transcript is preserved at
+`/Users/pavlov/.claude/projects/-Users-pavlov-Documents-GitHub-badbunny/31de9611-da6d-41ea-84ec-5db8ea852c4f.jsonl`.
+
+### Exact takeover point
+
+Claude stopped after profiling and partial throughput testing, not after a
+successful optimization handoff. The last real training process was
+`run23_sel0`, resumed from `run21_baseline_260m.pt`, with 14 active engines and
+4 standbys. Its last checkpoint is at global step **262,972,636** and its last
+recorded cycle rate is **737.45 steps/s**. The run manifest still says
+`running`, but the Windows process is gone; this is a stale manifest, not an
+active run. No training process is currently running on the trainer.
+
+Claude's immediate research context was:
+
+1. The old 500M-step result did not improve the 1v3 cell because attacks were
+   selected using a frozen camera direction. The target-selection correction
+   was made and is a correctness change, not proof of a better policy.
+2. A `>`/`>=` controller-identification error was fixed. The 829M policy was
+   worse under the corrected controls, while the 261M checkpoint was retained
+   as the clean restart point.
+3. The learner was discarding most updates because the continuous log
+   probability was reconstructed after tanh-clamping. That made the KL safety
+   guard stop almost every update. The fix stores the pre-tanh sample and was
+   the first valid learner rerun; the first million steps moved from roughly
+   0.29 to 0.37–0.40 in the in-run signal, but this is not the final held-out
+   1v3 result.
+4. Claude then switched to throughput work: asynchronous collection, Python
+   bookkeeping, inference mode, thread counts, process priority/affinity, and
+   phase-level timing. The session ended before a clean winner was adopted.
+
+### Ledger of levers Claude actually attempted
+
+The result column records measured output, not a claim that the change is
+safe for a production run. `n_envs` means active game processes; `k` means
+standby processes.
+
+| lever | what was changed or measured | output | disposition |
+|---|---|---|---|
+| Target selection | Compared the old camera-facing selector with self-facing/nearest modes; fixed the RL targeting path first | The earlier learner A/B was invalid because the tanh/log-prob bug made the KL guard fire on 100% of updates. Both arms fell below the 261M start after 10M; no selector effect can be inferred | Keep as a correctness prerequisite; re-run Phase 1b only after the learner smoke test passes |
+| Controller identity | Fixed the one-character `>`/`>=` test so the RL character is identified correctly | The old control behavior was not the intended experiment; the 829M policy degraded under the corrected controls | Adopted for correctness; do not compare old and corrected-policy scores as an optimization A/B |
+| KL/log-prob update | Moved the KL check before the optimizer step and stored the pre-tanh continuous sample | The previous reconstructed log ratio reached about 5.9 and tripped the guard on every update; this was fixed in the current code path | Adopted as a correctness fix; require the first-minibatch invariant before further learner runs |
+| Critic detach and related learner review | Reviewed the value path so the critic cannot rewrite actor inputs; corrected three adjacent issues found during review | No isolated throughput or held-out-win result was produced | Keep in the fixed baseline; no separate adoption claim |
+| Asynchronous collector, 14 engines | Same general workload, two repeats: sync 2698.795 and 1911.467; async 1821.138 and 1977.925 decisions/s | Two-repeat medians: sync 2305.13, async 1899.53; async was slower and highly variable | Rejected for now; only revisit after a clean current-code test proves the implementation is materially different |
+| Asynchronous collector, 20 engines | Two repeats: sync 1961.686 and 2022.916; async 1916.168 and 1883.045 decisions/s | Medians: sync 1992.30, async 1899.61 | Rejected; it did not remove the Windows straggler cost |
+| Nonblocking periodic evaluation/bench | Changed the trainer to launch periodic evaluation without blocking collection, then drain the result at completion | Infrastructure change was written; no isolated end-to-end rate A/B was completed | Keep, but validate that evaluation never changes on-policy ordering or checkpoint selection |
+| Observation unpacking | Vectorized observation unpacking and finite checks | cProfile still showed `obs_schema.entity_field` and `math.isfinite` as hotspots; Claude reported the lite reward/entity path was equivalent on its smoke data, but no clean training A/B was completed | Keep as a candidate; measure against a same-seed control before adoption |
+| Reward/entity bookkeeping | Added a reduced entity-diff path instead of rebuilding full dictionaries where possible | No isolated wall-rate result; the cProfile profile still put reward/observation bookkeeping in the top group | Pending clean A/B |
+| PyTorch inference mode | Used `torch.inference_mode()` during collection | On Windows policy forward timing improved from about 0.96 ms to 0.61 ms at one thread; the isolated microbenchmark reached about 0.42 ms versus 0.46 ms for no-grad | Keep; the end-to-end gain is not yet independently measured |
+| PyTorch update threads | Tested the policy microbenchmark at 1/2/4 threads; 2 threads was fastest in that microbenchmark (~0.46 ms), while 4 threads was slower (~0.52–0.58 ms) | The real trainer tests used 4 update threads, so this is not a completed sweep | Pending 1/2/4/8 end-to-end A/B at the same engine count |
+| ctypes signatures | Added explicit ctypes argument types for the shared-memory calls | No isolated rate result; correctness smoke passed during the profiling work | Keep, but count as unproven until a controlled A/B |
+| Timer and phase instrumentation | Switched timing to `perf_counter`; added policy, environment-step, bookkeeping, worker-wait, and barrier metrics | Instrumentation showed, at n14/k4, roughly 2.38 ms policy, 19.04 ms vector step, 1.11 ms bookkeeping, 22.57 ms collection; mean engine wait 13.11 ms per worker and worker-latency p99 about 20.99 ms | Adopted as measurement infrastructure; timers themselves are not a speed win |
+| Engine priority/affinity | Scheduler sweep at n14/k4: normal trainer + normal engine **748.38 median sps**; above + above **720.19**; normal trainer + above engine with affinity `0xFFF` **754.53** | Above priority for both was worse. The mixed setting was only about 0.8% above normal in this run | Keep normal trainer priority, test engine priority/affinity only in a clean interleaved repeat; do not call this adopted yet |
+| Python-side fixes plus mixed scheduler | n14/k4: **728.31 median sps**; n18/k4: **716.70 median sps** under the same reported launch settings | n18 added engines but reduced throughput; this repeat did not reproduce the older 828 sps point | n14 remains provisional; n18 is rejected for this workload unless thermally controlled retesting reverses it |
+| Earlier n_env/k sweep | Existing Windows points: n8/k2 668.84; n10/k2 772.95; n10/k4 682.67; n12/k2 712.27; n14/k4 828.10 median sps | These points were taken under different source/runtime/launch states and cannot be ranked against the later Python-fix sweep as one experiment | Preserve as evidence; repeat the winner and control under one clean configuration |
+| cProfile | Profiled 100 updates: 321,467,733 calls in 493.565 s | Largest costs included semaphore wait 79.38 s, queue get 65.15 s, semaphore post 54.00 s, entity-field extraction 22.78 s, finite checks 13.93 s, and policy/vec-step call overhead | Diagnosis only; use it to target a new A/B, not as a throughput result |
+| py-spy | Tried live attach, then spawn profiling | Attach/quoting/PID attempts failed; the final spawn capture mostly measured process startup and DLL loading, not steady-state collection | Rejected as evidence for the hot loop; do not repeat without a verified live PID and a bounded capture plan |
+| Phase sweep at n12 | Attempted to extend the phase breakdown | Failed because the temporary Windows disk ran out of space while creating the phase script; this is a harness failure, not a performance result | Fix temporary-space hygiene before repeating; never label this point slow or fast |
+
+### What is left from earlier proposals
+
+These are the remaining levers, ordered by likely return and by how safely they
+can be tested without touching the Mac:
+
+1. **Clean concurrency baseline:** repeat n4, n6, n8, n10, n12, n14, and
+   n18 with the same binary, same three-map corpus, same checkpoint, same
+   `n_steps=256`, same `update_threads`, fresh shared-memory prefix per point,
+   and an explicit character-count assertion from each engine log. Use a
+   warmup followed by at least two measured repeats. This resolves the
+   contradictory 715/728/748/754/828 results.
+2. **Standby sweep:** at the winning active count, compare k=2 and k=4, then
+   k=6 only if the process and memory budget remain healthy. The map corpus
+   size and active+standby allocation must remain compatible with the project
+   map-axis rule.
+3. **Thread sweep:** at the clean winner, test update threads 1, 2, 4, and 8.
+   Record learner time, collection time, wall steps/s, CPU placement, RAM, and
+   thermal throttling. Do not infer this from a single policy microbenchmark.
+4. **Scheduler/affinity repeat:** interleave normal and above engine priority,
+   with and without the tested affinity mask. Treat any gain under 5% as noise
+   unless it repeats in both directions of the interleaving. A CPU mask must
+   be described in terms of the actual 165U logical processors; `0xFFF` is not
+   automatically a P-core-only mask.
+5. **Nonblocking evaluation validation:** run a short trainer job with
+   periodic evaluation enabled and compare update ordering, checkpoint step,
+   and collection rate against evaluation-disabled control. Keep it only if
+   the reported training state is identical apart from the intended eval work.
+6. **Decision frequency:** test 30, 20, and 15 Hz only as a controlled
+   throughput/fidelity A/B. This changes the action-hold contract, so it is not
+   a free optimization and cannot be adopted from speed alone. Evaluate both
+   1v1 retention and 1v3 performance.
+7. **Engine-side sound early-outs:** the patch is documented in `DEAD_ENDS.md`
+   but was not rebuilt and measured in the later run. A fresh trainer-boundary
+   A/B is allowed; never swap the binary during a live run.
+8. **Async collector:** currently rejected. Revisit only if the clean current
+   collector shows a reproducible straggler regime that an updated async
+   implementation addresses, and then compare on-policy ordering and final
+   metrics, not rate alone.
+9. **Large engine rewrite/JIT:** deferred. The AngelScript/JIT ceiling and
+   prior source probes are already recorded as negative evidence. Do not spend
+   the next training window here.
+
+The policy-quality work remains separate from throughput: Phase 1b target
+selection, Phase 2 representation probes, Phase 3 learner recipe, Phase 4
+backloaded knockout reward/action grammar, and Phase 5 curriculum. No quality
+arm gets a long budget until the fixed learner passes the first-minibatch
+log-ratio invariant and a 10–15M arm moves both greedy and sampled 1v3 results
+past the documented noise floor.
+
+### Test and adoption contract for this takeover
+
+Every optimization trial must record the exact Mac source commit, Windows
+binary hash or build identifier, Python/Torch versions, map list, character
+count, n/k, thread count, priority, affinity, shared-memory prefix, seed,
+warmup, measurement window, median/p10/wall steps/s, CPU/RAM/thermal state,
+crashes/recoveries, and raw artifact paths. A trial is invalid if it reuses a
+shared-memory name after a hard kill, silently changes the map corpus, loses
+characters, or measures an empty level.
+
+The adoption threshold is a repeatable **at least 5% wall-clock throughput
+gain** over an interleaved control, with no increase in recovery, timeout,
+episode-outcome, or production-equivalence failures. A smaller gain may be
+kept as a low-risk implementation cleanup, but it is not allowed to determine
+the long-run worker count. The winning configuration must then survive a
+longer stability run before it is written into the scheduled-task launcher.
+
+The Windows checkout is currently massively dirty and is not a clean checkout
+of the Mac branch. It may be used for bounded diagnostics already present on
+the trainer, but no new production training run is authorized from that state.
+The safe deployment path is: commit the source on the Mac topic branch, push
+it, pull/build on Windows in a separately verified checkout or reconciled
+working tree, run the correctness gates, then start a Scheduled Task. This
+contract therefore separates “measured on the dirty trainer runtime” from
+“adopted for production training.”
+
+### Takeover diagnostic result — scheduler/affinity
+
+The first Tailscale trial exposed a flaw in the old sweep harness: its forced
+Windows cleanup reused `/ogrl_sw14411` after killing the control engines. That
+control exited before metrics were written, so its result is invalid. The
+harness now makes the shared-memory prefix unique for every point, including
+repeated n/k points. This is a safety/correctness fix, not a speed claim.
+
+With the corrected harness, the same dirty Windows runtime, checkpoint
+`run23_sel0.pt`, map corpus `t_train_101,t_train_102,t_train_104`, n14/k4,
+update threads 4, and 45 s warmup + 90 s measurement produced:
+
+| order | normal engine | above engine + `0xFFF` affinity | relative wall gain |
+|---|---:|---:|---:|
+| normal first | 730.05 wall steps/s | 941.53 wall steps/s | +29.0% |
+| mixed first | 688.13 wall steps/s | 895.54 wall steps/s | +30.1% |
+
+The raw remote summaries are
+`Tools/rl/runs/throughput_sweep_takeover_unique_20260921.json` and
+`Tools/rl/runs/throughput_sweep_takeover_reverse_20260921.json` on the trainer.
+Both trials completed without an early exit. The engine's own per-worker logs
+showed players 0 through 3 and `Num_threats: 3`, confirming the intended 1v3
+scenario rather than an empty or 1v1 level. Pool misses were 0–1%; the trainer
+had no remaining engine or trainer process after cleanup.
+
+**Decision:** provisionally adopt `OGRL_ENGINE_PRIORITY=above` and
+`OGRL_ENGINE_AFFINITY=0xFFF` as the next trainer benchmark configuration. This
+passes the two-repeat 5% screening rule, but it is not yet written into a
+production Scheduled Task. The result was measured on the dirty Windows
+checkout, without a thermal/CPU-placement capture, and still needs the full
+n/k and update-thread sweep plus a longer stability run after clean source
+deployment. Do not claim “30% faster training” until those gates pass.
