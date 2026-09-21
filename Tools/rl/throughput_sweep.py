@@ -63,7 +63,9 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
            "--d-max-start", "1.0", "--d-max-cap", "1.0", "--d-step", "0.1", "--d-min", "1.0",
            "--opponents-cap", "3", "--opp-keep-solo", "0.0", "--armed-stage", "0",
            "--gate-eval-episodes", "30", "--gate-min-step-gap", "999999999999",
+           "--collection-torch-threads", str(args.collection_threads),
            "--update-torch-threads", str(args.update_threads),
+           "--torch-interop-threads", str(args.interop_threads),
            "--no-tapes", "--no-native-capture"] + args.extra
     env = dict(os.environ, OGRL_ALLOW_NENVS_CHANGE="1")
     log = run_dir.parent / f"{run_id}.log"
@@ -125,7 +127,11 @@ def main() -> int:
                          "14x4:OGRL_ENGINE_PRIORITY=above,OGRL_ENGINE_AFFINITY=0xFFF")
     ap.add_argument("--warmup", type=float, default=150.0)
     ap.add_argument("--measure", type=float, default=360.0)
+    ap.add_argument("--collection-threads", type=int, default=2,
+                    help="PyTorch intra-op threads during rollout inference")
     ap.add_argument("--update-threads", type=int, default=4)
+    ap.add_argument("--interop-threads", type=int, default=1,
+                    help="PyTorch inter-op threads")
     ap.add_argument("--tag", default=time.strftime("%Y%m%d_%H%M"))
     ap.add_argument("--out", default=None)
     ap.add_argument("--extra", nargs="*", default=[])
