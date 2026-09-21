@@ -230,8 +230,8 @@ can be tested without touching the Mac:
    Record learner time, collection time, wall steps/s, CPU placement, RAM, and
    thermal throttling. Do not infer this from a single policy microbenchmark.
 4. **Scheduler/affinity repeat:** interleave normal and above engine priority,
-   with and without the tested affinity mask. Treat any gain under 5% as noise
-   unless it repeats in both directions of the interleaving. A CPU mask must
+   with and without the tested affinity mask. Do not discard a repeatable gain
+   merely because it is under 5%: small gains compound across the stack. A CPU mask must
    be described in terms of the actual 165U logical processors; `0xFFF` is not
    automatically a P-core-only mask.
 5. **Nonblocking evaluation validation:** run a short trainer job with
@@ -270,12 +270,28 @@ crashes/recoveries, and raw artifact paths. A trial is invalid if it reuses a
 shared-memory name after a hard kill, silently changes the map corpus, loses
 characters, or measures an empty level.
 
-The adoption threshold is a repeatable **at least 5% wall-clock throughput
-gain** over an interleaved control, with no increase in recovery, timeout,
-episode-outcome, or production-equivalence failures. A smaller gain may be
-kept as a low-risk implementation cleanup, but it is not allowed to determine
-the long-run worker count. The winning configuration must then survive a
-longer stability run before it is written into the scheduled-task launcher.
+There is no blanket 5% rejection threshold. The project should accumulate
+small improvements because ten independent 2% gains can materially change the
+training time. The rule is:
+
+- Low-risk, behavior-preserving changes (timers, allocation, IPC, inference
+  bookkeeping): keep any repeatable positive gain that is larger than the
+  measurement uncertainty, even around 0.5–1%, if the maintenance cost is
+  negligible.
+- Worker, thread, priority, and affinity settings: compare complete stacks as
+  well as individual deltas. A 1–2% setting gain remains eligible for the
+  winner if it repeats in both orders and does not increase failures. The
+  winning stack is judged against the original status quo, not against the
+  immediately previous setting.
+- High-risk changes that can affect physics, action timing, observations,
+  resets, learner semantics, or episode outcomes require correctness and
+  production-equivalence gates regardless of speed.
+
+Any result inside noise stays in the candidate pool until it is combined with
+other candidates or measured longer; it is not silently discarded. A setting
+is written into the scheduled launcher only after the full stack beats the
+status quo, preserves character count and outcome/recovery behavior, and
+survives a longer stability run.
 
 The Windows checkout is currently massively dirty and is not a clean checkout
 of the Mac branch. It may be used for bounded diagnostics already present on
@@ -313,8 +329,113 @@ had no remaining engine or trainer process after cleanup.
 
 **Decision:** provisionally adopt `OGRL_ENGINE_PRIORITY=above` and
 `OGRL_ENGINE_AFFINITY=0xFFF` as the next trainer benchmark configuration. This
-passes the two-repeat 5% screening rule, but it is not yet written into a
+passes the two-repeat repeatability screen, but it is not yet written into a
 production Scheduled Task. The result was measured on the dirty Windows
 checkout, without a thermal/CPU-placement capture, and still needs the full
 n/k and update-thread sweep plus a longer stability run after clean source
-deployment. Do not claim “30% faster training” until those gates pass.
+deployment. It is already part of the cumulative optimization stack; do not
+claim a final percentage until the complete stack is measured against status
+quo.
+
+### Continued takeover evidence — clean deployment, adoption threshold, and cooling
+
+The dirty Windows checkout was not repaired or reset. A separate deployment was
+created at `C:\ogrl\overgrowthRL_clean` from source commit `228a3bf3`, with the
+existing Release binary copied in place and `run23_sel0.pt` copied only as the
+resume input. The original dirty tree remains preserved. All measurements below
+use the clean deployment, the same three-map diagnostic corpus
+(`t_train_101`, `t_train_102`, `t_train_104`), a real resumed checkpoint, and
+the trainer's own character-bearing logs. `n_envs + k_standby` is a multiple of
+three for this corpus; the production six-map corpus is likewise compatible
+with `n14/k4` because 18 is a multiple of six.
+
+The earlier adoption question is resolved explicitly: there is no veto at 5%.
+For a low-risk stack, a repeatable 0.5–1% gain above measurement uncertainty is
+worth keeping; a 1–2% worker/thread/scheduler gain remains eligible when it
+survives reversed order or a longer run; high-risk reset, physics, observation,
+action, and learner changes still require correctness gates. The adoption test is
+therefore cumulative: compare the complete candidate stack with the status quo,
+then keep each component that is repeatable and behavior-neutral. Ten genuine
+2% gains are treated as a real compounded improvement (about 21.9% if
+independent), not rounded away as ten separate “too small” results.
+
+#### Clean sustained throughput
+
+| configuration | measured rows | median cycle steps/s | p10 | wall steps/s | pool misses | result |
+|---|---:|---:|---:|---:|---:|---|
+| status quo `n14/k4`, normal priority, no affinity | 59 | 697.5 | 671.1 | 700.1 | 0.284% | clean control |
+| `n14/k4`, engine above-normal + `0xFFF`, threads 2/4/1 | 70 | 856.2 | 669.8 | 833.6 | 0.225% | **adopt candidate** |
+| `n18/k3`, engine above-normal + `0xFFF`, threads 2/4/1 | 56 | 857.5 | 822.5 | 855.7 | 2.309% | not adopted yet |
+
+Each long point used 60 seconds of warmup and 300 seconds of measurement and
+completed without early exit. The safe resumable `n14/k4` stack is +22.7% on
+median cycle rate and +19.1% on wall rate against the matched clean control.
+`n18/k3` is not a production resume target: the checkpoint's reward normalizer
+has one running accumulator per active worker, so changing from the saved
+`n_envs=14` to 18 needs an explicit migration or a fresh n18 checkpoint. It also
+has a higher pool-miss rate and no sustained advantage over n14. It stays as a
+future fresh-run candidate rather than being forced onto `run23_sel0.pt`.
+
+The adopted production candidate is therefore:
+
+```text
+n_envs=14, k_standby=4
+OGRL_ENGINE_PRIORITY=above
+OGRL_ENGINE_AFFINITY=0xFFF
+collection torch threads=2, update torch threads=4, inter-op threads=1
+```
+
+The remote launcher now accepts these settings explicitly in
+`Tools/rl/remote/launch_training.ps1`; the source change is to be committed and
+deployed before starting an unattended Scheduled Task. The source change does
+not change physics or action timing.
+
+#### Thread and worker follow-ups
+
+The clean short sweeps support `collection_threads=2`; collection-thread results
+were t1=876.2, t2=894.8, t4=827.5, and t8=676.1 wall steps/s under the same
+above/affinity stack. Update-thread=8 was not adopted: two repeat points varied
+from 793.6 to 931.0 median steps/s, with the lower point's p10 at 649.8, while
+the longer stable t4 point was 856.2. This is too variable to call a gain and
+does not justify changing the known-stable t4 default. The raw sweep is kept at
+`C:\ogrl\overgrowthRL_clean\Tools\rl\runs\throughput_sweep_update8_repeat_20260921.json`.
+
+The valid worker/standby screen showed throughput rising through the available
+workers, but short points were noisy and some diagnostic totals were invalid
+for the map-corpus rule. The long n14/n18 comparison above is the adoption
+evidence. Invalid totals, startup failures, and inter-op-thread failures remain
+negative evidence, not silent omissions.
+
+#### Cooling and power ceiling
+
+The trainer is AC-powered and already uses the `High performance` plan with
+minimum and maximum AC processor state at 100%, active cooling policy, aggressive
+boost, energy-performance preference 0, and 100% core-parking minimum. No Dell
+thermal-control service was present to select a stronger profile. During the
+long n18 run Windows reported 90% maximum frequency, 90% performance limit, and
+performance-limit flag `2`; Microsoft documents flag `0x2` as a power-safety
+limit ([official definition](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/pepfx/ns-pepfx-_pep_ppm_query_perf_constraints)).
+This is a laptop firmware/hardware ceiling, not an unmet grid-power setting.
+The software cooling lever is exhausted; more load would risk throttling rather
+than add useful training throughput.
+
+#### Reset correctness boundary
+
+The first soft-reset validation was rejected because `t_train_101.xml` produced
+zero entities. The rerun used the valid `oval_arena_1v1_unarmed.xml` fixture and
+confirmed: self id stable, 0/10 scenario-distribution mismatches, hard reset
+median 1313 ms, soft reset median 187.5 ms, but replay/physics equivalence still
+failed at step 0 (maximum position deviation 0.808, velocity deviation 4.954).
+The result is consistent with the previously documented deep-sequence reset
+anomaly and keeps soft reset behind the existing periodic hard-reset hedge. The
+new scheduler/affinity adoption does not add this risk; it preserves the reset
+mode already used by the status quo. A Windows RSS probe was also added to the
+validator because its old Unix-only `ps` probe silently returned NaN on the
+trainer; rerun the leak audit after that source change is deployed.
+
+**Current decision.** Adopt the clean `n14/k4` plus above-normal engine priority,
+`0xFFF` affinity, collection=2/update=4/inter-op=1 stack for the next bounded
+resume smoke and, if it remains healthy, the unattended run. Do not adopt t8,
+n18 resume, inter-op changes, or any new soft-reset semantics. Any long run must
+still be started by Scheduled Task, with checkpoint monotonicity and run-specific
+shared-memory names intact.

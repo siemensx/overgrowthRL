@@ -26,14 +26,24 @@ param(
   [int]    $OppGateWindow   = 400,
   [int]    $OppGateMin      = 150,
   [double] $OppKeepSolo     = 0.35,
-  [switch] $AllowNEnvsChange
+  [switch] $AllowNEnvsChange,
+  [string] $RepoRoot        = "C:\ogrl\overgrowthRL",
+  [string] $EnginePriority  = "above",
+  [string] $EngineAffinity  = "0xFFF",
+  [int]    $CollectionThreads = 2,
+  [int]    $UpdateThreads     = 4,
+  [int]    $InteropThreads    = 1
 )
 
 $py   = "C:\Users\pavlov\AppData\Local\Programs\Python\Python312\python.exe"
-$repo = "C:\ogrl\overgrowthRL"
+$repo = $RepoRoot
 $log  = "C:\ogrl\$RunId.log"
 
-$envline = if ($AllowNEnvsChange) { "set OGRL_ALLOW_NENVS_CHANGE=1" } else { "" }
+$envline = @(
+  "set OGRL_ENGINE_PRIORITY=$EnginePriority"
+  "set OGRL_ENGINE_AFFINITY=$EngineAffinity"
+  $(if ($AllowNEnvsChange) { "set OGRL_ALLOW_NENVS_CHANGE=1" } else { "rem OGRL_ALLOW_NENVS_CHANGE intentionally unset" })
+) -join "`r`n"
 $bat = @"
 @echo off
 cd /d $repo
@@ -46,6 +56,7 @@ $envline
   --entropy-coef $EntropyCoef --entropy-coef-final $EntropyFinal --entropy-anneal-steps $EntropyAnneal ^
   --stall-target-weight $StallWeight --stall-ramp-steps $StallRamp ^
   --act-period 4 --frame-stack 4 --soft-reset --hard-reset-every 50 ^
+  --collection-torch-threads $CollectionThreads --update-torch-threads $UpdateThreads --torch-interop-threads $InteropThreads ^
   --opponents-cap $OpponentsCap --opp-gate-win-rate $OppGateWinRate ^
   --opp-gate-window $OppGateWindow --opp-gate-min-samples $OppGateMin --opp-keep-solo $OppKeepSolo ^
   --device cpu --run-id $RunId --seed $Seed ^

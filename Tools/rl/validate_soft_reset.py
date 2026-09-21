@@ -53,6 +53,18 @@ LAYOUT = DEFAULT_LAYOUT
 def _rss_mb(pid: int) -> float:
     try:
         import subprocess
+        if sys.platform == "win32":
+            # ``ps`` is not part of a normal Windows trainer install.  Keep
+            # the leak audit meaningful on the host where soft reset is
+            # actually used instead of silently converting every sample to
+            # NaN.  PowerShell is already a required part of the remote
+            # Scheduled-Task setup.
+            out = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                 f"(Get-Process -Id {int(pid)} -ErrorAction Stop).WorkingSet64"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip()
+            return float(out) / (1024.0 * 1024.0) if out else float("nan")
         out = subprocess.run(["ps", "-o", "rss=", "-p", str(pid)], capture_output=True, text=True, timeout=5).stdout.strip()
         return float(out) / 1024.0 if out else float("nan")
     except Exception:  # noqa: BLE001 -- best-effort diagnostic, never fail the suite over a ps hiccup
