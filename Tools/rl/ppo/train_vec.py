@@ -226,6 +226,9 @@ def parse_args():
                         "--periodic-eval-sampled episodes runs alongside; the benched checkpoint is "
                         "snapshotted to checkpoints/snapshots/<run>_<step>.pt so it can be re-benched.")
     p.add_argument("--periodic-eval-sampled", type=int, default=200)
+    p.add_argument("--reset-running-return", action="store_true",
+                   help="zero the reward normaliser's per-worker running return on resume (RMS kept). "
+                        "Correct, but behaviour-changing: off by default so A/Bs against run23 stay one-variable.")
     p.add_argument("--critic-detach-shared", action="store_true",
                    help="value loss stops at the shared feature tensor (critic trunk still learns). "
                         "The causal test for critic->actor representation interference (review 2026-09-20).")
@@ -567,7 +570,7 @@ def main():
         # The per-worker running discounted return belongs to episodes that no
         # longer exist after a resume (workers start fresh); keep the RMS
         # statistics, zero the accumulator (review, 2026-09-20).
-        if hasattr(reward_normalizer, "_running_return"):
+        if args.reset_running_return and hasattr(reward_normalizer, "_running_return"):
             reward_normalizer._running_return[...] = 0.0
         # OGRL-20260906-078: restore where the curriculum had climbed to.
         # Without this every resume restarts d_max at --d-max-start, so an
@@ -1067,6 +1070,8 @@ def main():
                     "shared_grad_actor_norm": stats.get("shared_grad_actor_norm", 0.0),
                     "shared_grad_value_norm": stats.get("shared_grad_value_norm", 0.0),
                     "shared_grad_cos": stats.get("shared_grad_cos", 0.0),
+                    "shared_grad_policy_norm": stats.get("shared_grad_policy_norm", 0.0),
+                    "shared_grad_entropy_norm": stats.get("shared_grad_entropy_norm", 0.0),
                 },
                 # kl_spike (OGRL-20260817-028 Sec8.2): run9 had a single
                 # approx_kl of 12.87 against a 0.02 target, buried in a

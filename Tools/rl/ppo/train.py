@@ -262,7 +262,11 @@ def _exact_head_kls(old_params, new_params) -> torch.Tensor:
     return torch.cat([kl_g, kl_b], dim=-1)
 
 
+_update_counter = [0]
+
+
 def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dict, args) -> dict:
+    _update_counter[0] += 1
     n = batch["obs"].shape[0]
     indices = np.arange(n)
     if "valid" in batch:
@@ -277,7 +281,8 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
              "max_sample_kl_head": "",       # which head's log-ratio dominated that sample
              "early_stop_minibatch": -1,     # index at which the pre-step guard fired, -1 = never
              "exact_kl_mb_max": 0.0,         # largest single-minibatch exact KL this update (the guard's input)
-             "shared_grad_actor_norm": 0.0, "shared_grad_value_norm": 0.0, "shared_grad_cos": 0.0}
+             "shared_grad_actor_norm": 0.0, "shared_grad_value_norm": 0.0, "shared_grad_cos": 0.0,
+             "shared_grad_policy_norm": 0.0, "shared_grad_entropy_norm": 0.0}
     n_minibatch_updates = 0
     stop_early = False
     # Frozen copy of the rollout policy for exact KL. 480K params, eval-only:
@@ -368,7 +373,8 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
             entropy_loss = entropy.mean()
             loss = policy_loss + args.value_coef * value_loss - args.entropy_coef * entropy_loss
 
-            if mb_index == 1 and hasattr(policy, "shared_parameters"):
+            _diag_due = (_update_counter[0] < 50) or (_update_counter[0] % 10 == 0)
+            if mb_index == 1 and _diag_due and hasattr(policy, "shared_parameters"):
                 # Actor-vs-critic gradient geometry on the SHARED encoder, once per
                 # update (two extra backward passes on one minibatch). If the value
                 # gradient is comparable in norm and anti-aligned with the policy
@@ -376,10 +382,26 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
                 # 2026-09-20). Logged, never applied.
                 _sp = [q for q in policy.shared_parameters() if q.requires_grad]
                 if _sp:
-                    _ga = torch.autograd.grad(policy_loss - args.entropy_coef * entropy_loss, _sp, retain_graph=True, allow_unused=True)
-                    _gv = torch.autograd.grad(args.value_coef * value_loss, _sp, retain_graph=True, allow_unused=True)
-                    _fa = torch.cat([(g if g is not None else torch.zeros_like(q)).flatten() for g, q in zip(_ga, _sp)])
-                    _fv = torch.cat([(g if g is not None else torch.zeros_like(q)).flatten() for g, q in zip(_gv, _sp)])
+                    def _flat(loss):
+                        g = torch.autograd.grad(loss, _sp, retain_graph=True, allow_unused=True)
+                        return torch.cat([(x if x is not None else torch.zeros_like(q)).flatten() for x, q in zip(g, _sp)])
+                    _fp = _flat(policy_loss)
+                    _fe = _flat(-args.entropy_coef * entropy_loss)
+                    # counterfactual value gradient through the UNDETACHED features, so
+                    # the detach arm reports the same quantity it is suppressing
+                    _was = getattr(policy, "detach_critic_features", False)
+                    if _was:
+                        policy.detach_critic_features = False
+                        _, _, _, _v2 = policy.get_action_and_value(mb_obs, mb_actions, raw_continuous=mb_raw)
+                        _vl2 = 0.5 * torch.max((_v2 - mb_returns).pow(2),
+                                               (mb_old_values + torch.clamp(_v2 - mb_old_values, -args.value_clip_coef, args.value_clip_coef) - mb_returns).pow(2)).mean()
+                        _fv = _flat(args.value_coef * _vl2)
+                        policy.detach_critic_features = True
+                    else:
+                        _fv = _flat(args.value_coef * value_loss)
+                    _fa = _fp + _fe
+                    stats["shared_grad_policy_norm"] = float(_fp.norm())
+                    stats["shared_grad_entropy_norm"] = float(_fe.norm())
                     stats["shared_grad_actor_norm"] = float(_fa.norm())
                     stats["shared_grad_value_norm"] = float(_fv.norm())
                     stats["shared_grad_cos"] = float(torch.dot(_fa, _fv) / (_fa.norm() * _fv.norm() + 1e-12))

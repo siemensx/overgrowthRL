@@ -70,7 +70,12 @@ class VecRolloutBuffer:
             next_non_terminal = 1.0 - self.terminals[t]
             delta = self.rewards[t] + gamma * next_value * next_non_terminal - self.values[t]
             last_gae = delta + gamma * gae_lambda * next_non_terminal * last_gae
-            advantages[t] = last_gae
+            # A recovered-worker row is an invalid boundary: no advantage for it
+            # and no lambda-recursion through it. The row keeps its obs_t/value_t
+            # so the PREVIOUS step's one-step bootstrap into s_t stays valid.
+            invalid = self.valid[t] < 0.5
+            last_gae = np.where(invalid, 0.0, last_gae).astype(np.float32)
+            advantages[t] = np.where(invalid, 0.0, last_gae)
         returns = advantages + self.values
         return advantages, returns
 
