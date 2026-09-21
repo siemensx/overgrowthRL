@@ -156,6 +156,28 @@ class ObsLayout:
     def all_entities(self, values: list) -> list:
         return [self.entity_field(values, slot) for slot in range(self.max_visible_entities)]
 
+    def valid_entities_lite(self, values: list) -> dict:
+        """{id: fields} for VALID slots only, with just what the reward diff
+        reads (2026-09-20 profile: entity_field's full 18-key dict, built 16x
+        per env step, was ~6% of a training update). Same indices as
+        entity_field; keep the two in lockstep with rl_observation.cpp."""
+        out = {}
+        base = self.entities_start
+        for slot in range(self.max_visible_entities):
+            o = base + slot * ENTITY_FLOATS
+            if values[o] <= 0.5:
+                continue
+            out[int(values[o + 1])] = {
+                "knocked_out_awake": values[o + 10] > 0.5,
+                "state_ground": values[o + 14] > 0.5,
+                "state_ragdoll": values[o + 17] > 0.5,
+                "temp_health": values[o + 20],
+                "blood_health": values[o + 21],
+                "attacked_by_id": int(values[o + 22]),
+                "is_ally": values[o + 23] > 0.5,
+            }
+        return out
+
     def self_knocked_out_index(self, values: list) -> int:
         """0=awake, 1=unconscious, 2=dead -- argmax of the one-hot."""
         onehot = values[self.KNOCKED_OUT]

@@ -197,8 +197,8 @@ class RewardComputer:
         # is penalized, not just excluded from credit -- it's actively
         # counterproductive behavior, not merely uninformative.
         self_id = layout.self_id(values)
-        prev_entities = {e["id"]: e for e in layout.all_entities(prev_values) if e["valid"]}
-        curr_entities = {e["id"]: e for e in layout.all_entities(values) if e["valid"]}
+        prev_entities = layout.valid_entities_lite(prev_values)
+        curr_entities = layout.valid_entities_lite(values)
         damage_dealt = 0.0
         ground_finish = 0.0
         knockout_bonus = 0.0
@@ -210,8 +210,8 @@ class RewardComputer:
                 continue  # only entered view this step; no prior health reading to diff against
             if curr["attacked_by_id"] != self_id:
                 continue  # this entity's most recent hit wasn't from this agent -- not its credit
-            prev_health = _health_scalar(prev)
-            curr_health = _health_scalar(curr)
+            prev_health = 0.5 * (prev["temp_health"] + prev["blood_health"])
+            curr_health = 0.5 * (curr["temp_health"] + curr["blood_health"])
             # SIGNED delta (Sec7, see damage_taken's comment above for the
             # full potential-based-shaping rationale) -- positive = this
             # entity lost health, negative = it regenerated. Note the
@@ -224,8 +224,8 @@ class RewardComputer:
             # longer manufactures a one-directional bias on top of the
             # approximation the gate already introduces.
             health_lost = prev_health - curr_health
-            prev_target_awake = prev["knocked_out"][0] > 0.5
-            curr_target_awake = curr["knocked_out"][0] > 0.5
+            prev_target_awake = prev["knocked_out_awake"]
+            curr_target_awake = curr["knocked_out_awake"]
             target_knocked_out_this_step = prev_target_awake and not curr_target_awake
             if curr["is_ally"]:
                 friendly_fire += health_lost
@@ -236,7 +236,7 @@ class RewardComputer:
                 # Was this opponent already DOWN when we hit it? entity state is
                 # a 5-way one-hot (movement, ground, attack, hit_reaction,
                 # ragdoll); indices 1 and 4 are the two down states.
-                if health_lost > 0.0 and (prev["state"][4] > 0.5 or prev["state"][1] > 0.5):
+                if health_lost > 0.0 and (prev["state_ragdoll"] or prev["state_ground"]):
                     ground_finish += health_lost
                 if target_knocked_out_this_step:
                     knockout_bonus += cfg.opponent_knockout_bonus

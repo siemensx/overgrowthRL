@@ -29,6 +29,7 @@ import math
 import mmap
 import os
 import struct
+import numpy as np
 import time
 from dataclasses import dataclass
 
@@ -87,6 +88,16 @@ if _IS_WINDOWS:
         return h if h else None
 
     _WAIT_TIMEOUT = 0x00000102
+
+    # ctypes without argtypes/restype re-derives conversions on every call;
+    # these two run 2x per engine step (2026-09-20 profile: _sem_post 54 s / 100 updates).
+    try:
+        _k32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        _k32.WaitForSingleObject.restype = ctypes.c_uint32
+        _k32.ReleaseSemaphore.argtypes = [ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
+        _k32.ReleaseSemaphore.restype = ctypes.c_int
+    except Exception:
+        pass
 
     def _sem_wait(sem, timeout_s: float | None = None) -> bool:
         """True if acquired, False on timeout. None means wait forever."""
@@ -353,7 +364,12 @@ class ShmEnv:
             )
         header = _unpack_header(self._mm[:_HEADER_SIZE])
         obs_bytes = self._mm[_HEADER_SIZE : _HEADER_SIZE + header["obs_floats"] * 4]
-        values = list(struct.unpack(f"<{header['obs_floats']}f", obs_bytes))
+        # 2026-09-20: numpy at the source. struct.unpack + a pure-Python
+        # any(isfinite) over 1356 floats cost ~14% of a training update (123M
+        # math.isfinite calls per 100 updates in the profile). One frombuffer
+        # and one vectorised isfinite do the same work in microseconds; the
+        # list interface downstream consumers expect is preserved.
+        arr = np.frombuffer(obs_bytes, dtype="<f4")
         # NaN/Inf sanitization (2026-08-17, found live during the first
         # cold-start smoke test): a rare non-finite raw observation value --
         # root cause not isolated under time pressure, but the timing
@@ -372,10 +388,11 @@ class ShmEnv:
         # a fix for wherever the value actually originates; if this fires
         # often in metrics.jsonl/dashboard, that IS the follow-up to
         # investigate, not something to ignore because it stopped crashing.
-        if any(not math.isfinite(v) for v in values):
+        if not np.isfinite(arr).all():
             global non_finite_observation_count
             non_finite_observation_count += 1
-            values = [v if math.isfinite(v) else 0.0 for v in values]
+            arr = np.where(np.isfinite(arr), arr, 0.0).astype("<f4")
+        values = arr.tolist()
         return Observation(step=header["step_counter"], done=bool(header["episode_done"]), values=values)
 
     def write_action(self, move_x: float, move_y: float, jump: bool, crouch: bool, attack: bool, grab: bool, drop: bool = False, walk: bool = False) -> None:

@@ -158,7 +158,7 @@ def parse_args():
                          "dense damage at a matched +/-1 scale, a much smaller time_cost, stall tax and ragdoll "
                          "penalty off, no closing-distance shaping -- see that function's docstring for why.")
     p.add_argument("--device", default="cpu", choices=["cpu", "mps"])
-    p.add_argument("--collection-torch-threads", type=int, default=1,
+    p.add_argument("--collection-torch-threads", type=int, default=2,
                    help="PyTorch intra-op threads during tiny rollout inference; 1 avoids competing with engine workers")
     p.add_argument("--update-torch-threads", type=int, default=4,
                    help="PyTorch intra-op threads during PPO minibatch updates")
@@ -226,6 +226,8 @@ def parse_args():
                         "--periodic-eval-sampled episodes runs alongside; the benched checkpoint is "
                         "snapshotted to checkpoints/snapshots/<run>_<step>.pt so it can be re-benched.")
     p.add_argument("--periodic-eval-sampled", type=int, default=200)
+    p.add_argument("--periodic-eval-parallel", type=int, default=4,
+                   help="bench.py slices per periodic bench; they run alongside training on spare cores")
     p.add_argument("--reset-running-return", action="store_true",
                    help="zero the reward normaliser's per-worker running return on resume (RMS kept). "
                         "Correct, but behaviour-changing: off by default so A/Bs against run23 stay one-variable.")
@@ -594,6 +596,7 @@ def main():
                                                    # caller; this is a placeholder until that's plumbed through,
                                                    # not a claim of per-episode reproducibility
     _last_gate_step = -10**18   # see --gate-min-step-gap
+    _pending_benches = []        # non-blocking periodic benches in flight
     _next_periodic_eval = (global_step // max(1, args.periodic_eval_steps) + 1) * args.periodic_eval_steps if args.periodic_eval_steps > 0 else None
     previous_cycle_end = time.monotonic()  # for perf.cycle_seconds -- the full update-to-update wall time,
                                             # not just collection_seconds (OGRL-20260816-020's sps blind spot)
@@ -699,7 +702,7 @@ def main():
 
             for _ in range(args.n_steps):
                 obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device)
-                with torch.no_grad():
+                with torch.inference_mode():   # 2026-09-20: 0.96 -> 0.61 ms per forward on the trainer (no autograd bookkeeping)
                     actions, log_probs, _entropy, values, raw_cont = policy.get_action_and_value(obs_tensor, return_raw=True)
                 actions_np = actions.cpu().numpy()
                 actions_this_update.append(actions_np)
@@ -930,15 +933,17 @@ def main():
             # corresponds to what a human sees; the stochastic one promoted the
             # policy six rungs into fights it could not score in.
             # --- Periodic deterministic bench (0.6) ------------------------
+            # 2026-09-20: NON-BLOCKING and PARALLEL. The bench runs bench.py
+            # (K evaluate.py processes on disjoint seed slices) on a snapshot of
+            # the checkpoint while training continues; results are harvested on
+            # a later update. The old blocking single-engine bench paused
+            # training ~20 min per call -- 17% of a 10M arm.
             if _next_periodic_eval is not None and global_step >= _next_periodic_eval:
                 _next_periodic_eval += args.periodic_eval_steps
                 _sp = sampler.stage_params()
                 _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer,
                                  reward_normalizer, global_step,
                                  curriculum=sampler.curriculum_state())
-                # Snapshot the exact checkpoint being benched so the number can be
-                # re-benched later (Phase 1's +8.7M checkpoints were overwritten and
-                # a 82 -> 44/59 swing could not be re-examined).
                 _snapdir = Path(args.checkpoint_path).parent / "snapshots"
                 _snapdir.mkdir(parents=True, exist_ok=True)
                 _snap = _snapdir / f"{run_id}_{global_step}.pt"
@@ -946,45 +951,55 @@ def main():
                     shutil.copyfile(args.checkpoint_path, _snap)
                 except Exception as _e:
                     print(f"[periodic-eval] snapshot failed: {_e}", flush=True)
-                _results = {}
+                    _snap = Path(args.checkpoint_path)
                 for _mode, _neps, _flag in (("greedy", args.periodic_eval_episodes, []),
                                             ("sampled", args.periodic_eval_sampled, ["--stochastic"])):
                     if _neps <= 0:
                         continue
                     _out = Path(logger.run_dir) / "eval" / f"periodic_{global_step}_{_mode}.json"
                     _out.parent.mkdir(parents=True, exist_ok=True)
-                    _cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "evaluate.py"),
-                            "--checkpoint", str(_snap if _snap.exists() else args.checkpoint_path),
+                    _cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "bench.py"),
+                            "--checkpoint", str(_snap), "--episodes", str(_neps),
+                            "--parallel", str(args.periodic_eval_parallel), "--seed-base", "900000",
+                            "--shm-name", f"{args.shm_prefix}p{_mode[0]}", "--out", str(_out),
                             "--repo-root", args.repo_root,
                             "--level", levels_list[0], "--frame-stack", str(args.frame_stack),
-                            "--act-period", str(args.act_period), "--episodes", str(_neps),
-                            "--seed-base", "900000",
+                            "--act-period", str(args.act_period),
                             "--difficulty-bands", "1.0", "--opponents", str(_sp["opponents"]),
                             "--max-episode-steps", str(args.max_episode_steps),
                             "--armed-count", str(_sp["armed_count"]), "--weapon-type", str(_sp["weapon_type"]),
-                            "--throw-aggression", str(_sp["throw_aggression"]),
-                            "--shm-name", f"{args.shm_prefix}p{_mode[0]}", "--device", "cpu", "--no-control",
-                            "--out", str(_out)] + _flag
+                            "--throw-aggression", str(_sp["throw_aggression"]), "--device", "cpu"] + _flag
                     for _cl in args.engine_config_line:
                         _cmd += ["--config-line", _cl]
-                    _wr, _n = 0.0, 0
                     try:
-                        subprocess.run(_cmd, capture_output=True, timeout=7200)
-                        if _out.exists():
-                            _b = json.loads(_out.read_text())["bands"][0]["policy"]
-                            _wr, _n = _b["win_rate"], _b["episodes"]
+                        _proc = subprocess.Popen(_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        _pending_benches.append({"proc": _proc, "out": _out, "mode": _mode, "step": global_step,
+                                                 "label": _sp["label"], "opponents": _sp["opponents"], "snap": _snap.name,
+                                                 "t0": time.time()})
+                        print(f"[periodic-eval] launched {_mode} bench of {_neps} episodes at global_step={global_step:,} (non-blocking)", flush=True)
                     except Exception as _e:
-                        print(f"[periodic-eval] {_mode} failed: {_e}", flush=True)
-                    _results[_mode] = (_wr, _n)
-                _g = _results.get("greedy", (0.0, 0)); _s = _results.get("sampled", (0.0, 0))
+                        print(f"[periodic-eval] launch failed: {_e}", flush=True)
+
+            # Harvest finished benches.
+            for _b in list(_pending_benches):
+                if _b["proc"].poll() is None:
+                    continue
+                _pending_benches.remove(_b)
+                _wr, _n = 0.0, 0
+                try:
+                    if _b["out"].exists():
+                        _r = json.loads(_b["out"].read_text())["bands"][0]["policy"]
+                        _wr, _n = _r["win_rate"], _r["episodes"]
+                except Exception as _e:
+                    print(f"[periodic-eval] read failed: {_e}", flush=True)
                 logger.log_event(
                     "periodic_eval",
-                    f"{run_id} periodic bench at {_sp['label']}: greedy {_g[0]:.3f} over {_g[1]}, sampled {_s[0]:.3f} over {_s[1]}",
-                    body=f"at global_step={global_step:,}  opponents={_sp['opponents']}  seeds 900000+  "
-                         f"greedy wins={int(round(_g[0] * _g[1]))}/{_g[1]}  sampled wins={int(round(_s[0] * _s[1]))}/{_s[1]}  "
-                         f"snapshot={_snap.name}  (gate bar {sampler.armed_gate_win_rate:.2f})")
-                print(f"[periodic-eval] global_step={global_step:,} {_sp['label']}: GREEDY {_g[0]:.3f} over {_g[1]} "
-                      f"({int(round(_g[0] * _g[1]))} wins)  SAMPLED {_s[0]:.3f} over {_s[1]} ({int(round(_s[0] * _s[1]))} wins)", flush=True)
+                    f"{run_id} periodic bench at {_b['label']}: {_b['mode']} {_wr:.3f} over {_n}",
+                    body=f"at global_step={_b['step']:,}  opponents={_b['opponents']}  seeds 900000+  "
+                         f"{_b['mode']} wins={int(round(_wr * _n))}/{_n}  snapshot={_b['snap']}  "
+                         f"took {time.time() - _b['t0']:.0f}s while training continued  (gate bar {sampler.armed_gate_win_rate:.2f})")
+                print(f"[periodic-eval] global_step={_b['step']:,} {_b['label']}: {_b['mode'].upper()} {_wr:.3f} over {_n} "
+                      f"({int(round(_wr * _n))} wins)  [harvested at {global_step:,}]", flush=True)
 
             _pend = sampler.gate_pending()
             if _pend is not None and global_step - _last_gate_step < args.gate_min_step_gap:
@@ -1109,6 +1124,25 @@ def main():
                 _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step,
                                  curriculum=sampler.curriculum_state())
         run_status = "completed"  # reached either by the while condition going false, or the dashboard-stop break above
+        # Wait for in-flight benches at natural completion (the +10M bench IS
+        # the arm's result); log them the same way the harvest loop does.
+        for _b in list(_pending_benches):
+            try:
+                _b["proc"].wait(timeout=7200)
+            except Exception:
+                pass
+            _wr, _n = 0.0, 0
+            try:
+                if _b["out"].exists():
+                    _r = json.loads(_b["out"].read_text())["bands"][0]["policy"]
+                    _wr, _n = _r["win_rate"], _r["episodes"]
+            except Exception:
+                pass
+            logger.log_event("periodic_eval",
+                             f"{run_id} periodic bench at {_b['label']}: {_b['mode']} {_wr:.3f} over {_n}",
+                             body=f"at global_step={_b['step']:,}  opponents={_b['opponents']}  {_b['mode']} wins={int(round(_wr * _n))}/{_n}  snapshot={_b['snap']}  (final drain)")
+            print(f"[periodic-eval] global_step={_b['step']:,} {_b['label']}: {_b['mode'].upper()} {_wr:.3f} over {_n} ({int(round(_wr * _n))} wins)  [final]", flush=True)
+        _pending_benches.clear()
     finally:
         # OGRL-20260816-018 -- see train.py's identical fix for the full
         # rationale: confirmed on run5 itself, which exited 7 updates
