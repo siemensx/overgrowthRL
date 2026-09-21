@@ -451,3 +451,52 @@ ms; scenario distribution mismatches were 0/10. Replay/physics equivalence
 still failed at step 0 with position deviation 0.80832 and velocity deviation
 4.95399. The memory gate passes; the replay gate remains unresolved and soft
 reset is not a newly adopted lever.
+
+#### Further lever coverage — reset interval and CPU mask
+
+The reset interval was parameterized in the sweep harness and compared under
+the same n14/k4, above/affinity, threads 2/4/1 stack. Hard-reset-every=20
+completed at 878.0 wall steps/s (median cycle 874.3, p10 841.7, pool misses
+0.78%). A first 50 point failed startup and was discarded; a fresh retry
+completed at 886.0 wall steps/s (median cycle 896.9, p10 846.2, zero pool
+misses). The short-run speed edge is about 0.9% wall and is not enough to
+override the correctness reason for the safer 20-reset hedge.
+
+The physical logical-CPU mask screen, using hard-reset-every=20, produced
+`0x3FF`=803.2, `0x7FF`=839.8, `0xFFF`=810.5, and `0x3FFF`=790.6 wall steps/s.
+A longer reversed repeat gave `0xFFF`=786.8 and `0x7FF`=783.3 wall steps/s.
+The apparent short `0x7FF` edge did not repeat; keep `0xFFF` and leave the
+mask decomposition closed unless a thermal-state-controlled run changes the
+result.
+
+Defender inspection found real-time scanning enabled but path exclusions already
+cover `C:\ogrl` and the purchased Overgrowth install, with the relevant build,
+engine, and Python processes excluded. No blanket Defender disable is justified.
+
+This closes the first low-risk throughput inventory: clean worker/standby,
+collector and update threads, engine priority/affinity, reset interval,
+shared-memory cleanup, clean deployment, Defender exclusions, and software
+power-plan settings have all been measured or inspected. Remaining meaningful
+levers are a fresh-checkpoint n18 run/migration, component-level scheduler
+repeat under captured thermals, evaluation-overhead validation, decision-rate
+experiments with gameplay gates, and rebuilt engine-side early-outs. They are
+not declared exhausted or adopted from a speed number alone.
+
+#### Scheduler component decomposition and unattended handoff
+
+At n14/k4 with hard-reset-every=20, the short component screen measured
+normal/no-affinity 708.4, above/no-affinity 825.0, normal+`0xFFF` 733.2, and
+above+`0xFFF` 816.3 wall steps/s. This indicates that priority is the dominant
+component; affinity was not a reliably additive gain in this short order. The
+longer above+`0xFFF` stability result remains the deployment basis because it
+has the stronger measurement window and lower demonstrated risk than changing
+the production mask from one short screen.
+
+After the bounded smoke completed at step 264,001,244, a durable Scheduled
+Task `OGRL_Train_run25_optimized_20260921` was launched from the clean checkout
+using its new checkpoint, six maps, n14/k4, above priority, `0xFFF`, threads
+2/4/1, hard-reset-every=20, and a 320M target. The first observed update was
+global step 264,022,748 at about 796 cycle steps/s, with zero NaN skips, no KL
+spike, no pool misses, and `mb0_max_abs_logratio=2.48e-5`. The task is designed
+to survive SSH disconnect and logoff; its progress is monitored from telemetry,
+not from the agent session.
