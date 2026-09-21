@@ -322,9 +322,9 @@ class OvergrowthEnv:
                 except Exception as _e:  # never let a scheduling tweak break a launch
                     print(f"[env] affinity {mask} not applied: {_e}", flush=True)
 
-        deadline = time.monotonic() + self._launch_timeout
+        deadline = time.perf_counter() + self._launch_timeout
         last_error = None
-        while time.monotonic() < deadline:
+        while time.perf_counter() < deadline:
             if self._process.poll() is not None:
                 raise RuntimeError(
                     f"engine process exited early (code {self._process.returncode}) while connecting to {self.shm_name} -- see {log_path}"
@@ -422,10 +422,10 @@ class OvergrowthEnv:
             self.last_reset_seconds = 0.0  # not a real reset -- see _used_initial_observation's comment
         else:
             reset_seed = seed if seed is not None else self.seed
-            reset_start = time.monotonic()
+            reset_start = time.perf_counter()
             obs = self._shm.reset(reset_seed, soft=soft, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
                               armed_count=armed_count, weapon_type=weapon_type, throw_aggression=throw_aggression)
-            self.last_reset_seconds = time.monotonic() - reset_start  # OGRL-20260817-028 Sec8.2: perf.reset_seconds source
+            self.last_reset_seconds = time.perf_counter() - reset_start  # OGRL-20260817-028 Sec8.2: perf.reset_seconds source
             self.episode_count += 1
             self.last_reset_seed = reset_seed
         self._prev_values = obs.values
@@ -440,7 +440,9 @@ class OvergrowthEnv:
         move_x, move_y = float(action[0]), float(action[1])
         buttons = [bool(v > 0.5) for v in action[2:8]]
         self._shm.write_action(move_x, move_y, buttons[0], buttons[1], buttons[2], buttons[3], buttons[4], buttons[5])
+        _tw = time.perf_counter()
         obs = self._shm.wait_for_observation()
+        self.last_wait_seconds = time.perf_counter() - _tw   # engine sim + IPC + scheduling, no Python
         self._episode_steps += 1
 
         reward, reward_info = self.reward_computer.compute(self._prev_values, obs.values)

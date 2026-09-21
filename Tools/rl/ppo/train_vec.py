@@ -79,6 +79,7 @@ def _perf_with_reset_share(perf: dict, cycle_seconds: float) -> dict:
         "reset_blocking_share": (reset_blocking_seconds / cycle_seconds) if cycle_seconds > 0 else 0.0,
         "pool_hits": perf["pool_hits"], "pool_misses": perf["pool_misses"],
         "step_wall_seconds": perf["step_wall_seconds"],
+        "worker_wait_seconds": perf.get("worker_wait_seconds", 0.0),
         "step_count": perf["step_count"],
         "worker_step_latency_p50_seconds": perf["worker_step_latency_p50_seconds"],
         "worker_step_latency_p90_seconds": perf["worker_step_latency_p90_seconds"],
@@ -598,7 +599,7 @@ def main():
     _last_gate_step = -10**18   # see --gate-min-step-gap
     _pending_benches = []        # non-blocking periodic benches in flight
     _next_periodic_eval = (global_step // max(1, args.periodic_eval_steps) + 1) * args.periodic_eval_steps if args.periodic_eval_steps > 0 else None
-    previous_cycle_end = time.monotonic()  # for perf.cycle_seconds -- the full update-to-update wall time,
+    previous_cycle_end = time.perf_counter()  # for perf.cycle_seconds -- the full update-to-update wall time,
                                             # not just collection_seconds (OGRL-20260816-020's sps blind spot)
     run_status = "interrupted"  # pessimistic default -- only overwritten to "completed" right after a clean loop
                                  # exit (natural completion or an explicit dashboard stop), so a real exception
@@ -681,7 +682,7 @@ def main():
             outcomes_this_update = {"won": 0, "lost": 0, "timeout": 0}
             actions_this_update = []  # OGRL-20260817-028 Sec8.2: raw sampled actions, for action_stats below
             emergence = EmergenceAccumulator()  # Sec8.3: fresh each update, same sample size as action_stats
-            collection_start = time.monotonic()
+            collection_start = time.perf_counter()
             # Tiny policy batches lose more to thread-pool coordination than
             # they gain from intra-op parallelism. Keep collection on one
             # thread so it does not compete with the engine workers; the
@@ -700,14 +701,20 @@ def main():
                 for _c in remote_conns:
                     _send(_c, _payload)
 
+            _t_policy = _t_step = _t_book = 0.0     # per-update phase timers (QPC); see perf.phase_*
             for _ in range(args.n_steps):
+                _t0 = time.perf_counter()
                 obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device)
                 with torch.inference_mode():   # 2026-09-20: 0.96 -> 0.61 ms per forward on the trainer (no autograd bookkeeping)
                     actions, log_probs, _entropy, values, raw_cont = policy.get_action_and_value(obs_tensor, return_raw=True)
                 actions_np = actions.cpu().numpy()
                 actions_this_update.append(actions_np)
+                _t1 = time.perf_counter()
 
                 raw_next_obs, rewards, terminals, truncateds, infos = vec_env.step(actions_np)
+                _t2 = time.perf_counter()
+                _t_policy += _t1 - _t0
+                _t_step += _t2 - _t1
                 episode_reward += rewards
                 episode_length += 1
                 global_step += args.n_envs
@@ -808,8 +815,9 @@ def main():
 
                 obs = obs_normalizer.normalize(raw_next_obs)
                 raw_obs_current = raw_next_obs
+                _t_book += time.perf_counter() - _t2
 
-            collection_seconds = max(1e-6, time.monotonic() - collection_start)
+            collection_seconds = max(1e-6, time.perf_counter() - collection_start)
 
             # OGRL-20260817-028 Sec8.2: action statistics -- press_prob's
             # SPREAD across the batch (std across n_envs of each env's own
@@ -843,7 +851,7 @@ def main():
             # update's weights -- that is what keeps the algorithm on-policy.
             remote_rollouts = []
             if remote_conns:
-                _rt0 = time.monotonic()
+                _rt0 = time.perf_counter()
                 for _c in list(remote_conns):
                     try:
                         _msg = _recv(_c)
@@ -861,7 +869,7 @@ def main():
                                                      opponents=_ep.get("opponents", 1) or 1,
                                                      difficulty=_ep.get("difficulty"))
                     global_step += args.n_steps * _msg["obs"].shape[1]
-                remote_wait_seconds = time.monotonic() - _rt0
+                remote_wait_seconds = time.perf_counter() - _rt0
             else:
                 remote_wait_seconds = 0.0
 
@@ -919,7 +927,7 @@ def main():
             ])
             log_file.flush()
 
-            cycle_end = time.monotonic()
+            cycle_end = time.perf_counter()
             cycle_seconds = max(1e-6, cycle_end - previous_cycle_end)
             previous_cycle_end = cycle_end
             component_means = {}
@@ -1113,7 +1121,8 @@ def main():
                 "action_stats": action_stats,
                 "emergence": emergence_snapshot,
                 "perf": {
-                    "collection_seconds": collection_seconds, "cycle_seconds": cycle_seconds,
+                    "collection_seconds": collection_seconds,
+                    "phase_policy_seconds": _t_policy, "phase_step_seconds": _t_step, "phase_bookkeeping_seconds": _t_book, "cycle_seconds": cycle_seconds,
                     "steps_per_second_collection": steps_per_second,
                     "steps_per_second_cycle": (args.n_steps * args.n_envs) / cycle_seconds,
                     **_perf_with_reset_share(vec_env.drain_perf(), cycle_seconds),

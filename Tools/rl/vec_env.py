@@ -153,6 +153,7 @@ class VecOvergrowthEnv:
         self._barrier_idle_seconds = 0.0
         self._reset_blocking_seconds = 0.0
         self._step_wall_seconds = 0.0
+        self._worker_wait_seconds = 0.0   # sum over workers of time blocked in sem_wait (engine+IPC), per update
         self._step_count = 0
         self.k_standby = max(0, k_standby)
         self._pool = ThreadPoolExecutor(max_workers=n_envs + max(1, self.k_standby), thread_name_prefix="ogrl-vec-env")
@@ -275,6 +276,7 @@ class VecOvergrowthEnv:
                 "pool_hits": self._pool_hits,
                 "pool_misses": self._pool_misses,
                 "step_wall_seconds": self._step_wall_seconds,
+                "worker_wait_seconds": self._worker_wait_seconds,
                 "step_count": self._step_count,
                 "worker_step_latency_p50_seconds": float(np.percentile(latencies, 50)) if latencies.size else 0.0,
                 "worker_step_latency_p90_seconds": float(np.percentile(latencies, 90)) if latencies.size else 0.0,
@@ -289,6 +291,7 @@ class VecOvergrowthEnv:
             self._step_latencies.clear()
             self._reset_blocking_seconds = 0.0
             self._step_wall_seconds = 0.0
+            self._worker_wait_seconds = 0.0
             self._step_count = 0
             self._barrier_idle_seconds = 0.0
         return out
@@ -352,7 +355,7 @@ class VecOvergrowthEnv:
         actions = np.asarray(actions, dtype=np.float32).reshape(self.n_envs, ACTION_DIM)
 
         def _step_one(i: int):
-            worker_start = time.monotonic()
+            worker_start = time.perf_counter()
             blocking_reset_seconds = 0.0
             try:
                 obs, reward, done, info = self.envs[i].step(actions[i])
@@ -387,7 +390,7 @@ class VecOvergrowthEnv:
                         "worker_recovered": True, "recovery_reason": str(exc),
                         "scenario": scenario, "seed": self._episode_seed[i],
                         "level": self.envs[i].level, "native_trace_path": None,
-                        "perf": {"worker_step_seconds": time.monotonic() - worker_start,
+                        "perf": {"worker_step_seconds": time.perf_counter() - worker_start,
                                  "blocking_reset_seconds": 0.0}}
                 # truncated=True, not terminal: the episode did not really end,
                 # it was abandoned, so the caller bootstraps the value rather than
@@ -457,22 +460,25 @@ class VecOvergrowthEnv:
                     # synchronous behavior for this worker only. Correct,
                     # just not fast; matches worker_pool.py's own
                     # pool_underrun concept from the Stage 4 bake-off.
-                    reset_started = time.monotonic()
+                    reset_started = time.perf_counter()
                     obs, scenario = self._reset_env(self.envs[i])
-                    blocking_reset_seconds = time.monotonic() - reset_started
+                    blocking_reset_seconds = time.perf_counter() - reset_started
                     self._episode_scenario[i] = scenario
                     self._episode_seed[i] = self.envs[i].last_reset_seed
-            worker_seconds = time.monotonic() - worker_start
-            info["perf"] = {"worker_step_seconds": worker_seconds, "blocking_reset_seconds": blocking_reset_seconds}
+            worker_seconds = time.perf_counter() - worker_start
+            info["perf"] = {"worker_step_seconds": worker_seconds, "blocking_reset_seconds": blocking_reset_seconds,
+                            "wait_seconds": float(getattr(self.envs[i], "last_wait_seconds", 0.0))}
             return obs, reward, terminal, truncated, info, terminal_obs
 
-        step_started = time.monotonic()
+        step_started = time.perf_counter()
         results = list(self._pool.map(_step_one, range(self.n_envs)))
-        step_wall_seconds = time.monotonic() - step_started
+        step_wall_seconds = time.perf_counter() - step_started
         worker_latencies = [float(result[4]["perf"]["worker_step_seconds"]) for result in results]
         barrier_idle_seconds = sum(max(0.0, step_wall_seconds - latency) for latency in worker_latencies)
         blocking_reset_seconds = sum(float(result[4]["perf"]["blocking_reset_seconds"]) for result in results)
+        wait_seconds = sum(float(result[4]["perf"].get("wait_seconds", 0.0)) for result in results)
         with self._perf_lock:
+            self._worker_wait_seconds += wait_seconds
             self._step_latencies.extend(worker_latencies)
             self._barrier_idle_seconds += barrier_idle_seconds
             self._reset_blocking_seconds += blocking_reset_seconds

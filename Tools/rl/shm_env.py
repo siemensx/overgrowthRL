@@ -171,12 +171,12 @@ else:
         # deadline.
         if _libc.sem_trywait(sem) == 0:
             return True
-        deadline = time.monotonic() + timeout_s
+        deadline = time.perf_counter() + timeout_s
         spins = 0
         while True:
             if _libc.sem_trywait(sem) == 0:
                 return True
-            if time.monotonic() >= deadline:
+            if time.perf_counter() >= deadline:
                 return False
             spins += 1
             if spins < 2000:
