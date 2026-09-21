@@ -552,6 +552,12 @@ def main():
         # resume boundary on purpose.
         policy.load_state_dict(resumed_checkpoint["policy"])
         optimizer.load_state_dict(resumed_checkpoint["optimizer"])
+        # load_state_dict restores the checkpoint's param_groups, including its
+        # learning rate -- so a resume requested at 1e-4 from a 3e-4 checkpoint
+        # silently trained at 3e-4 while telemetry printed 1e-4 (review,
+        # 2026-09-20). The CLI value is authoritative; the moments carry over.
+        for _g in optimizer.param_groups:
+            _g["lr"] = args.learning_rate
         obs_normalizer.load_state_dict(resumed_checkpoint["obs_normalizer"])
         reward_normalizer.load_state_dict(resumed_checkpoint["reward_normalizer"])
         # OGRL-20260906-078: restore where the curriculum had climbed to.
@@ -1035,7 +1041,7 @@ def main():
                     "policy_loss": stats["policy_loss"], "value_loss": stats["value_loss"], "approx_kl": stats["approx_kl"],
                     "clip_fraction": stats["clip_fraction"], "explained_variance": explained_var,
                     "entropy": stats["entropy"], "entropy_random_reference": entropy_random_reference,
-                    "learning_rate": args.learning_rate, "entropy_coef": args.entropy_coef,
+                    "learning_rate": float(optimizer.param_groups[0]["lr"]), "entropy_coef": args.entropy_coef,
                     "nan_skips": stats["nan_skips"],  # 2026-08-17: non-finite-loss/grad minibatches skipped
                                                         # this update, see ppo_update's NaN guard in train.py
                     # 2026-09-19 (OPTIMIZATION_CONTRACT 0.5): exact closed-form KL vs the

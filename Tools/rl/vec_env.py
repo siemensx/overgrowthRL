@@ -326,7 +326,10 @@ class VecOvergrowthEnv:
                 soft = self.soft_reset and not (self.hard_reset_every > 0 and env.episode_count > 0 and (env.episode_count % self.hard_reset_every) == 0)
                 obs = env.reset(seed=seeds[i], soft=soft, difficulty=scenario.get("difficulty"),
                                  opponents=scenario.get("opponents", 1), weapons=scenario.get("weapons", 0.0),
-                                 species=scenario.get("species", 0))
+                                 species=scenario.get("species", 0),
+                                 armed_count=int(scenario.get("armed_count", 0) or 0),
+                                 weapon_type=int(scenario.get("weapon_type", 0) or 0),
+                                 throw_aggression=float(scenario.get("throw_aggression", 1.0) or 1.0))
                 scenario = dict(scenario)
                 scenario["soft_reset"] = soft
             else:
@@ -377,7 +380,10 @@ class VecOvergrowthEnv:
                 # info["perf"] unconditionally, so a partial dict turns a recovered
                 # worker into a KeyError that kills the run anyway. Found by fault
                 # injection; a code read would not have caught it.
-                info = {"reward_components": {"opponent_knockout": 0.0},
+                # 2026-09-20: train_vec reads info["won"] on every stopped worker
+                # (Phase 0.3); a recovered worker without it was a KeyError one
+                # ShmWaitTimeout away from killing the run. Flagged by review.
+                info = {"reward_components": {"opponent_knockout": 0.0}, "won": False,
                         "worker_recovered": True, "recovery_reason": str(exc),
                         "scenario": scenario, "seed": self._episode_seed[i],
                         "level": self.envs[i].level, "native_trace_path": None,
