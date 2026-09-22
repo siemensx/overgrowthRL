@@ -691,3 +691,19 @@ decisions/s over a 30-second measurement; asynchronous n8/k0 with rollout size
 so it is rejected for the current optimization candidate. It remains in the
 source and is available for a later heterogeneous-cost experiment; no async
 implementation was deleted or silently replaced.
+
+#### Clean repeat and aligned worker sweep
+
+After correcting the resume path to the clean checkout, n18/k6 completed a
+45-second warmup plus 120-second real-PPO/no-checkpoint measurement at
+1,006.4 wall SPS (median 1,011.6, p10 928.0), with zero pool misses. An
+ordered n14/k4 then n18/k6 repeat then measured n14/k4=929.3 wall SPS and
+n18/k6=854.5, both with zero misses. Thus n18/k6 has the higher observed
+ceiling but is not a guaranteed winner in every thermal/order slot.
+
+At the same 24-engine aligned total, n20/k4 measured 869.4 wall SPS with no
+pool misses and n22/k2 measured 832.9 with a 16.3% pool-miss rate. More active
+workers do not improve this host. Keep n18/k6 as the maximum-throughput
+candidate and n14/k4 as the stability fallback; do not promote n20/k4 or
+n22/k2. All probes used in-memory PPO updates and recorded
+`checkpoint_written=false`.
