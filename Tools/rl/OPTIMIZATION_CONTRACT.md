@@ -642,3 +642,13 @@ optimization candidate is n8/k2, P-only `0xC03`, AboveNormal, Torch threads 4,
 inter-op 1. This candidate is for the next learner-shaped benchmark only; it
 does not alter a PPO default, resume checkpoint, worker-normalizer state, or
 training task.
+
+#### Async collector result
+
+The asynchronous collector hypothesis was tested with the same frozen policy
+and n8/P-only/AboveNormal/Torch-4 stack. Synchronous n8/k2 produced 464.3
+decisions/s over a 30-second measurement; asynchronous n8/k0 with rollout size
+8 produced 291.1. The async path is 37.3% slower on this host/configuration,
+so it is rejected for the current optimization candidate. It remains in the
+source and is available for a later heterogeneous-cost experiment; no async
+implementation was deleted or silently replaced.
