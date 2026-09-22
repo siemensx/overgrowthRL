@@ -692,6 +692,16 @@ so it is rejected for the current optimization candidate. It remains in the
 source and is available for a later heterogeneous-cost experiment; no async
 implementation was deleted or silently replaced.
 
+#### PPO batching sweep
+
+Nested commit `c8f9f277` exposes rollout horizon, PPO epochs, and minibatch
+size to the no-checkpoint harness while preserving the existing defaults.
+On n18/k6, 512 steps/128 minibatch/1 epoch measured 1,000.4 wall SPS;
+1024/128/1 measured 790.6; and 512/256/1 measured 856.5. All had zero pool
+misses. Use 512/128/1 for subsequent optimization probes, but do not change a
+long-run training default until policy-quality and sample-efficiency checks
+are complete.
+
 #### Reset-policy sweep
 
 On n18/k6 with the established AboveNormal/`0xFFF` and Torch 2/4/1 stack,
