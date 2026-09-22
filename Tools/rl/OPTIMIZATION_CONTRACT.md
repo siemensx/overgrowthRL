@@ -718,6 +718,15 @@ threads 4 measured 1,000.4, and update threads 8 measured 886.8. Valid points
 had zero pool misses; the first update-2 launch failed at startup. Retain
 update threads 4 and reject 2 and 8 for this host.
 
+#### Sustained thermal benchmark
+
+With 60 seconds warmup and 300 seconds measurement, the successful n18/k6
+retry measured 903.8 wall SPS (median 917.7, p10 825.6, zero pool misses).
+The same-duration n14/k4 retry measured 670.8 wall SPS (median 667.8, p10
+639.2, 0.56% pool misses), a sustained +34.7% gain. Each first launch failed
+during startup and is recorded separately. Treat 903.8 versus 670.8 as the
+robust comparison; 987–1,006 SPS are short-window peaks.
+
 #### Reset-policy sweep
 
 On n18/k6 with the established AboveNormal/`0xFFF` and Torch 2/4/1 stack,
