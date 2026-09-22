@@ -604,3 +604,21 @@ excluding the two LP-E-cores; it is not a P-core-only mask. The untested P-core
 mask is `0xC03` (bits 0,1,10,11). It remains a diagnostic candidate only:
 restricting 14 engines to two physical P-cores may worsen contention, and it
 must be tested in an interleaved thermal ABBA before any adoption decision.
+
+#### Corrected SHM namespace and fresh affinity comparison
+
+The first mask comparison reused its shared-memory prefix across separate
+invocations. The failed `0xFFF` launch and the very low P-only point from that
+sequence are preserved, but neither is a CPU result. The collector harness was
+corrected in `407ff261` to namespace every invocation and sweep point.
+
+With the corrected harness, a fresh six-map n6/k2 collector sequence used
+act-period 4, a 1200-step cap, 5 seconds of warmup, and 40 seconds of
+measurement. Normal/all (`0x3FFF`) produced 553.8 decisions/s; AboveNormal/all
+produced 476.9; AboveNormal+`0xFFF` produced 479.4; and AboveNormal+P-only
+`0xC03` produced 583.2. A separate fresh C/D pair reproduced 490.8 versus
+572.5. This is a repeated collector-only signal for P-only affinity, but the
+absolute values remain sensitive to order and thermal state and the test has no
+learner. The next safe action is to run a frozen-policy collector benchmark
+with `0xC03`; no training launcher, PPO resume, checkpoint, or reward state is
+changed by this result.
