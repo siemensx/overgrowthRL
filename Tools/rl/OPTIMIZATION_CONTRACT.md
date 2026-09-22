@@ -676,6 +676,12 @@ and threads 4 failed during startup. The earlier clean threads-2 point was
 964.1, so the thread result is order/thermal-sensitive; retain the established
 2/4/1 stack rather than switching to threads 4.
 
+The thermal-captured n18/k6 attempt had one of 24 engines remain silent during
+standby initialization and produced no speed rows. The sampler recorded High
+Performance, 90% maximum frequency, 90% performance limit, and 23 live engines
+before cleanup. Preserve this as a startup-reliability failure, not as a
+throughput result or a reason to discard the 964.1 SPS n18/k6 candidate.
+
 #### Async collector result
 
 The asynchronous collector hypothesis was tested with the same frozen policy
