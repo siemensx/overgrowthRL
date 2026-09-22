@@ -260,6 +260,12 @@ real_sound_handle ThreadedSoundDataBridge::GetHandle(wrapper_sound_handle wsh) {
 }
 
 bool ThreadedSoundDataBridge::IsHandleValid(wrapper_sound_handle wsh) {
+    // Zero is the invalid/default handle and can never be created by
+    // CreateWrapperHandle(). Avoid taking the bridge mutex for the common
+    // null-audio probes that carry this sentinel.
+    if (wsh == 0)
+        return false;
+
     bool out;
     mutex.lock();
     std::map<wrapper_sound_handle, real_sound_handle>::iterator it = handle_map.find(wsh);
