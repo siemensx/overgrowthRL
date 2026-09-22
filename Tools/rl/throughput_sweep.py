@@ -49,12 +49,12 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
     if run_dir.exists():
         shutil.rmtree(run_dir)
     ckpt = repo / "Tools" / "rl" / "ppo" / "checkpoints" / f"{run_id}.pt"
-    if ckpt.exists():
+    if ckpt.exists() and not args.no_checkpoint:
         ckpt.unlink()
     cmd = [sys.executable, "-u", str(repo / "Tools" / "rl" / "ppo" / "train_vec.py"),
            "--repo-root", str(repo), "--levels", args.levels,
            "--shm-prefix", shm_prefix, "--n-envs", str(n_envs), "--k-standby", str(k_standby),
-           "--seed", "7", "--checkpoint-path", str(ckpt), "--resume-from", args.resume_from,
+           "--seed", "7", "--resume-from", args.resume_from,
            "--run-id", run_id, "--total-timesteps", "4000000000",
            "--n-steps", "256", "--n-epochs", "1", "--minibatch-size", "128",
            "--entropy-coef", "0.003", "--entropy-coef-final", "0.003", "--entropy-anneal-steps", "1000000",
@@ -68,6 +68,8 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
            "--update-torch-threads", str(args.update_threads),
            "--torch-interop-threads", str(args.interop_threads),
            "--no-tapes", "--no-native-capture"] + args.extra
+    if not args.no_checkpoint:
+        cmd[cmd.index("--resume-from"):cmd.index("--resume-from")] = ["--checkpoint-path", str(ckpt)]
     env = dict(os.environ, OGRL_ALLOW_NENVS_CHANGE="1")
     log = run_dir.parent / f"{run_id}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -112,9 +114,10 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
             "wall_sps": ((win[-1]["global_step"] - win[0]["global_step"]) / (win[-1]["t"] - win[0]["t"])) if len(win) > 1 else 0,
         })
     print(json.dumps(out), flush=True)
-    for p in (ckpt,):
+    for p in (() if args.no_checkpoint else (ckpt,)):
         if p.exists():
             p.unlink()
+    out["checkpoint_written"] = not args.no_checkpoint
     return out
 
 
@@ -137,6 +140,8 @@ def main() -> int:
                     help="periodic hard-reset interval for soft-reset throughput tests")
     ap.add_argument("--tag", default=time.strftime("%Y%m%d_%H%M"))
     ap.add_argument("--out", default=None)
+    ap.add_argument("--no-checkpoint", action="store_true",
+                    help="run the real PPO loop with in-memory updates but never pass a checkpoint output path")
     ap.add_argument("--extra", nargs="*", default=[])
     args = ap.parse_args()
     kill_engines()
