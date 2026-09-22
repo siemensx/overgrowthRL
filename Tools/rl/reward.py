@@ -340,7 +340,12 @@ class RewardComputer:
                 closing = max(0.0, prev_nearest - curr_nearest) * cfg.closing_distance_weight
         components["closing_distance"] = closing
 
-        total = sum(components.values())
+        # Observation transport may provide an owned NumPy array rather than
+        # the historical Python list. Keep the reward/telemetry boundary
+        # scalar and JSON-safe regardless of which transport representation is
+        # active; this is a type normalization only, not a reward change.
+        components = {name: float(value) for name, value in components.items()}
+        total = float(sum(components.values()))
         return total, components
 
 
