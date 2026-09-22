@@ -622,3 +622,23 @@ absolute values remain sensitive to order and thermal state and the test has no
 learner. The next safe action is to run a frozen-policy collector benchmark
 with `0xC03`; no training launcher, PPO resume, checkpoint, or reward state is
 changed by this result.
+
+#### Frozen-policy confirmation and worker knee
+
+Nested commit `8ce0df70` adds a benchmark-only collector that loads a frozen
+checkpoint and its observation normalizer, runs the real policy forward pass,
+and steps the real environments. It creates no optimizer, performs no PPO
+update, and writes no checkpoint. On the six-map corpus at n6/k2, frame-stack
+4, act-period 4, AboveNormal, the mask results were normal/all `0x3FFF` 407.0
+decisions/s, AboveNormal/all 421.5, AboveNormal+`0xFFF` 439.0, and
+AboveNormal+P-only `0xC03` 463.9. Policy inference was only 8.1% of the P-only
+wall time, so the mask direction survives learner-shaped action generation.
+
+Under P-only with 4 Torch threads, the active-worker screen measured n1=292.5,
+n2=413.4, n4=438.5, n6=487.5, n8=505.2, and n10=489.0 decisions/s. A
+separate thread screen at n6/k2 measured threads 1=509.2, threads 2=494.8 on
+retry after one startup failure, and threads 4=536.2. The current safe
+optimization candidate is n8/k2, P-only `0xC03`, AboveNormal, Torch threads 4,
+inter-op 1. This candidate is for the next learner-shaped benchmark only; it
+does not alter a PPO default, resume checkpoint, worker-normalizer state, or
+training task.
