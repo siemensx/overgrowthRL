@@ -711,6 +711,13 @@ the engine affinity from `0xFFF` to all logical CPUs (`0x3FFF`) measured 971.5
 wall SPS, 2.9% slower. Retain collection threads 2 and `0xFFF`; record
 thread-4 as a startup reliability failure, not a throughput result.
 
+#### PPO update-thread sweep
+
+At n18/k6 with 512/128/1, update threads 2 measured 973.2 wall SPS, update
+threads 4 measured 1,000.4, and update threads 8 measured 886.8. Valid points
+had zero pool misses; the first update-2 launch failed at startup. Retain
+update threads 4 and reject 2 and 8 for this host.
+
 #### Reset-policy sweep
 
 On n18/k6 with the established AboveNormal/`0xFFF` and Torch 2/4/1 stack,
