@@ -101,6 +101,8 @@ def main() -> int:
     p.add_argument("--warmup-seconds", type=float, default=3.0)
     p.add_argument("--measure-seconds", type=float, default=15.0)
     p.add_argument("--out", default=None)
+    p.add_argument("--shm-tag", default=None,
+                   help="unique prefix for this invocation; defaults to the current Unix timestamp")
     args = p.parse_args()
 
     levels = args.levels or ([args.level] if args.level else ["arenas/oval_arena_1v1_unarmed.xml"])
@@ -110,6 +112,7 @@ def main() -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     results = []
+    invocation_tag = args.shm_tag or str(int(time.time()))
     with open(out_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["n_envs", "k_standby", "act_period", "launch_seconds", "steps", "measured_seconds",
@@ -117,7 +120,7 @@ def main() -> int:
                           "episode_ends_during_measurement", "error"])
         for n_envs in args.n_envs_grid:
             for k_standby in args.k_standby_grid:
-                shm_tag = f"{n_envs}k{k_standby}"
+                shm_tag = f"{invocation_tag}_{n_envs}k{k_standby}"
                 print(f"=== n_envs={n_envs} k_standby={k_standby} act_period={args.act_period} ===", flush=True)
                 result = run_one_point(
                     args.repo_root, levels, n_envs, k_standby, args.act_period,
