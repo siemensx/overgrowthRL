@@ -78,6 +78,9 @@ def _perf_with_reset_share(perf: dict, cycle_seconds: float) -> dict:
         "reset_blocking_seconds": reset_blocking_seconds,
         "reset_blocking_share": (reset_blocking_seconds / cycle_seconds) if cycle_seconds > 0 else 0.0,
         "pool_hits": perf["pool_hits"], "pool_misses": perf["pool_misses"],
+        "recoveries": perf.get("recoveries", 0),
+        "valid_transition_count": perf.get("valid_transition_count", perf["step_count"]),
+        "recovered_transition_count": perf.get("recovered_transition_count", 0),
         "step_wall_seconds": perf["step_wall_seconds"],
         "worker_wait_seconds": perf.get("worker_wait_seconds", 0.0),
         "step_count": perf["step_count"],
@@ -299,6 +302,9 @@ def parse_args():
                          "should stay a cold start. --total-timesteps is still an ABSOLUTE global_step target, not "
                          "an additional budget -- e.g. resuming from step 2,949,120 needs --total-timesteps "
                          "6000000 for 3M more steps, not 3000000 (which would be a no-op).")
+    p.add_argument("--allow-n-envs-change", action="store_true",
+                   help="explicitly permit resizing per-worker reward-normalizer state when resuming "
+                        "from a checkpoint saved with a different --n-envs; intended for sweeps")
     return p.parse_args()
 
 
@@ -318,6 +324,10 @@ def _raise_keyboard_interrupt(signum, frame):
 def main():
     signal.signal(signal.SIGTERM, _raise_keyboard_interrupt)
     args = parse_args()
+    if args.allow_n_envs_change:
+        os.environ["OGRL_ALLOW_NENVS_CHANGE"] = "1"
+    elif os.environ.get("OGRL_ALLOW_NENVS_CHANGE"):
+        raise ValueError("OGRL_ALLOW_NENVS_CHANGE is set but --allow-n-envs-change was not supplied; make worker-count migration explicit")
     # Preserved separately from args.entropy_coef, which the anneal below
     # mutates in place every update once training starts -- the anneal
     # formula needs the ORIGINAL starting value throughout, not whatever
@@ -607,6 +617,8 @@ def main():
 
     try:
         raw_obs = vec_env.reset(seeds=[args.seed + i for i in range(args.n_envs)])
+        print(f"[RL_READY] t={time.time():.6f} active_workers={args.n_envs} "
+              f"ready_standbys={len(vec_env._standby)}", flush=True)
         obs = obs_normalizer.normalize(raw_obs)
         raw_obs_current = raw_obs  # OGRL-20260817-028 Sec8.1: the raw (unnormalized) observation each
                                     # step's action was actually chosen from -- tape.decision_record needs
@@ -763,7 +775,19 @@ def main():
                 buffer.add(obs, actions_np, log_probs.cpu().numpy(), values.cpu().numpy(), normalized_rewards, stop_flags.astype(np.float32),
                            raw_cont=raw_cont.cpu().numpy(), valid=_valid)
 
+                for i, info in enumerate(infos):
+                    if info.get("worker_recovered"):
+                        # Recovery abandons the previous physical episode and
+                        # starts a fresh one. It is not a timeout, win, or loss
+                        # and must not advance curriculum statistics.
+                        episode_reward[i] = 0.0
+                        episode_length[i] = 0
+                        episode_components[i] = defaultdict(float)
+                        episode_start_time[i] = time.time()
+
                 for i in np.where(stop_flags)[0]:
+                    if infos[i].get("worker_recovered"):
+                        continue
                     episode_rewards_this_update.append(episode_reward[i])
                     episode_lengths_this_update.append(episode_length[i])
                     # Canonical all-hostiles-down flag from vec_env (0.3). The old
@@ -1063,6 +1087,7 @@ def main():
                 print(f"[curriculum] global_step={global_step:,}  ARMED STAGE {_old} -> {_new}  "
                       f"{_label}  (won {_wr:.3f} of {_n} armed episodes)", flush=True)
 
+            perf_snapshot = _perf_with_reset_share(vec_env.drain_perf(), cycle_seconds)
             logger.log_update({
                 "t": time.time(), "global_step": global_step, "update": update,
                 "phase": curriculum.phase_name(global_step),
@@ -1125,7 +1150,8 @@ def main():
                     "phase_policy_seconds": _t_policy, "phase_step_seconds": _t_step, "phase_bookkeeping_seconds": _t_book, "cycle_seconds": cycle_seconds,
                     "steps_per_second_collection": steps_per_second,
                     "steps_per_second_cycle": (args.n_steps * args.n_envs) / cycle_seconds,
-                    **_perf_with_reset_share(vec_env.drain_perf(), cycle_seconds),
+                    "useful_steps_per_second_cycle": perf_snapshot["valid_transition_count"] / cycle_seconds,
+                    **perf_snapshot,
                 },
             })
 

@@ -168,24 +168,19 @@ class OvergrowthEnv:
         self._shm: ShmEnv | None = None
         self._prev_values: list | None = None
         self._episode_steps = 0
-        # Engine::ResetRLTrainingScenario requires its baseline to have been
-        # captured, which only happens once the engine's own *initial* level
-        # load (started at engine launch, independent of when this client
-        # happens to connect) fully completes -- shm segment creation
-        # (RLShmTransport::Configure) runs during CLI arg processing, well
-        # before that load finishes, so a client that connects quickly and
-        # immediately calls reset() races the baseline capture and reliably
-        # loses. The initial level load already produces a fresh, valid
-        # starting state on its own -- no engine-side reset is needed to use
-        # it -- so the first reset() call just consumes that natural first
-        # observation instead of requesting a redundant, racy one.
+        # Engine::ResetRLTrainingScenario requires its baseline to be captured,
+        # which only happens once the engine's own initial level load has
+        # completed. ShmEnv connects earlier because the transport is created
+        # during CLI processing. The first reset therefore drains the engine's
+        # natural initial observation before issuing the requested reset. This
+        # preserves readiness synchronization without silently training on an
+        # episode whose seed/difficulty/opponents were never requested.
         self._used_initial_observation = False
-        # episode_count: real resets only (the pseudo-reset that consumes the
-        # engine's own initial observation, above, doesn't count) -- this is
-        # what --hard-reset-every gates on (OGRL-20260817-028 Sec1.2), so it
-        # deliberately lives on the physical engine process, not on whatever
-        # vector slot currently happens to be playing it (a standby moves
-        # between slots over its lifetime -- see vec_env.py).
+        # episode_count counts requested scenario resets -- the initial natural
+        # observation is only drained as a readiness handshake -- and is what
+        # --hard-reset-every gates on (OGRL-20260817-028 Sec1.2). It deliberately
+        # lives on the physical engine process, not on whatever vector slot
+        # currently happens to be playing it (a standby moves between slots).
         self.episode_count = 0
         # last_reset_seed: the REAL seed most recently used to reset this
         # env, for episodes.jsonl (OGRL-20260817-028 Sec8.6 -- ghost replay
@@ -317,7 +312,20 @@ class OvergrowthEnv:
                     import ctypes
                     h = ctypes.windll.kernel32.OpenProcess(0x0200 | 0x0400, False, self._process.pid)  # SET_INFORMATION|QUERY_INFORMATION
                     if h:
-                        ctypes.windll.kernel32.SetProcessAffinityMask(h, ctypes.c_size_t(int(mask, 16)))
+                        requested_mask = ctypes.c_size_t(int(mask, 16))
+                        if not ctypes.windll.kernel32.SetProcessAffinityMask(h, requested_mask):
+                            raise ctypes.WinError()
+                        applied_mask = ctypes.c_size_t()
+                        system_mask = ctypes.c_size_t()
+                        if not ctypes.windll.kernel32.GetProcessAffinityMask(
+                            h, ctypes.byref(applied_mask), ctypes.byref(system_mask)
+                        ):
+                            raise ctypes.WinError()
+                        if applied_mask.value != requested_mask.value:
+                            raise RuntimeError(
+                                f"requested {mask}, Windows applied 0x{applied_mask.value:X}"
+                            )
+                        print(f"[env] affinity applied pid={self._process.pid} mask=0x{applied_mask.value:X}", flush=True)
                         ctypes.windll.kernel32.CloseHandle(h)
                 except Exception as _e:  # never let a scheduling tweak break a launch
                     print(f"[env] affinity {mask} not applied: {_e}", flush=True)
@@ -326,7 +334,7 @@ class OvergrowthEnv:
         last_error = None
         while time.perf_counter() < deadline:
             if self._process.poll() is not None:
-                raise RuntimeError(
+                self._fail_launch(
                     f"engine process exited early (code {self._process.returncode}) while connecting to {self.shm_name} -- see {log_path}"
                 )
             try:
@@ -336,12 +344,20 @@ class OvergrowthEnv:
                 last_error = exc
                 time.sleep(0.2)
         if self._shm is None:
-            raise RuntimeError(f"timed out connecting to {self.shm_name} after {self._launch_timeout}s: {last_error}")
+            self._fail_launch(f"timed out connecting to {self.shm_name} after {self._launch_timeout}s: {last_error}")
 
         if self._shm.obs_floats != self.layout.total_floats:
-            raise ValueError(f"obs_floats mismatch: engine publishes {self._shm.obs_floats}, this layout expects {self.layout.total_floats}")
+            self._fail_launch(f"obs_floats mismatch: engine publishes {self._shm.obs_floats}, this layout expects {self.layout.total_floats}")
         if self._shm.schema_version != SCHEMA_VERSION:
-            raise ValueError(f"schema_version mismatch: engine publishes {self._shm.schema_version}, obs_schema.py expects {SCHEMA_VERSION} -- rebuild the engine or update obs_schema.py")
+            self._fail_launch(f"schema_version mismatch: engine publishes {self._shm.schema_version}, obs_schema.py expects {SCHEMA_VERSION} -- rebuild the engine or update obs_schema.py")
+
+    def _fail_launch(self, message: str) -> None:
+        """Terminate and clean a partially-started engine before reporting failure."""
+        try:
+            self.close()
+        except Exception as cleanup_error:  # noqa: BLE001 - preserve the launch error
+            print(f"[env] launch cleanup failed for {self.shm_name}: {cleanup_error}", flush=True)
+        raise RuntimeError(message)
 
     def close(self) -> None:
         if self._shm is not None:
@@ -406,28 +422,22 @@ class OvergrowthEnv:
         weapon_type: int = 0,
         throw_aggression: float = 1.0,
     ) -> np.ndarray:
-        """soft/difficulty/opponents/weapons/species are the OGRL-20260817-028
-        Sec1/Sec3.1 curriculum hook -- forwarded straight to ShmEnv.reset(),
-        see its docstring for exact semantics. Not applied to the very first
-        reset() of a freshly-launched engine (see _used_initial_observation's
-        comment in __init__): that one just consumes the natural first
-        observation from the engine's own initial level load, which the
-        level script drives with its own default difficulty, not the
-        RL-requested one -- a one-episode-per-worker-lifetime cold-start
-        artifact, unchanged from before this hook existed and not worth a
-        redundant extra reset just to eliminate."""
+        """Reset the requested scenario, including on a fresh engine.
+
+        The first call drains the engine's natural post-load observation before
+        sending the reset request. The returned observation therefore always
+        belongs to the caller's requested seed and scenario.
+        """
         if not self._used_initial_observation:
+            self._shm.wait_for_observation()
             self._used_initial_observation = True
-            obs = self._shm.wait_for_observation()
-            self.last_reset_seconds = 0.0  # not a real reset -- see _used_initial_observation's comment
-        else:
-            reset_seed = seed if seed is not None else self.seed
-            reset_start = time.perf_counter()
-            obs = self._shm.reset(reset_seed, soft=soft, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
-                              armed_count=armed_count, weapon_type=weapon_type, throw_aggression=throw_aggression)
-            self.last_reset_seconds = time.perf_counter() - reset_start  # OGRL-20260817-028 Sec8.2: perf.reset_seconds source
-            self.episode_count += 1
-            self.last_reset_seed = reset_seed
+        reset_seed = seed if seed is not None else self.seed
+        reset_start = time.perf_counter()
+        obs = self._shm.reset(reset_seed, soft=soft, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
+                          armed_count=armed_count, weapon_type=weapon_type, throw_aggression=throw_aggression)
+        self.last_reset_seconds = time.perf_counter() - reset_start  # OGRL-20260817-028 Sec8.2: perf.reset_seconds source
+        self.episode_count += 1
+        self.last_reset_seed = reset_seed
         self._prev_values = obs.values
         self._episode_steps = 0
         self._frame_stack_buffer.clear()

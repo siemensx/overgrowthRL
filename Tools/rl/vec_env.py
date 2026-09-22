@@ -45,6 +45,7 @@ step with k_standby too shallow to cover the burst.
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -185,10 +186,11 @@ class VecOvergrowthEnv:
             )
 
         # Parallel launch: each OvergrowthEnv.__init__ blocks on its own
-        # engine's level load -- N of these sequentially would cost N times
-        # that for no reason, since the engines themselves don't contend with
-        # each other during their own independent startup. Actives and
-        # standbys launch together, one batch, not two.
+        # engine's level load. Launch in bounded waves instead of one 24-process
+        # burst: this preserves parallel startup while reducing Windows handle,
+        # shader/cache, and Defender contention that caused silent-engine
+        # failures in otherwise valid runs. OGRL_LAUNCH_WAVE_SIZE=0 restores
+        # the historical all-at-once behavior for a controlled comparison.
         n_total = n_envs + self.k_standby
         specs = [(str(i), base_seed + i, _levels[i % len(_levels)]) for i in range(n_envs)] + \
                 [(f"s{i}", base_seed + n_envs + i, _levels[(n_envs + i) % len(_levels)])
@@ -201,8 +203,25 @@ class VecOvergrowthEnv:
         # will ever post to -- a hang that looks exactly like the original fault.
         self._make_env = _make
         self._recoveries = 0
+        self._recoveries_since_drain = 0
+        self._valid_transition_count = 0
+        self._recovered_transition_count = 0
         self._shm_prefix = shm_prefix
-        built = list(self._pool.map(lambda spec: _make(*spec), specs))
+        wave_size = int(os.environ.get("OGRL_LAUNCH_WAVE_SIZE", "6"))
+        if wave_size <= 0:
+            wave_size = len(specs)
+        built: list[OvergrowthEnv] = []
+        try:
+            for start in range(0, len(specs), wave_size):
+                wave = specs[start:start + wave_size]
+                built.extend(self._pool.map(lambda spec: _make(*spec), wave))
+        except Exception:
+            for env in built:
+                try:
+                    env.close()
+                except Exception:
+                    pass
+            raise
         self.envs: list[OvergrowthEnv] = built[:n_envs]
         standby_envs = built[n_envs:]
 
@@ -231,17 +250,9 @@ class VecOvergrowthEnv:
         seed = self._next_reset_seed(env)
         soft = self.soft_reset
         # env.episode_count > 0 guard added 2026-08-17: forcing hard on an
-        # env's very FIRST real reset (episode_count==0, i.e. right after the
-        # pseudo-reset that consumes its natural initial observation --
-        # see OvergrowthEnv.reset()'s _used_initial_observation comment)
-        # produced a live RuntimeError ("engine reported reset(...) failed")
-        # in the very first smoke test run, consistent with a startup race
-        # around rl_training_reset_baseline_valid_ that the ORIGINAL
-        # hard-reset path already documents as a risk for a client that
-        # resets too soon after connecting. Not fully root-caused under
-        # time pressure -- this sidesteps the specific failing case
-        # (skip forcing hard on episode 0) rather than fixing the race
-        # itself, which is a real open item for a future session.
+        # env's first requested reset now follows the explicit initial
+        # observation drain in OvergrowthEnv.reset(), so episode_count reflects
+        # real scenario resets rather than a pseudo-reset artifact.
         if soft and self.hard_reset_every > 0 and env.episode_count > 0 and (env.episode_count % self.hard_reset_every) == 0:
             soft = False  # periodic safety valve (Sec1.2) -- fires on episode_count 0, N, 2N, ...
         # 2026-09-19: armed_count / weapon_type / throw_aggression were sampled
@@ -275,6 +286,9 @@ class VecOvergrowthEnv:
                 "reset_blocking_seconds": self._reset_blocking_seconds,
                 "pool_hits": self._pool_hits,
                 "pool_misses": self._pool_misses,
+                "recoveries": self._recoveries_since_drain,
+                "valid_transition_count": self._valid_transition_count,
+                "recovered_transition_count": self._recovered_transition_count,
                 "step_wall_seconds": self._step_wall_seconds,
                 "worker_wait_seconds": self._worker_wait_seconds,
                 "step_count": self._step_count,
@@ -288,6 +302,9 @@ class VecOvergrowthEnv:
             self._reset_seconds_accum = 0.0
             self._pool_hits = 0
             self._pool_misses = 0
+            self._recoveries_since_drain = 0
+            self._valid_transition_count = 0
+            self._recovered_transition_count = 0
             self._step_latencies.clear()
             self._reset_blocking_seconds = 0.0
             self._step_wall_seconds = 0.0
@@ -365,7 +382,9 @@ class VecOvergrowthEnv:
                 # metric still reading green (OGRL-20260905-065). Rebuild the
                 # worker and carry on: one lost episode costs seconds, a hung run
                 # costs however long it takes a human to notice.
-                self._recoveries += 1
+                with self._perf_lock:
+                    self._recoveries += 1
+                    self._recoveries_since_drain += 1
                 dead, self.envs[i] = self.envs[i], None
                 try:
                     dead.close()
@@ -477,6 +496,7 @@ class VecOvergrowthEnv:
         barrier_idle_seconds = sum(max(0.0, step_wall_seconds - latency) for latency in worker_latencies)
         blocking_reset_seconds = sum(float(result[4]["perf"]["blocking_reset_seconds"]) for result in results)
         wait_seconds = sum(float(result[4]["perf"].get("wait_seconds", 0.0)) for result in results)
+        recovered_count = sum(1 for result in results if result[4].get("worker_recovered"))
         with self._perf_lock:
             self._worker_wait_seconds += wait_seconds
             self._step_latencies.extend(worker_latencies)
@@ -484,6 +504,8 @@ class VecOvergrowthEnv:
             self._reset_blocking_seconds += blocking_reset_seconds
             self._step_wall_seconds += step_wall_seconds
             self._step_count += self.n_envs
+            self._recovered_transition_count += recovered_count
+            self._valid_transition_count += self.n_envs - recovered_count
         obs = np.stack([r[0] for r in results])
         rewards = np.array([r[1] for r in results], dtype=np.float32)
         terminals = np.array([r[2] for r in results], dtype=bool)

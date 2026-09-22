@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import signal
 import statistics as st
@@ -34,6 +35,30 @@ def kill_engines() -> None:
         subprocess.run(["taskkill", "/F", "/IM", "Overgrowth.exe"], capture_output=True)
     else:
         subprocess.run(["pkill", "-f", "write-dir.*env-ogrl_sw"], capture_output=True)
+
+
+def wait_for_ready(log: Path, proc: subprocess.Popen, timeout: float) -> tuple[float | None, float]:
+    """Wait for the post-reset all-active-worker readiness barrier."""
+    started = time.monotonic()
+    offset = 0
+    carry = ""
+    while time.monotonic() - started < timeout:
+        if log.exists():
+            try:
+                with log.open("r", encoding="utf-8", errors="replace") as fh:
+                    fh.seek(offset)
+                    chunk = fh.read()
+                    offset = fh.tell()
+                carry = (carry + chunk)[-2048:]
+                match = re.search(r"\[RL_READY\] t=([0-9.]+)", carry)
+                if match:
+                    return float(match.group(1)), time.monotonic() - started
+            except OSError:
+                pass
+        if proc.poll() is not None:
+            return None, time.monotonic() - started
+        time.sleep(0.25)
+    return None, time.monotonic() - started
 
 
 def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
@@ -64,29 +89,42 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
            "--d-max-start", "1.0", "--d-max-cap", "1.0", "--d-step", "0.1", "--d-min", "1.0",
            "--opponents-cap", "3", "--opp-keep-solo", "0.0", "--armed-stage", "0",
            "--gate-eval-episodes", "30", "--gate-min-step-gap", "999999999999",
+           "--allow-n-envs-change",
            "--collection-torch-threads", str(args.collection_threads),
            "--update-torch-threads", str(args.update_threads),
            "--torch-interop-threads", str(args.interop_threads),
            "--no-tapes", "--no-native-capture"] + args.extra
     if not args.no_checkpoint:
         cmd[cmd.index("--resume-from"):cmd.index("--resume-from")] = ["--checkpoint-path", str(ckpt)]
-    env = dict(os.environ, OGRL_ALLOW_NENVS_CHANGE="1")
+    env = dict(os.environ)
     log = run_dir.parent / f"{run_id}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     print(f"\n=== {run_id}: {args.warmup + args.measure:.0f}s ===", flush=True)
-    t0 = time.time()
+    launch_t = time.time()
+    ready_at = None
+    ready_wait = 0.0
     with open(log, "w") as lf:
         proc = subprocess.Popen(cmd, cwd=str(repo), stdout=lf, stderr=subprocess.STDOUT, env=env)
-        try:
-            proc.wait(timeout=args.warmup + args.measure)
+        ready_at, ready_wait = wait_for_ready(log, proc, args.ready_timeout)
+        if ready_at is None:
             exited_early = True
-        except subprocess.TimeoutExpired:
-            exited_early = False
-            proc.terminate()
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+        else:
             try:
-                proc.wait(timeout=20)
+                proc.wait(timeout=args.warmup + args.measure)
+                exited_early = True
             except subprocess.TimeoutExpired:
-                proc.kill()
+                exited_early = False
+                proc.terminate()
+                try:
+                    proc.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
     kill_engines()
     time.sleep(5)
     metrics = run_dir / "metrics.jsonl"
@@ -97,12 +135,13 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
                 rows.append(json.loads(line))
             except Exception:
                 pass
-    win = [r for r in rows if r["t"] - t0 >= args.warmup]
+    win = [r for r in rows if ready_at is not None and r["t"] - ready_at >= args.warmup]
     def col(k):
         return [r["perf"][k] for r in win if r.get("perf", {}).get(k) is not None]
     sps = col("steps_per_second_cycle")
     out = {"run_id": run_id, "n_envs": n_envs, "k_standby": k_standby, "rows_total": len(rows), "rows_measured": len(win),
-           "exited_early": exited_early, "wall_seconds": time.time() - t0}
+           "exited_early": exited_early, "ready": ready_at is not None, "ready_at": ready_at,
+           "ready_wait_seconds": ready_wait, "launch_wall_seconds": time.time() - launch_t}
     if sps:
         out.update({
             "sps_median": st.median(sps), "sps_mean": st.mean(sps), "sps_p10": sorted(sps)[len(sps) // 10],
@@ -110,8 +149,12 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
             "barrier_idle_per_worker_s": st.mean(col("barrier_idle_seconds") or [0]) / n_envs,
             "cycle_s": st.median(col("cycle_seconds") or [0]),
             "pool_miss_rate": (sum(col("pool_misses")) / max(1, sum(col("pool_misses")) + sum(col("pool_hits")))) if col("pool_hits") else None,
+            "recoveries": sum(col("recoveries")),
+            "valid_steps_measured": sum(col("valid_transition_count")),
+            "recovered_steps_measured": sum(col("recovered_transition_count")),
             "steps_measured": (win[-1]["global_step"] - win[0]["global_step"]) if len(win) > 1 else 0,
             "wall_sps": ((win[-1]["global_step"] - win[0]["global_step"]) / (win[-1]["t"] - win[0]["t"])) if len(win) > 1 else 0,
+            "useful_wall_sps": (sum(col("valid_transition_count")) / (win[-1]["t"] - win[0]["t"])) if len(win) > 1 else 0,
         })
     print(json.dumps(out), flush=True)
     for p in (() if args.no_checkpoint else (ckpt,)):
@@ -131,6 +174,8 @@ def main() -> int:
                          "14x4:OGRL_ENGINE_PRIORITY=above,OGRL_ENGINE_AFFINITY=0xFFF")
     ap.add_argument("--warmup", type=float, default=150.0)
     ap.add_argument("--measure", type=float, default=360.0)
+    ap.add_argument("--ready-timeout", type=float, default=180.0,
+                    help="maximum seconds to wait for the post-reset RL_READY barrier")
     ap.add_argument("--collection-threads", type=int, default=2,
                     help="PyTorch intra-op threads during rollout inference")
     ap.add_argument("--update-threads", type=int, default=4)
