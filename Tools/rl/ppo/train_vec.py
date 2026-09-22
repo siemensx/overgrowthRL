@@ -340,9 +340,9 @@ def main():
         # its single-threaded rollout inference sits on the collector's critical
         # path. OGRL_TRAINER_PRIORITY: normal (default) | above | high | inherit
         # OGRL_TRAINER_AFFINITY: optional hexadecimal process mask, e.g. 0xFFF
-        # to keep the learner off the two LP-E logical CPUs. This is a soft,
-        # feature-gated scheduling experiment; it does not constrain engines,
-        # which apply their own affinity after launch.
+        # to keep the learner off the two LP-E logical CPUs. This is a hard,
+        # feature-gated process-affinity/priority experiment; it does not
+        # constrain engines, which apply their own affinity after launch.
         try:
             import ctypes
             _pri = os.environ.get("OGRL_TRAINER_PRIORITY", "normal").lower()

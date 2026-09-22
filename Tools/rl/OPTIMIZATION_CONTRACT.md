@@ -242,9 +242,12 @@ can be tested without touching the Mac:
    throughput/fidelity A/B. This changes the action-hold contract, so it is not
    a free optimization and cannot be adopted from speed alone. Evaluate both
    1v1 retention and 1v3 performance.
-7. **Engine-side sound early-outs:** the patch is documented in `DEAD_ENDS.md`
-   but was not rebuilt and measured in the later run. A fresh trainer-boundary
-   A/B is allowed; never swap the binary during a live run.
+7. **Engine-side sound early-outs:** the null-backend `SetPosition` and
+`TranslatePosition` early-outs are already present in source commit `517beb56`
+and its descendant Windows binary anchor `d6f67601`; they are therefore part of
+the current optimized baseline, not an untested edit to apply mid-run. The
+remaining work is only an isolated before/after build A/B if a clean historical
+measurement is needed.
 8. **Async collector:** currently rejected. Revisit only if the clean current
    collector shows a reproducible straggler regime that an updated async
    implementation addresses, and then compare on-policy ordering and final
@@ -827,8 +830,9 @@ Remaining safe levers, in priority order:
   four-frame ring buffer.
 - Standby placement experiments: active engines AboveNormal/`0xFFF`; standby engines
   Normal on LP-E or regular E cores, restoring the active mask/priority before ready.
-- Trainer soft CPU-set P-core preference, followed only if useful by a hard C03 test;
-  do not move engine affinity away from the validated `0xFFF` without measurement.
+- Trainer hard process-affinity/priority was tested and rejected by the ABBA
+  follow-up; no CPU-set preference is adopted. Do not move engine affinity away
+  from the validated `0xFFF` without measurement.
 - Verify the active Torch runtime with `torch.__config__.parallel_info()` and test
   fixed versus dynamic thread settings rather than relying on environment folklore.
 - Verify HighQoS/execution-speed power state. The host already reports High
@@ -892,3 +896,95 @@ standby arm reached `[RL_READY]` and its logs verified six standby processes
 with applied mask `0x3000`, but was intentionally interrupted by the owner
 after four update rows while relocating the computer. It has no valid measured
 throughput and was not adopted. Resume with a fresh paired ABBA comparison.
+
+## 2026-09-22 takeover: corrected placement, worker depth, threads, and ETW
+
+The repaired source is nested commit `da4c07ce`, deployed to the clean Windows
+checkout before these probes. It fixes two correctness issues identified by the
+advisor audit: Windows `_sem_wait` now distinguishes `WAIT_OBJECT_0`,
+`WAIT_TIMEOUT`, and `WAIT_FAILED` instead of treating a failed wait as success;
+and a standby promoted into an active vector slot is restored to the active
+priority/affinity while the retired engine is moved to the standby role before
+its background reset. A two-active/one-standby smoke run logged the full
+launch -> promote -> retire transitions and completed with zero recoveries.
+
+### Standby placement ABBA
+
+The previously paused LP-E experiment was not evidence because the old source
+left promoted engines on the LP-E mask. The corrected n18/k6 real-PPO ABBA
+tested active AboveNormal/`0xFFF`, standby Normal/`0x3000`, six maps,
+512/128/1, Torch 2/4/1, hard-reset-every 20, and no checkpoint output:
+
+| order | normal standby useful SPS | LP-E standby result | recovery/pool result |
+|---|---:|---:|---|
+| normal -> LP-E | 779.1 | 137.0 | 0 / 0 in both |
+| LP-E -> normal | 741.9 | 159.8 row median* | 0 / 0 in both |
+
+*The LP-E reverse arm produced only one post-boundary row because its cycles
+were 57--61 seconds; its cumulative useful-SPS field is zero after the harness
+correctly drops the boundary row. The per-row value is still sufficient to
+show the severe slowdown. The placement is rejected: six standby resets
+contend on the two LP-E logical processors and create about 22--23 seconds of
+barrier idle per worker. The role-transition implementation is retained for
+future targeted experiments but both placement variables remain default-off.
+
+Regular-E-only standby placement (`0x3FC`) was also screened. Forward order
+was 796.5 normal versus 678.8 regular-E useful SPS; reverse order had a
+regular-E startup failure and a 753.4 normal result. It is rejected and the
+placement family is closed for this host. The raw ABBA summaries and logs are
+under `research-artifacts/OGRL-20260921-006-optimization/telemetry/` in the
+Mac outer repository.
+
+### Worker/standby depth
+
+An n18 depth screen (`k=2..8`, six maps, no checkpoint) was completed. The
+map-axis rule still governs adoption: with six maps, active plus standby
+engines must be a multiple of six. Thus most n18/k points are diagnostics,
+not canonical training candidates. Useful wall SPS in the measured order was
+
+| n18/k | useful SPS | pool-miss rate | status |
+|---:|---:|---:|---|
+| 2 | startup failure | -- | reject |
+| 3 | 771.2 | 3.31% | diagnostic/map-skewed |
+| 4 | 799.9 / 755.0 repeat | 1.47% / 0% | diagnostic/map-skewed |
+| 5 | 732.5 | 0% | diagnostic/map-skewed |
+| 6 | 695.0 | 0% | valid map-aligned candidate |
+| 7 | 692.0 | 0% | diagnostic/map-skewed |
+| 8 | 648.0 | 0% | diagnostic/map-skewed |
+
+The sequence is strongly order/thermal-sensitive, so it does not overturn the
+two-order post-repair n14/n18 result or the sustained n18/k6 result. n18/k6
+remains the only valid six-map member of this local family and the adopted
+throughput candidate; no worker-count default was changed.
+
+### Fine learner-thread screen
+
+At n18/k6 with the same no-checkpoint protocol, update threads 3 and 4
+produced 787.8 and 801.3 useful SPS respectively, both with zero recoveries
+and pool misses. The 1.7% difference is within the observed thermal/order
+spread and does not beat the adoption threshold. Keep update threads 4;
+collection 2 and inter-op 1 remain unchanged.
+
+### Power and ETW evidence
+
+The trainer is already at the software cooling ceiling: High Performance,
+AC minimum and maximum processor state 100%, Active cooling, Aggressive boost,
+and Defender path exclusions for `C:\\ogrl` and the Overgrowth install. No
+power-plan mutation was necessary. The raw WPR CPU trace is retained on the
+trainer at `C:\\ogrl\\wpr\\wpr_candidate_20260922.etl` (1,733,296,128 bytes,
+SHA-256 `FFDB168861FA57505E29E82A702182617A2FD0CCE1DD0F7DCE3E212053B77627`).
+`tracerpt` processed its 217-second trace with 17,763,758 events, zero lost,
+1,546,605 CPU samples, and 9,935,057 stack-walk events. The local summary is
+`telemetry/wpr/wpr_candidate_20260922_summary.txt`; WPA/xperf is not installed,
+so no function-level hotspot claim is made. The next high-value engineering
+lever is an engine-side profile/hot-path change backed by this trace or an
+equivalent analyzer, not another blind affinity permutation.
+
+### Current decision
+
+The optimization candidate remains n18/k6, engine AboveNormal with affinity
+`0xFFF`, trainer normal priority, Torch 2/4/1, hard-reset-every 20, and the
+512/128/1 learner-shaped benchmark settings. All 2026-09-22 probes used
+in-memory PPO updates and `checkpoint_written=false`. No unattended training
+task was started, no gameplay/physics semantics were changed, and no test
+checkpoint was written.
