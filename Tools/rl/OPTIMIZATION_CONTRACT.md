@@ -747,3 +747,11 @@ both. The first baseline launch failed at startup and is excluded from the
 comparison. Treat n18/k6 + AboveNormal + `0xFFF` + 512/128/1 as the peak
 optimization candidate; n14/k4 remains the stability fallback pending
 multi-hour thermal and policy-quality gates.
+
+#### Trainer-process priority check
+
+Setting `OGRL_TRAINER_PRIORITY=above` had one startup failure; a retry measured
+1,001.5 wall SPS, effectively tied with normal priority at 1,000.4. An
+interleaved follow-up had the normal arm at 702.3 wall SPS and the AboveNormal
+arm failed during reset. This is not a stable causal gain. Keep the trainer at
+normal priority and retain only engine AboveNormal/`0xFFF`.
