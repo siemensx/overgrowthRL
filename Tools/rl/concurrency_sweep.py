@@ -35,12 +35,12 @@ from obs_schema import DEFAULT_LAYOUT, ObsLayout
 from env import ACTION_DIM
 
 
-def run_one_point(repo_root: str, level: str, n_envs: int, k_standby: int, act_period: int,
+def run_one_point(repo_root: str, levels: "str | list[str]", n_envs: int, k_standby: int, act_period: int,
                    max_episode_steps: int, warmup_seconds: float, measure_seconds: float,
                    shm_tag: str, layout: ObsLayout) -> dict:
     launch_start = time.monotonic()
     vec = VecOvergrowthEnv(
-        n_envs=n_envs, repo_root=repo_root, level=level, shm_prefix=f"/ogrl_sw{shm_tag}_",
+        n_envs=n_envs, repo_root=repo_root, level=levels, shm_prefix=f"/ogrl_sw{shm_tag}_",
         base_seed=20260817 + n_envs * 1000 + k_standby, layout=layout,
         frame_stack=1, max_episode_steps=max_episode_steps, k_standby=k_standby, act_period=act_period,
     )
@@ -88,7 +88,9 @@ def run_one_point(repo_root: str, level: str, n_envs: int, k_standby: int, act_p
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[2]))
-    p.add_argument("--level", default="arenas/oval_arena_1v1_unarmed.xml")
+    p.add_argument("--level", default=None, help="single level (legacy alias for --levels)")
+    p.add_argument("--levels", nargs="+", default=None,
+                   help="one or more levels dealt round-robin across active and standby engines")
     p.add_argument("--n-envs-grid", type=int, nargs="+", default=[2, 4, 6, 8])
     p.add_argument("--k-standby-grid", type=int, nargs="+", default=[0, 1, 2])
     p.add_argument("--act-period", type=int, default=4)
@@ -97,6 +99,8 @@ def main() -> int:
     p.add_argument("--measure-seconds", type=float, default=15.0)
     p.add_argument("--out", default=None)
     args = p.parse_args()
+
+    levels = args.levels or ([args.level] if args.level else ["arenas/oval_arena_1v1_unarmed.xml"])
 
     layout = DEFAULT_LAYOUT
     out_path = Path(args.out) if args.out else Path(args.repo_root) / "Tools/rl/runs" / f"concurrency_sweep_{int(time.time())}.csv"
@@ -113,7 +117,7 @@ def main() -> int:
                 shm_tag = f"{n_envs}k{k_standby}"
                 print(f"=== n_envs={n_envs} k_standby={k_standby} act_period={args.act_period} ===", flush=True)
                 result = run_one_point(
-                    args.repo_root, args.level, n_envs, k_standby, args.act_period,
+                    args.repo_root, levels, n_envs, k_standby, args.act_period,
                     args.max_episode_steps, args.warmup_seconds, args.measure_seconds, shm_tag, layout,
                 )
                 results.append(result)
