@@ -590,3 +590,17 @@ and do not broaden it based on the incomplete collector screens. The next
 safe test is an interleaved, thermal-captured, frozen-policy collector ABBA
 that separates priority from affinity and maps actual 165U EfficiencyClass
 before selecting a CPU mask.
+
+#### Topology follow-up
+
+`GetSystemCpuSetInformation` resolved the 165U mask instead of leaving
+`0xFFF` as an assumption: logical 0/1 and 10/11 are EfficiencyClass 1 on
+physical cores 0 and 10 (the two hyper-threaded P-cores); logical 2–9 are
+EfficiencyClass 0 E-cores; logical 12–13 are EfficiencyClass 0 LP-E-cores.
+Microsoft defines the higher EfficiencyClass as faster but less power-efficient
+([SYSTEM_CPU_SET_INFORMATION](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-system_cpu_set_information)).
+Therefore `0xFFF` includes both P-cores and all eight regular E-cores while
+excluding the two LP-E-cores; it is not a P-core-only mask. The untested P-core
+mask is `0xC03` (bits 0,1,10,11). It remains a diagnostic candidate only:
+restricting 14 engines to two physical P-cores may worsen contention, and it
+must be tested in an interleaved thermal ABBA before any adoption decision.
