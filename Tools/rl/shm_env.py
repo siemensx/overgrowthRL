@@ -259,7 +259,7 @@ non_finite_observation_count = 0  # module-level, process-wide -- see wait_for_o
 class Observation:
     step: int
     done: bool
-    values: list  # length == obs_floats; see RLObservation::FieldNames() for the layout
+    values: object  # owned ndarray by default; list when the compatibility gate is disabled
 
 
 class ShmEnv:
@@ -392,7 +392,17 @@ class ShmEnv:
             global non_finite_observation_count
             non_finite_observation_count += 1
             arr = np.where(np.isfinite(arr), arr, 0.0).astype("<f4")
-        values = arr.tolist()
+        # The old compatibility path converted the ndarray to a Python list,
+        # then env.py immediately converted it back with np.asarray(). That
+        # allocates thousands of Python float objects per decision and was
+        # directly identified as an advisor-ranked safe lever. The copy is
+        # essential: the frombuffer view aliases shared memory that the engine
+        # overwrites on its next publish. Set OGRL_SHM_ARRAY_FASTPATH=0 only
+        # for an explicit compatibility comparison.
+        if os.environ.get("OGRL_SHM_ARRAY_FASTPATH", "1") != "0":
+            values = arr.copy()
+        else:
+            values = arr.tolist()
         return Observation(step=header["step_counter"], done=bool(header["episode_done"]), values=values)
 
     def write_action(self, move_x: float, move_y: float, jump: bool, crouch: bool, attack: bool, grab: bool, drop: bool = False, walk: bool = False) -> None:
