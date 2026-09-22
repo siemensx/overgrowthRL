@@ -735,3 +735,15 @@ workers do not improve this host. Keep n18/k6 as the maximum-throughput
 candidate and n14/k4 as the stability fallback; do not promote n20/k4 or
 n22/k2. All probes used in-memory PPO updates and recorded
 `checkpoint_written=false`.
+
+#### Status-quo versus optimized benchmark
+
+With the same six maps, 45-second warmup, 90-second measurement, 512/128/1
+PPO batching, hard-reset-every 20, update threads 4, inter-op 1, and no
+checkpoint output, the valid status-quo retry (n14/k4, default priority and
+affinity) measured 720.8 wall SPS. The optimized n18/k6 point with AboveNormal
+and `0xFFF` measured 987.5 wall SPS, a 37.0% gain, with zero pool misses in
+both. The first baseline launch failed at startup and is excluded from the
+comparison. Treat n18/k6 + AboveNormal + `0xFFF` + 512/128/1 as the peak
+optimization candidate; n14/k4 remains the stability fallback pending
+multi-hour thermal and policy-quality gates.
