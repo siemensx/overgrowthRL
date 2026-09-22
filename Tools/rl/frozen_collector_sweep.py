@@ -27,6 +27,7 @@ from env import ACTION_DIM  # noqa: E402
 from obs_schema import DEFAULT_LAYOUT  # noqa: E402
 from ppo.normalize import ObservationNormalizer  # noqa: E402
 from ppo.policy import ActorCritic  # noqa: E402
+from async_vec_env import AsyncVecOvergrowthEnv  # noqa: E402
 from vec_env import VecOvergrowthEnv  # noqa: E402
 
 
@@ -58,55 +59,82 @@ def run(args: argparse.Namespace) -> dict:
     normalizer.load_state_dict(checkpoint["obs_normalizer"])
 
     tag = args.shm_tag or str(int(time.time()))
-    vec = VecOvergrowthEnv(
-        n_envs=args.workers,
-        repo_root=args.repo_root,
-        level=args.levels,
-        shm_prefix=f"/ogrl_fp_{tag}_",
-        base_seed=args.seed,
-        layout=layout,
-        frame_stack=frame_stack,
-        max_episode_steps=args.max_episode_steps,
-        k_standby=args.k_standby,
-        act_period=args.act_period,
-    )
+    env_type = AsyncVecOvergrowthEnv if args.collector == "async" else VecOvergrowthEnv
+    env_kwargs = {
+        "n_envs": args.workers,
+        "repo_root": args.repo_root,
+        "level": args.levels,
+        "shm_prefix": f"/ogrl_fp_{tag}_",
+        "base_seed": args.seed,
+        "layout": layout,
+        "frame_stack": frame_stack,
+        "max_episode_steps": args.max_episode_steps,
+        "act_period": args.act_period,
+    }
+    if args.collector == "sync":
+        env_kwargs["k_standby"] = args.k_standby
+    vec = env_type(**env_kwargs)
     try:
         raw_obs = vec.reset(seeds=[args.seed + i for i in range(args.workers)])
 
-        def step_once(obs: np.ndarray) -> tuple[np.ndarray, float]:
+        inference_seconds = 0.0
+
+        def policy_action(obs: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+            nonlocal inference_seconds
             normalized = normalizer.normalize(obs, update=False)
             tensor = torch.as_tensor(normalized, dtype=torch.float32)
             started = time.perf_counter()
             with torch.inference_mode():
-                actions, _log_prob, _entropy, _value = policy.get_action_and_value(tensor)
-            inference_seconds = time.perf_counter() - started
+                actions, log_prob, _entropy, value = policy.get_action_and_value(tensor)
+            inference_seconds += time.perf_counter() - started
             action_array = actions.detach().numpy().astype(np.float32, copy=False)
-            if action_array.shape != (args.workers, ACTION_DIM):
-                raise RuntimeError(f"policy returned {action_array.shape}, expected {(args.workers, ACTION_DIM)}")
-            next_obs, _rewards, _terminals, _truncateds, _infos = vec.step(action_array)
-            return next_obs, inference_seconds
+            expected_shape = (len(obs), ACTION_DIM)
+            if action_array.shape != expected_shape:
+                raise RuntimeError(f"policy returned {action_array.shape}, expected {expected_shape}")
+            return normalized, action_array, log_prob.detach().numpy(), value.detach().numpy()
 
-        warmup_deadline = time.monotonic() + args.warmup_seconds
-        while time.monotonic() < warmup_deadline:
-            raw_obs, _ = step_once(raw_obs)
+        if args.collector == "sync":
+            def step_once(obs: np.ndarray) -> np.ndarray:
+                _normalized, action_array, _log_prob, _value = policy_action(obs)
+                next_obs, _rewards, _terminals, _truncateds, _infos = vec.step(action_array)
+                return next_obs
 
-        transitions = 0
-        policy_batches = 0
-        inference_seconds = 0.0
-        measured_start = time.monotonic()
-        while time.monotonic() < measured_start + args.measure_seconds:
-            raw_obs, inference_time = step_once(raw_obs)
-            transitions += args.workers
-            policy_batches += 1
-            inference_seconds += inference_time
+            warmup_deadline = time.monotonic() + args.warmup_seconds
+            while time.monotonic() < warmup_deadline:
+                raw_obs = step_once(raw_obs)
+
+            transitions = 0
+            policy_batches = 0
+            measured_start = time.monotonic()
+            while time.monotonic() < measured_start + args.measure_seconds:
+                raw_obs = step_once(raw_obs)
+                transitions += args.workers
+                policy_batches += 1
+        else:
+            def act_fn(raw_batch: np.ndarray):
+                return policy_action(raw_batch)
+
+            warmup_deadline = time.monotonic() + args.warmup_seconds
+            while time.monotonic() < warmup_deadline:
+                vec.collect_rollout(args.rollout_steps, act_fn)
+
+            transitions = 0
+            policy_batches = 0
+            measured_start = time.monotonic()
+            while time.monotonic() < measured_start + args.measure_seconds:
+                rollout = vec.collect_rollout(args.rollout_steps, act_fn)
+                transitions += rollout.obs.shape[0] * rollout.obs.shape[1]
+                policy_batches += rollout.batches
         measured_seconds = time.monotonic() - measured_start
         perf = vec.drain_perf()
         return {
             "mode": "frozen_policy_collector",
+            "collector": args.collector,
             "checkpoint": str(args.checkpoint),
             "checkpoint_global_step": checkpoint.get("global_step"),
             "workers": args.workers,
             "k_standby": args.k_standby,
+            "rollout_steps": args.rollout_steps if args.collector == "async" else 1,
             "torch_threads": args.torch_threads,
             "torch_interop_threads": args.torch_interop_threads,
             "frame_stack": frame_stack,
@@ -138,6 +166,9 @@ def main() -> int:
     parser.add_argument("--levels", nargs="+", required=True)
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--k-standby", type=int, default=2)
+    parser.add_argument("--collector", choices=("sync", "async"), default="sync")
+    parser.add_argument("--rollout-steps", type=int, default=8,
+                        help="time-major transitions per worker per async rollout")
     parser.add_argument("--torch-threads", type=int, default=2)
     parser.add_argument("--torch-interop-threads", type=int, default=1)
     parser.add_argument("--frame-stack", type=int, default=4)
