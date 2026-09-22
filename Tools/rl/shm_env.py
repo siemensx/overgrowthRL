@@ -399,7 +399,7 @@ class ShmEnv:
         # essential: the frombuffer view aliases shared memory that the engine
         # overwrites on its next publish. Set OGRL_SHM_ARRAY_FASTPATH=0 only
         # for an explicit compatibility comparison.
-        if os.environ.get("OGRL_SHM_ARRAY_FASTPATH", "1") != "0":
+        if os.environ.get("OGRL_SHM_ARRAY_FASTPATH", "0") != "0":
             values = arr.copy()
         else:
             values = arr.tolist()
