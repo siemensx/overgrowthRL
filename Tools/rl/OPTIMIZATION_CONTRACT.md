@@ -692,6 +692,15 @@ so it is rejected for the current optimization candidate. It remains in the
 source and is available for a later heterogeneous-cost experiment; no async
 implementation was deleted or silently replaced.
 
+#### Reset-policy sweep
+
+On n18/k6 with the established AboveNormal/`0xFFF` and Torch 2/4/1 stack,
+hard-reset-every 50 measured 957.9 wall SPS, while disabling periodic hard
+resets measured 821.0 wall SPS. Both had zero pool misses; reset-50 had one
+startup retry. The established hard-reset-every 20 setting remains the fastest
+observed and retains the cleanup safety valve. Reject reset-0 and reset-50 as
+adoption changes; preserve hard-reset-every 20.
+
 #### Clean repeat and aligned worker sweep
 
 After correcting the resume path to the clean checkout, n18/k6 completed a
