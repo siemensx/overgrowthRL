@@ -702,6 +702,15 @@ misses. Use 512/128/1 for subsequent optimization probes, but do not change a
 long-run training default until policy-quality and sample-efficiency checks
 are complete.
 
+#### Thread and affinity follow-up
+
+At the 512/128/1 learner point, collection Torch thread-1 measured 996.0 wall
+SPS, effectively tied with thread-2 at 1,000.4. Thread-4 failed during reset
+because one live engine published no observation for 120 seconds. Expanding
+the engine affinity from `0xFFF` to all logical CPUs (`0x3FFF`) measured 971.5
+wall SPS, 2.9% slower. Retain collection threads 2 and `0xFFF`; record
+thread-4 as a startup reliability failure, not a throughput result.
+
 #### Reset-policy sweep
 
 On n18/k6 with the established AboveNormal/`0xFFF` and Torch 2/4/1 stack,
