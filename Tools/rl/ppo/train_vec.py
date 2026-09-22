@@ -339,14 +339,39 @@ def main():
         # The trainer itself also inherits BelowNormal from the scheduled task;
         # its single-threaded rollout inference sits on the collector's critical
         # path. OGRL_TRAINER_PRIORITY: normal (default) | above | high | inherit
+        # OGRL_TRAINER_AFFINITY: optional hexadecimal process mask, e.g. 0xFFF
+        # to keep the learner off the two LP-E logical CPUs. This is a soft,
+        # feature-gated scheduling experiment; it does not constrain engines,
+        # which apply their own affinity after launch.
         try:
             import ctypes
             _pri = os.environ.get("OGRL_TRAINER_PRIORITY", "normal").lower()
             _cls = {"normal": 0x20, "above": 0x8000, "high": 0x80}.get(_pri)
             if _cls:
-                ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), _cls)
+                if not ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), _cls):
+                    raise ctypes.WinError()
+            _mask_text = os.environ.get("OGRL_TRAINER_AFFINITY")
+            if _mask_text:
+                _k32 = ctypes.windll.kernel32
+                _k32.SetProcessAffinityMask.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+                _k32.SetProcessAffinityMask.restype = ctypes.c_int
+                _k32.GetProcessAffinityMask.argtypes = [
+                    ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_size_t)
+                ]
+                _k32.GetProcessAffinityMask.restype = ctypes.c_int
+                _handle = _k32.GetCurrentProcess()
+                _requested = ctypes.c_size_t(int(_mask_text, 16))
+                if not _k32.SetProcessAffinityMask(_handle, _requested):
+                    raise ctypes.WinError()
+                _applied = ctypes.c_size_t()
+                _system = ctypes.c_size_t()
+                if not _k32.GetProcessAffinityMask(_handle, ctypes.byref(_applied), ctypes.byref(_system)):
+                    raise ctypes.WinError()
+                if _applied.value != _requested.value:
+                    raise RuntimeError(f"requested {_mask_text}, Windows applied 0x{_applied.value:X}")
+                print(f"[trainer] affinity applied mask=0x{_applied.value:X}", flush=True)
         except Exception as _e:
-            print(f"[trainer] priority not applied: {_e}", flush=True)
+            print(f"[trainer] scheduling override not fully applied: {_e}", flush=True)
     torch.set_num_interop_threads(args.torch_interop_threads)
     torch.set_num_threads(args.collection_torch_threads)
     device = torch.device(args.device)
