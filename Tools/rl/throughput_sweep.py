@@ -136,6 +136,7 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
             except Exception:
                 pass
     win = [r for r in rows if ready_at is not None and r["t"] - ready_at >= args.warmup]
+    measured_rows = win[1:] if len(win) > 1 else []
     def col(k):
         return [r["perf"][k] for r in win if r.get("perf", {}).get(k) is not None]
     sps = col("steps_per_second_cycle")
@@ -149,12 +150,13 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
             "barrier_idle_per_worker_s": st.mean(col("barrier_idle_seconds") or [0]) / n_envs,
             "cycle_s": st.median(col("cycle_seconds") or [0]),
             "pool_miss_rate": (sum(col("pool_misses")) / max(1, sum(col("pool_misses")) + sum(col("pool_hits")))) if col("pool_hits") else None,
-            "recoveries": sum(col("recoveries")),
-            "valid_steps_measured": sum(col("valid_transition_count")),
-            "recovered_steps_measured": sum(col("recovered_transition_count")),
+            "recoveries": sum(r["perf"].get("recoveries", 0) for r in measured_rows),
+            "valid_steps_measured": sum(r["perf"].get("valid_transition_count", 0) for r in measured_rows),
+            "recovered_steps_measured": sum(r["perf"].get("recovered_transition_count", 0) for r in measured_rows),
             "steps_measured": (win[-1]["global_step"] - win[0]["global_step"]) if len(win) > 1 else 0,
             "wall_sps": ((win[-1]["global_step"] - win[0]["global_step"]) / (win[-1]["t"] - win[0]["t"])) if len(win) > 1 else 0,
-            "useful_wall_sps": (sum(col("valid_transition_count")) / (win[-1]["t"] - win[0]["t"])) if len(win) > 1 else 0,
+            "useful_wall_sps": (sum(r["perf"].get("valid_transition_count", 0) for r in measured_rows) /
+                                (win[-1]["t"] - win[0]["t"])) if len(win) > 1 else 0,
         })
     print(json.dumps(out), flush=True)
     for p in (() if args.no_checkpoint else (ckpt,)):

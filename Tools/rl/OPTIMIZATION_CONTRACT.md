@@ -771,3 +771,109 @@ Setting `OGRL_TRAINER_PRIORITY=above` had one startup failure; a retry measured
 interleaved follow-up had the normal arm at 702.3 wall SPS and the AboveNormal
 arm failed during reset. This is not a stable causal gain. Keep the trainer at
 normal priority and retain only engine AboveNormal/`0xFFF`.
+## Advisor audit: remaining optimization and correctness work (2026-09-21)
+
+The repaired `chatgpt-advisor` skill was given the implementation contract, operating
+manual, recent source history, benchmark artifacts, and the sustained n14/n18 results.
+Its conclusion is that the current n18/k6 candidate is a real improvement, but the
+optimization is not exhausted and the harness is not yet ready for an unattended
+production-training default.
+
+Observed evidence accepted by the audit:
+
+- Sustained n18/k6: 903.8 wall decisions/s after 60 s warmup and 300 s measurement,
+  zero pool misses.
+- Sustained n14/k4: 670.8 wall decisions/s under the same protocol, with 0.56% pool
+  misses. The robust observed gain is therefore +34.7%.
+- Short-window peaks near 987-1,006 decisions/s are not the sustained headline.
+- n18/k6 requires six standby engines to avoid the n18/k0 starvation regime. The
+  n18/k6 + engine AboveNormal + `0xFFF` + Torch 2/4/1 stack remains the leading
+  systems candidate, while n14/k4 remains the stability fallback.
+- 512 rollout steps / 128 minibatch / 1 PPO epoch is a useful systems probe, but is
+  not behavior-neutral relative to the default 256/256/4 PPO schedule. It must not
+  become the production training default without policy-quality and sample-efficiency
+  evidence.
+
+P0 work required before adoption or further claims:
+
+1. Repair benchmark accounting. `throughput_sweep.py` advances and scores from
+   `global_step` before recovery validity is established, so reported wall SPS can
+   include invalid/recovered transitions. Add `valid_transition_count`, useful SPS,
+   recovery counts, per-map episode accounting, and post-ready timing. Separate
+   recovery telemetry from legitimate timeout/outcome telemetry.
+2. Repair startup reliability. The 24-engine configurations intermittently leave an
+   engine alive but silent for 120 seconds. Replace simultaneous construction with
+   staged, map-balanced launch waves (six at a time), per-engine timeouts, explicit
+   ready counts, fresh IPC prefixes, retry counts, and exception-safe cleanup. A
+   speed point is not adoptable unless its startup/recovery ledger is clean.
+3. Fix the readiness/reset boundary. The first reset currently consumes a natural
+   startup observation instead of proving that the requested seed, difficulty,
+   opponents, and scenario were applied. Initialize to ready, then issue and verify
+   the requested reset before marking a worker ready.
+4. Audit worker-count migration. `throughput_sweep.py` currently sets
+   `OGRL_ALLOW_NENVS_CHANGE=1`; that is not by itself a documented or verified
+   reward-normalizer migration. Prove the normalizer state mapping or forbid worker
+   changes on resume.
+5. Complete the learner audit with `Tools/rl/ppo/train.py` and
+   `Tools/rl/ppo/vec_buffer.py`, then run the exact in-memory PPO path separately
+   from the environment-only speed instrument.
+
+Remaining safe levers, in priority order:
+
+- Windows multi-object wait for observation semaphores, feature-gated and preserving
+  bounded recovery semantics and worker ordering.
+- A NumPy shared-memory fast path that avoids `np.frombuffer(...).tolist()` followed
+  by list-to-array conversion, with owned copies, finite checks, and a preallocated
+  four-frame ring buffer.
+- Standby placement experiments: active engines AboveNormal/`0xFFF`; standby engines
+  Normal on LP-E or regular E cores, restoring the active mask/priority before ready.
+- Trainer soft CPU-set P-core preference, followed only if useful by a hard C03 test;
+  do not move engine affinity away from the validated `0xFFF` without measurement.
+- Verify the active Torch runtime with `torch.__config__.parallel_info()` and test
+  fixed versus dynamic thread settings rather than relying on environment folklore.
+- Verify HighQoS/execution-speed power state. The host already reports High
+  Performance, EPP 0, active cooling, and 100% core parking, so expected gain is low.
+- Use ETW/WPR or an equivalent profile to identify engine/AngelScript hotspots before
+  editing gameplay-adjacent code.
+
+Do not adopt: act-period reduction, physics/Bullet/contact changes, weakened
+non-finite checks, disabled hard resets, blanket Defender disablement, High or
+Realtime priority, thermal/BIOS-limit defeat, or a revived async collector. The
+current async probe was 37.3% slower than synchronous collection on the tested host.
+
+Advisor consultation status: completed successfully after one recoverable `NO_TAB`
+response and stale-lock cleanup; the repaired multi-file upload path worked. No source
+implementation was changed by the consultation itself. The next falsifiable gate is
+the repaired cold-start and useful-SPS harness, followed by paired post-ready n14/n18
+and lever-factorial runs.
+
+## Measurement-harness implementation pass (nested commit deffca9c)
+
+The first implementation pass after the audit is source-only infrastructure; it does
+not change gameplay, physics, action timing, reward semantics, or checkpoint output.
+
+- `OvergrowthEnv.reset()` now drains the natural post-load observation and then issues
+  the caller's requested reset even on the first call. The initial unrequested
+  episode is no longer counted as a training episode.
+- `VecOvergrowthEnv` launches engines in bounded waves of six by default, with
+  `OGRL_LAUNCH_WAVE_SIZE=0` retained as an explicit all-at-once comparison. A partial
+  constructor failure closes already-built engines.
+- Failed engine connection/schema/affinity launches now clean up their process and
+  write directory before raising. Windows affinity application checks the API return,
+  reads the applied mask back, and logs the PID/mask.
+- The trainer emits `[RL_READY]` only after active workers have completed the requested
+  initial reset. `throughput_sweep.py` waits for that barrier and starts warmup after
+  it, rather than charging engine startup against the timing window.
+- Recovery transitions are excluded from win/loss/timeout and curriculum episode
+  accounting. Per-update telemetry now includes recoveries, valid transitions, and
+  recovered transitions; the sweep reports useful wall SPS separately from raw PPO
+  global-step SPS.
+- Checkpoint worker-count migration is now explicit through
+  `--allow-n-envs-change`; the sweep passes that flag instead of silently injecting
+  `OGRL_ALLOW_NENVS_CHANGE`.
+
+Static checks and the 11-test checkpoint-safety suite pass. A Windows/Tailscale
+no-checkpoint smoke run at n2/k1 reached `[RL_READY]` in 5.0 s, produced 14 measured
+rows, 7,168 valid transitions before boundary-row correction, zero recoveries, and
+no checkpoint. The corrected cumulative accounting excludes the first boundary row;
+the next n14/n18 comparison is the first benchmark of this harness revision.
