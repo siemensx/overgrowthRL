@@ -176,10 +176,18 @@ class VecOvergrowthEnv:
         def _make(shm_suffix: str, seed: int, worker_level: str) -> OvergrowthEnv:
             # Darwin's shm/sem name limit (~31 bytes) constrains shm_prefix +
             # suffix length -- see rl_shm_transport.h. Keep shm_prefix short.
+            # Standby engines do reset work while active workers are stepping.
+            # On Windows, allow a controlled placement experiment that keeps
+            # active engines on the preferred CPUs and moves only standbys to
+            # efficiency cores. With no standby-specific variables, the
+            # process-wide settings retain the historical behavior.
+            is_standby = shm_suffix.startswith("s")
             return OvergrowthEnv(
                 repo_root=repo_root, level=worker_level, shm_name=f"{shm_prefix}{shm_suffix}",
                 controller_id=0, seed=seed, layout=layout,
                 reward_config=reward_config, frame_stack=frame_stack, act_period=act_period,
+                engine_priority=(os.environ.get("OGRL_STANDBY_PRIORITY") if is_standby else None),
+                engine_affinity=(os.environ.get("OGRL_STANDBY_AFFINITY") if is_standby else None),
                 equivalence_digest_path=(self.native_trace_dir / f"{shm_suffix}.jsonl") if self.native_trace_dir is not None else None,
                 equivalence_trace_path=(self.native_trace_dir / f"{shm_suffix}.input.jsonl") if self.native_trace_dir is not None else None,
                 extra_config_lines=list(self.engine_config_lines),

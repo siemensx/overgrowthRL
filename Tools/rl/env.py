@@ -110,6 +110,8 @@ class OvergrowthEnv:
         spectator_fov: float | None = None,
         extra_config_lines: list[str] | None = None,
         keep_artifacts: bool = False,
+        engine_priority: str | None = None,
+        engine_affinity: str | None = None,
     ):
         # act_period (OGRL-20260816-021 Sec 1.3(a)/2.2(a), Stage 6): decision
         # rate divisor -- 1 = every physics tick is a decision (120Hz, the
@@ -122,6 +124,12 @@ class OvergrowthEnv:
         self.spectator_fov = float(spectator_fov) if spectator_fov is not None else None
         self.extra_config_lines = list(extra_config_lines or [])
         self.keep_artifacts = bool(keep_artifacts)
+        # Optional per-engine overrides used by VecOvergrowthEnv for standby
+        # placement experiments. None preserves the process-wide environment
+        # defaults, so existing callers and the active-worker path are
+        # unchanged.
+        self.engine_priority = engine_priority
+        self.engine_affinity = engine_affinity
         # render=True is "watch mode" (Tools/rl/ppo/watch.py): a real window,
         # no --benchmark fast-forward, so wall-clock time and in-game time
         # match -- letting a human actually watch the character move at
@@ -300,13 +308,13 @@ class OvergrowthEnv:
             #   OGRL_ENGINE_PRIORITY: normal (default) | above | high | inherit
             #   OGRL_ENGINE_AFFINITY: hex mask, e.g. 0xFFF to keep 12C/14T
             #       Core Ultra engines off the two LP E-cores (CPUs 12-13)
-            pri = os.environ.get("OGRL_ENGINE_PRIORITY", "normal").lower()
+            pri = (self.engine_priority or os.environ.get("OGRL_ENGINE_PRIORITY", "normal")).lower()
             flags = {"normal": 0x00000020, "above": 0x00008000, "high": 0x00000080}.get(pri, 0)
             if flags:
                 popen_kwargs["creationflags"] = flags
         self._process = subprocess.Popen(command, cwd=self.repo_root, stdout=self._log_file, stderr=subprocess.STDOUT, **popen_kwargs)
         if sys.platform == "win32":
-            mask = os.environ.get("OGRL_ENGINE_AFFINITY")
+            mask = self.engine_affinity or os.environ.get("OGRL_ENGINE_AFFINITY")
             if mask:
                 try:
                     import ctypes
