@@ -39,13 +39,15 @@ def run_one_point(repo_root: str, levels: "str | list[str]", n_envs: int, k_stan
                    max_episode_steps: int, warmup_seconds: float, measure_seconds: float,
                    shm_tag: str, layout: ObsLayout) -> dict:
     launch_start = time.monotonic()
-    vec = VecOvergrowthEnv(
-        n_envs=n_envs, repo_root=repo_root, level=levels, shm_prefix=f"/ogrl_sw{shm_tag}_",
-        base_seed=20260817 + n_envs * 1000 + k_standby, layout=layout,
-        frame_stack=1, max_episode_steps=max_episode_steps, k_standby=k_standby, act_period=act_period,
-    )
+    vec = None
     launch_seconds = time.monotonic() - launch_start
     try:
+        vec = VecOvergrowthEnv(
+            n_envs=n_envs, repo_root=repo_root, level=levels, shm_prefix=f"/ogrl_sw{shm_tag}_",
+            base_seed=20260817 + n_envs * 1000 + k_standby, layout=layout,
+            frame_stack=1, max_episode_steps=max_episode_steps, k_standby=k_standby, act_period=act_period,
+        )
+        launch_seconds = time.monotonic() - launch_start
         vec.reset(seeds=[20260817 + i for i in range(n_envs)])
 
         def _burst(seconds: float) -> tuple[int, int]:
@@ -82,7 +84,8 @@ def run_one_point(repo_root: str, levels: "str | list[str]", n_envs: int, k_stan
             "episode_ends_during_measurement": 0, "error": str(exc),
         }
     finally:
-        vec.close()
+        if vec is not None:
+            vec.close()
 
 
 def main() -> int:
