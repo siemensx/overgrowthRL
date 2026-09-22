@@ -877,3 +877,18 @@ no-checkpoint smoke run at n2/k1 reached `[RL_READY]` in 5.0 s, produced 14 meas
 rows, 7,168 valid transitions before boundary-row correction, zero recoveries, and
 no checkpoint. The corrected cumulative accounting excludes the first boundary row;
 the next n14/n18 comparison is the first benchmark of this harness revision.
+
+## Standby LP-E placement (paused partial)
+
+Nested commit `35829ca3` adds per-engine Windows priority/affinity overrides for
+standby processes only. Active n18 workers retain AboveNormal and `0xFFF`;
+`OGRL_STANDBY_PRIORITY` and `OGRL_STANDBY_AFFINITY` can place reset standbys on
+the two LP-E logical CPUs (`0x3000`) without changing engine code or gameplay.
+
+The forward baseline arm completed at 1,018.562 useful transitions/s, with zero
+recoveries and zero pool misses, under the same six-map, 512/128/1, Torch 2/4/1,
+60 s post-ready warmup, 120 s measurement, no-checkpoint protocol. The LP-E
+standby arm reached `[RL_READY]` and its logs verified six standby processes
+with applied mask `0x3000`, but was intentionally interrupted by the owner
+after four update rows while relocating the computer. It has no valid measured
+throughput and was not adopted. Resume with a fresh paired ABBA comparison.
