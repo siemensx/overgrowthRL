@@ -643,6 +643,39 @@ inter-op 1. This candidate is for the next learner-shaped benchmark only; it
 does not alter a PPO default, resume checkpoint, worker-normalizer state, or
 training task.
 
+#### No-checkpoint PPO throughput correction
+
+The user clarified that optimization probes may run the real PPO loop and
+update policy parameters in memory, provided test checkpoints are never
+written. Nested commit `78d42e67` adds `throughput_sweep.py --no-checkpoint`:
+the resume checkpoint is read-only, no output checkpoint path is passed, and
+the probe records `checkpoint_written=false`.
+
+This resolves the apparent 505-versus-890 discrepancy. The frozen-policy n8
+collector number was not a replacement for training throughput. A matched
+real-PPO n14/k4 six-map probe produced 719.4 wall SPS for normal control and
+923.2 for AboveNormal+`0xFFF`, the same regime as the historical 890+ points.
+
+The real PPO worker screen showed n10/k2=777.9, n14/k4=830.4, n16/k2=836.4,
+and n18/k0=672.9 wall SPS; n18/k0 had 100% pool misses. Map-aligned n18/k6
+then produced 896.6 and a fresh retry produced 964.1 wall SPS, with p10=910.3
+and zero pool misses. The forward n14/k4 versus n18/k6 block measured 820.9
+versus 867.6 wall SPS. The reverse block failed in startup and is retained as
+harness evidence, not a speed result.
+
+Decision: the current real-PPO optimization candidate is n18/k6,
+AboveNormal+`0xFFF`, Torch threads 2/4/1. This supersedes the frozen n8/505
+collector candidate. It is still a bounded benchmark setting; a clean reverse
+repeat, thermal capture, correctness gate, and policy-quality gate remain
+before changing any unattended training launcher.
+
+An isolated n14/k4 rerun after n18/k6 produced 903.5 wall SPS, while the
+fresh n18/k6 retry produced 964.1. A live n18/k6 Torch-thread screen then
+measured threads 1=956.0 wall SPS, threads 2=822.4 in a warmer later slot,
+and threads 4 failed during startup. The earlier clean threads-2 point was
+964.1, so the thread result is order/thermal-sensitive; retain the established
+2/4/1 stack rather than switching to threads 4.
+
 #### Async collector result
 
 The asynchronous collector hypothesis was tested with the same frozen policy
