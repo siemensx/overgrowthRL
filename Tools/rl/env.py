@@ -163,7 +163,17 @@ class OvergrowthEnv:
         # (self._prev_values), never the stacked/returned array, since it
         # needs the actual current/previous readings, not a flattened window.
         self.frame_stack = max(1, frame_stack)
+        # Optional storage optimization for the hot observation path. The
+        # legacy deque+concatenate implementation remains the default until a
+        # paired benchmark proves that the preallocated ring preserves both
+        # throughput and the owned-array API expected by callers.
+        self._prealloc_frame_stack = os.environ.get("OGRL_PREALLOC_FRAME_STACK", "0") != "0"
         self._frame_stack_buffer: deque = deque(maxlen=self.frame_stack)
+        self._frame_stack_array = (
+            np.empty((self.frame_stack, self.layout.total_floats), dtype=np.float32)
+            if self._prealloc_frame_stack else None
+        )
+        self._frame_stack_initialized = False
         self.binary_path = paths.engine_binary(self.repo_root, binary_path)
         self._launch_timeout = launch_timeout_seconds
 
@@ -410,6 +420,18 @@ class OvergrowthEnv:
 
     def _stacked(self, values: list) -> np.ndarray:
         frame = np.asarray(values, dtype=np.float32)
+        if self._prealloc_frame_stack:
+            frame = frame.reshape(self.layout.total_floats)
+            if not self._frame_stack_initialized:
+                self._frame_stack_array[...] = frame
+                self._frame_stack_initialized = True
+            else:
+                if self.frame_stack > 1:
+                    np.copyto(self._frame_stack_array[:-1], self._frame_stack_array[1:])
+                np.copyto(self._frame_stack_array[-1], frame)
+            # Return an owned array just like np.concatenate did; callers may
+            # retain observations after the next engine step mutates the ring.
+            return self._frame_stack_array.reshape(-1).copy()
         self._frame_stack_buffer.append(frame)
         while len(self._frame_stack_buffer) < self.frame_stack:
             # Startup padding: repeat the first frame rather than zero-fill,
@@ -448,7 +470,10 @@ class OvergrowthEnv:
         self.last_reset_seed = reset_seed
         self._prev_values = obs.values
         self._episode_steps = 0
-        self._frame_stack_buffer.clear()
+        if self._prealloc_frame_stack:
+            self._frame_stack_initialized = False
+        else:
+            self._frame_stack_buffer.clear()
         self.reward_computer.reset_episode()  # clears the stall-tax streak (OGRL-20260816-018) -- otherwise a
                                                 # stall run from the tail of one episode taxes the start of the next
         return self._stacked(obs.values)
