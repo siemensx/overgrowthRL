@@ -526,3 +526,67 @@ and thermal performance-limit samples as diagnostics. Historical `run23_sel0`
 telemetry is preserved as an anchor but is not a causal A/B because it used
 three maps, collection threads=1, and hard-reset-every=50; current run25 uses
 six maps, threads=2/4/1, and hard-reset-every=20.
+
+#### OGRL-20260921-006 — optimization-only correction and collector screen
+
+The scheduled run above was launched before this takeover turn's optimization-
+only boundary was made explicit. It was stopped cleanly over Tailscale, not
+force-killed. The first Windows control write used PowerShell's UTF-8 BOM;
+Python's `json.loads(read_text())` rejected that file and continued polling
+normally. Rewriting the control file as BOM-free UTF-8 produced the expected
+`stop_requested` and `run_stop` events. The completed manifest records
+`final_global_step=268402396`. The task is `Ready`, and the trainer has no
+remaining `python.exe` or `Overgrowth.exe` process. No regular training is
+authorized or running after this point; all following work in this phase is
+measurement, source audit, or harness work.
+
+The repaired `$chatgpt-advisor` skill was tested through
+`skill/bin/chatgpt-advisor`, not the private driver. `doctor` passed with the
+dedicated advisor tab, login, composer, and High reasoning available. A real
+`ask` uploaded four files using four repeated `--file` options; the returned
+JSON had `ok=true`, `state=COMPLETE`, and explicitly distinguished all four
+preserved paths. Session `20260921-165327-986529` completed in 351.5 seconds.
+The advisor's stale-state warning was correct for the evidence bundle's time
+of capture and is superseded by the stop proof above. The old direct-driver
+path was not used.
+
+The existing `throughput_sweep.py` is barred in optimization-only mode: it
+launches `train_vec.py` with `--n-epochs 1` and performs PPO updates. A
+separate collector-only screen was therefore run after the stop gate. The
+six-map worker/standby screen tested n=1/2/4/6/8/10 with k=0/2, act-period 4,
+8-second warmup and 25-second measurement. The complete normal/no-affinity
+arm peaked at n8/k2 = 488.3 decisions/s; n10/k2 fell to 402.4. AboveNormal
+without affinity reached 515.5 at n6/k2 but was order-dependent and later
+failed to launch n8/k2. AboveNormal plus `0xFFF` reached 434.5 at n2/k2 and
+failed at n6/k0. These candidate arms are preserved as incomplete negative
+evidence, not adoption evidence. The robust result is that k=2 helped the
+collector screen and too many active workers hurt; this cannot be transplanted
+to a PPO resume because reward-normalizer state is per active worker.
+
+A frozen Windows policy forward microbenchmark used the run24 checkpoint and
+fresh processes: 1/2/4 intra-op threads produced 3924.3/3991.6/3958.4
+forward calls/s. The +1.7% two-thread burst is below a causal adoption claim;
+five repeated in-process changes converged near 1.81–1.82k for all settings.
+The existing collection=2 setting remains reasonable and no thread setting is
+changed from this test.
+
+The Windows trainer is already at the software cooling ceiling: High
+performance, AC min/max processor state 100%, active cooling, aggressive
+boost, EPP 0, and 100% core parking. Captures reported 90% maximum frequency
+and 90% performance limit. This is consistent with the documented firmware
+power-safety ceiling; no stronger software cooling lever was found.
+
+The collector harness now accepts an explicit map corpus and records a launch
+failure as a point-level error rather than aborting the entire screen. This
+source-only change is nested commit `e2f9cbb9`, deployed to the clean Windows
+checkout; it does not alter engine or learner semantics. Raw evidence and the
+next no-training levers are in
+`research-artifacts/OGRL-20260921-006-optimization/README.md`.
+
+Decision after this experiment: keep the prior n14/k4 + above/`0xFFF`
+configuration only as a provisional benchmark candidate from the earlier
+longer matched diagnostic; do not claim it as final, do not launch training,
+and do not broaden it based on the incomplete collector screens. The next
+safe test is an interleaved, thermal-captured, frozen-policy collector ABBA
+that separates priority from affinity and maps actual 165U EfficiencyClass
+before selecting a CPU mask.
