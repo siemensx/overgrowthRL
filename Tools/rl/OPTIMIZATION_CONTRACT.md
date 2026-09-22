@@ -988,3 +988,14 @@ The optimization candidate remains n18/k6, engine AboveNormal with affinity
 in-memory PPO updates and `checkpoint_written=false`. No unattended training
 task was started, no gameplay/physics semantics were changed, and no test
 checkpoint was written.
+
+## Per-map transition telemetry
+
+The global standby pool deliberately lets an engine keep its own map while it
+swaps vector slots. That is fast, but startup engine-count alignment alone does
+not prove that transitions remain balanced across the six-map corpus over a long
+run. Nested source now records valid and recovered transition counts keyed by
+the actual `info["level"]` in every PPO update. This is telemetry only; it does
+not change pool scheduling, map assignment, resets, or gameplay. A future
+training gate must inspect these counters before accepting a long run. The
+implementation passed `py_compile` and the 11-test checkpoint-safety suite.

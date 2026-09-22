@@ -81,6 +81,8 @@ def _perf_with_reset_share(perf: dict, cycle_seconds: float) -> dict:
         "recoveries": perf.get("recoveries", 0),
         "valid_transition_count": perf.get("valid_transition_count", perf["step_count"]),
         "recovered_transition_count": perf.get("recovered_transition_count", 0),
+        "map_transition_counts": perf.get("map_transition_counts", {}),
+        "map_recovered_transition_counts": perf.get("map_recovered_transition_counts", {}),
         "step_wall_seconds": perf["step_wall_seconds"],
         "worker_wait_seconds": perf.get("worker_wait_seconds", 0.0),
         "step_count": perf["step_count"],

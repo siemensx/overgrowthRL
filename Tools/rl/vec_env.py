@@ -218,6 +218,12 @@ class VecOvergrowthEnv:
         self._recoveries_since_drain = 0
         self._valid_transition_count = 0
         self._recovered_transition_count = 0
+        # A standby carries its level when it swaps vector slots. Track the
+        # actual map attached to every transition so six-map alignment cannot
+        # be mistaken for per-map balance after a long run. This is telemetry
+        # only: the global pool and its scheduling semantics remain unchanged.
+        self._map_transition_counts: dict[str, int] = {}
+        self._map_recovered_transition_counts: dict[str, int] = {}
         self._shm_prefix = shm_prefix
         wave_size = int(os.environ.get("OGRL_LAUNCH_WAVE_SIZE", "6"))
         if wave_size <= 0:
@@ -301,6 +307,8 @@ class VecOvergrowthEnv:
                 "recoveries": self._recoveries_since_drain,
                 "valid_transition_count": self._valid_transition_count,
                 "recovered_transition_count": self._recovered_transition_count,
+                "map_transition_counts": dict(self._map_transition_counts),
+                "map_recovered_transition_counts": dict(self._map_recovered_transition_counts),
                 "step_wall_seconds": self._step_wall_seconds,
                 "worker_wait_seconds": self._worker_wait_seconds,
                 "step_count": self._step_count,
@@ -317,6 +325,8 @@ class VecOvergrowthEnv:
             self._recoveries_since_drain = 0
             self._valid_transition_count = 0
             self._recovered_transition_count = 0
+            self._map_transition_counts.clear()
+            self._map_recovered_transition_counts.clear()
             self._step_latencies.clear()
             self._reset_blocking_seconds = 0.0
             self._step_wall_seconds = 0.0
@@ -555,6 +565,16 @@ class VecOvergrowthEnv:
         terminals = np.array([r[2] for r in results], dtype=bool)
         truncateds = np.array([r[3] for r in results], dtype=bool)
         infos = [r[4] for r in results]
+        with self._perf_lock:
+            for info in infos:
+                level = info.get("level")
+                if not level:
+                    continue
+                level_key = str(level)
+                target = (self._map_recovered_transition_counts
+                          if info.get("worker_recovered")
+                          else self._map_transition_counts)
+                target[level_key] = target.get(level_key, 0) + 1
         for info, r in zip(infos, results):
             info["terminal_observation"] = r[5]
         return obs, rewards, terminals, truncateds, infos
