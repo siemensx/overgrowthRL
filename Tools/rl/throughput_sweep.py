@@ -56,7 +56,7 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
            "--shm-prefix", shm_prefix, "--n-envs", str(n_envs), "--k-standby", str(k_standby),
            "--seed", "7", "--resume-from", args.resume_from,
            "--run-id", run_id, "--total-timesteps", "4000000000",
-           "--n-steps", "256", "--n-epochs", "1", "--minibatch-size", "128",
+           "--n-steps", str(args.n_steps), "--n-epochs", str(args.n_epochs), "--minibatch-size", str(args.minibatch_size),
            "--entropy-coef", "0.003", "--entropy-coef-final", "0.003", "--entropy-anneal-steps", "1000000",
            "--learning-rate", "0.0003", "--target-kl", "0.02", "--max-episode-steps", "1200",
            "--frame-stack", "4", "--act-period", "4", "--soft-reset",
@@ -138,6 +138,12 @@ def main() -> int:
                     help="PyTorch inter-op threads")
     ap.add_argument("--hard-reset-every", type=int, default=50,
                     help="periodic hard-reset interval for soft-reset throughput tests")
+    ap.add_argument("--n-steps", type=int, default=256,
+                    help="rollout horizon per environment for the PPO update")
+    ap.add_argument("--n-epochs", type=int, default=1,
+                    help="PPO optimization epochs per rollout")
+    ap.add_argument("--minibatch-size", type=int, default=128,
+                    help="PPO minibatch size")
     ap.add_argument("--tag", default=time.strftime("%Y%m%d_%H%M"))
     ap.add_argument("--out", default=None)
     ap.add_argument("--no-checkpoint", action="store_true",
