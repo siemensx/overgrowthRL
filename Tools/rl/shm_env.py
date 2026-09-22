@@ -50,6 +50,10 @@ if _IS_WINDOWS:
     _k32.OpenSemaphoreW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
     _k32.WaitForSingleObject.restype = wintypes.DWORD
     _k32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    _k32.WaitForMultipleObjects.restype = wintypes.DWORD
+    _k32.WaitForMultipleObjects.argtypes = [
+        wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE), wintypes.BOOL, wintypes.DWORD
+    ]
     _k32.ReleaseSemaphore.restype = wintypes.BOOL
     _k32.ReleaseSemaphore.argtypes = [wintypes.HANDLE, ctypes.c_long, ctypes.POINTER(ctypes.c_long)]
     _k32.CloseHandle.argtypes = [wintypes.HANDLE]
@@ -88,6 +92,9 @@ if _IS_WINDOWS:
         return h if h else None
 
     _WAIT_TIMEOUT = 0x00000102
+    _WAIT_OBJECT_0 = 0x00000000
+    _WAIT_FAILED = 0xFFFFFFFF
+    _MAXIMUM_WAIT_OBJECTS = 64
 
     # ctypes without argtypes/restype re-derives conversions on every call;
     # these two run 2x per engine step (2026-09-20 profile: _sem_post 54 s / 100 updates).
@@ -103,6 +110,41 @@ if _IS_WINDOWS:
         """True if acquired, False on timeout. None means wait forever."""
         ms = _INFINITE if timeout_s is None else max(0, int(timeout_s * 1000))
         return _k32.WaitForSingleObject(sem, ms) != _WAIT_TIMEOUT
+
+    def _sem_wait_many(sems, timeout_s: float | None = None) -> tuple[list[int], list[int]]:
+        """Wait on many semaphore handles with one Windows wait set.
+
+        Wait-any is repeated until every handle has been acquired. This keeps
+        the protocol identical to N independent WaitForSingleObject calls --
+        each semaphore is consumed exactly once -- while moving the wakeup
+        arbitration into the kernel. The returned indices are acquired and
+        still-pending; a timeout is therefore recoverable per worker by the
+        existing VecOvergrowthEnv path.
+        """
+        if len(sems) > _MAXIMUM_WAIT_OBJECTS:
+            raise ValueError(f"Windows wait set has {len(sems)} handles; maximum is {_MAXIMUM_WAIT_OBJECTS}")
+        pending = list(range(len(sems)))
+        acquired: list[int] = []
+        deadline = None if timeout_s is None else time.perf_counter() + timeout_s
+        while pending:
+            if deadline is None:
+                timeout_ms = _INFINITE
+            else:
+                timeout_ms = max(0, int(max(0.0, deadline - time.perf_counter()) * 1000))
+            handles = (wintypes.HANDLE * len(pending))(*[
+                int(sems[i].value) if hasattr(sems[i], "value") else int(sems[i])
+                for i in pending
+            ])
+            result = _k32.WaitForMultipleObjects(len(pending), handles, False, timeout_ms)
+            if _WAIT_OBJECT_0 <= result < _WAIT_OBJECT_0 + len(pending):
+                acquired.append(pending.pop(result - _WAIT_OBJECT_0))
+                continue
+            if result == _WAIT_TIMEOUT:
+                break
+            if result == _WAIT_FAILED:
+                raise ctypes.WinError(ctypes.get_last_error())
+            raise RuntimeError(f"WaitForMultipleObjects returned unexpected status 0x{result:X}")
+        return acquired, pending
 
     def _sem_post(sem) -> None:
         _k32.ReleaseSemaphore(sem, 1, None)
@@ -185,6 +227,17 @@ else:
                 time.sleep(0.0002)
             else:
                 time.sleep(0.005)
+
+    def _sem_wait_many(sems, timeout_s: float | None = None) -> tuple[list[int], list[int]]:
+        """Portable fallback used only by tests; Windows owns the optimization."""
+        acquired: list[int] = []
+        pending: list[int] = []
+        for i, sem in enumerate(sems):
+            if _sem_wait(sem, timeout_s):
+                acquired.append(i)
+            else:
+                pending.append(i)
+        return acquired, pending
 
     def _sem_post(sem) -> None:
         _libc.sem_post(sem)
@@ -278,6 +331,7 @@ class ShmEnv:
         self._mm: mmap.mmap | None = None
         self._obs_sem = None
         self._action_sem = None
+        self._observation_ready = False
         self._connect(connect_retries, connect_retry_delay)
 
     def _connect(self, retries: int, delay: float) -> None:
@@ -356,7 +410,12 @@ class ShmEnv:
         """
         if timeout_s is None:
             timeout_s = _DEFAULT_WAIT_TIMEOUT
-        if not _sem_wait(self._obs_sem, timeout_s):
+        if self._observation_ready:
+            # VecOvergrowthEnv's Windows batch-wait path already consumed this
+            # semaphore. Keep all observation decoding and validation below in
+            # one place so the optimization cannot change wire semantics.
+            self._observation_ready = False
+        elif not _sem_wait(self._obs_sem, timeout_s):
             raise ShmWaitTimeout(
                 f"engine {self._name} published no observation within {timeout_s}s. "
                 f"It is alive but silent, or has stopped stepping; the caller should "

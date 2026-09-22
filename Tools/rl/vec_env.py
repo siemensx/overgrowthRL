@@ -56,7 +56,7 @@ from typing import Sequence, Callable
 
 import numpy as np
 
-from shm_env import ShmWaitTimeout
+from shm_env import ShmWaitTimeout, _DEFAULT_WAIT_TIMEOUT, _sem_wait_many
 from env import OvergrowthEnv, ACTION_DIM
 from obs_schema import ObsLayout, DEFAULT_LAYOUT
 from reward import RewardConfig
@@ -379,11 +379,32 @@ class VecOvergrowthEnv:
         truncation-bootstrap treatment train.py's single-env loop does."""
         actions = np.asarray(actions, dtype=np.float32).reshape(self.n_envs, ACTION_DIM)
 
+        # A synchronous VecEnv already waits for the slowest worker. On
+        # Windows, replace N Python threads each calling WaitForSingleObject
+        # with one kernel wait set when explicitly enabled. The default stays
+        # unchanged until a paired throughput/equivalence check adopts it.
+        batch_wait_enabled = sys.platform == "win32" and os.environ.get("OGRL_BATCH_WAIT", "0") != "0"
+        batch_actions_written = False
+        if batch_wait_enabled:
+            for env, action in zip(self.envs, actions):
+                env.write_action(action)
+            batch_started = time.perf_counter()
+            acquired, pending = _sem_wait_many(
+                [env._shm._obs_sem for env in self.envs], _DEFAULT_WAIT_TIMEOUT
+            )
+            batch_elapsed = time.perf_counter() - batch_started
+            for i in acquired:
+                self.envs[i]._shm._observation_ready = True
+                self.envs[i].last_wait_seconds = batch_elapsed
+            for i in pending:
+                self.envs[i].last_wait_seconds = batch_elapsed
+            batch_actions_written = True
+
         def _step_one(i: int):
             worker_start = time.perf_counter()
             blocking_reset_seconds = 0.0
             try:
-                obs, reward, done, info = self.envs[i].step(actions[i])
+                obs, reward, done, info = self.envs[i].step(actions[i], action_already_written=batch_actions_written)
             except ShmWaitTimeout as exc:
                 # A worker went silent. Before bounded waits existed this parked
                 # the trainer in sem_wait forever at 0% CPU with every health

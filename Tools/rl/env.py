@@ -453,14 +453,25 @@ class OvergrowthEnv:
                                                 # stall run from the tail of one episode taxes the start of the next
         return self._stacked(obs.values)
 
-    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, dict]:
+    def write_action(self, action: np.ndarray) -> None:
+        """Publish an action without waiting for its observation.
+
+        VecOvergrowthEnv uses this only behind the Windows batch-wait feature
+        flag. Keeping the conversion here preserves the exact action wire
+        format of the ordinary step path.
+        """
         action = np.asarray(action, dtype=np.float32).reshape(ACTION_DIM)
         move_x, move_y = float(action[0]), float(action[1])
         buttons = [bool(v > 0.5) for v in action[2:8]]
         self._shm.write_action(move_x, move_y, buttons[0], buttons[1], buttons[2], buttons[3], buttons[4], buttons[5])
+
+    def step(self, action: np.ndarray, action_already_written: bool = False) -> tuple[np.ndarray, float, bool, dict]:
+        if not action_already_written:
+            self.write_action(action)
         _tw = time.perf_counter()
         obs = self._shm.wait_for_observation()
-        self.last_wait_seconds = time.perf_counter() - _tw   # engine sim + IPC + scheduling, no Python
+        if not action_already_written:
+            self.last_wait_seconds = time.perf_counter() - _tw   # engine sim + IPC + scheduling, no Python
         self._episode_steps += 1
 
         reward, reward_info = self.reward_computer.compute(self._prev_values, obs.values)
