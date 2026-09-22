@@ -109,7 +109,14 @@ if _IS_WINDOWS:
     def _sem_wait(sem, timeout_s: float | None = None) -> bool:
         """True if acquired, False on timeout. None means wait forever."""
         ms = _INFINITE if timeout_s is None else max(0, int(timeout_s * 1000))
-        return _k32.WaitForSingleObject(sem, ms) != _WAIT_TIMEOUT
+        result = _k32.WaitForSingleObject(sem, ms)
+        if result == _WAIT_OBJECT_0:
+            return True
+        if result == _WAIT_TIMEOUT:
+            return False
+        if result == _WAIT_FAILED:
+            raise ctypes.WinError(ctypes.get_last_error())
+        raise RuntimeError(f"WaitForSingleObject returned unexpected status 0x{result:X}")
 
     def _sem_wait_many(sems, timeout_s: float | None = None) -> tuple[list[int], list[int]]:
         """Wait on many semaphore handles with one Windows wait set.

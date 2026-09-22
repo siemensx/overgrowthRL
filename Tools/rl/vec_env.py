@@ -157,6 +157,10 @@ class VecOvergrowthEnv:
         self._worker_wait_seconds = 0.0   # sum over workers of time blocked in sem_wait (engine+IPC), per update
         self._step_count = 0
         self.k_standby = max(0, k_standby)
+        self._active_engine_priority = os.environ.get("OGRL_ENGINE_PRIORITY", "normal")
+        self._active_engine_affinity = os.environ.get("OGRL_ENGINE_AFFINITY")
+        self._standby_engine_priority = os.environ.get("OGRL_STANDBY_PRIORITY", self._active_engine_priority)
+        self._standby_engine_affinity = os.environ.get("OGRL_STANDBY_AFFINITY", self._active_engine_affinity)
         self._pool = ThreadPoolExecutor(max_workers=n_envs + max(1, self.k_standby), thread_name_prefix="ogrl-vec-env")
         # Dedicated to background resets of retired envs -- deliberately
         # separate from self._pool so a burst of background resets can never
@@ -498,6 +502,17 @@ class VecOvergrowthEnv:
                     # again, no ordering assumption needed.
                     retiring_env = self.envs[i]
                     self.envs[i] = standby.env
+                    # Restore the promoted engine to the active role before
+                    # its first action, and move the retired active engine to
+                    # the standby role before its background reset. Without
+                    # this transition, a standby-only affinity test silently
+                    # turns promoted workers into permanent LP-E stragglers.
+                    self.envs[i].apply_engine_scheduling(
+                        self._active_engine_priority, self._active_engine_affinity, "promote"
+                    )
+                    retiring_env.apply_engine_scheduling(
+                        self._standby_engine_priority, self._standby_engine_affinity, "retire"
+                    )
                     obs = standby.obs
                     self._episode_scenario[i] = standby.scenario
                     self._episode_seed[i] = standby.env.last_reset_seed

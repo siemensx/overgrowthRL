@@ -324,29 +324,14 @@ class OvergrowthEnv:
                 popen_kwargs["creationflags"] = flags
         self._process = subprocess.Popen(command, cwd=self.repo_root, stdout=self._log_file, stderr=subprocess.STDOUT, **popen_kwargs)
         if sys.platform == "win32":
-            mask = self.engine_affinity or os.environ.get("OGRL_ENGINE_AFFINITY")
-            if mask:
-                try:
-                    import ctypes
-                    h = ctypes.windll.kernel32.OpenProcess(0x0200 | 0x0400, False, self._process.pid)  # SET_INFORMATION|QUERY_INFORMATION
-                    if h:
-                        requested_mask = ctypes.c_size_t(int(mask, 16))
-                        if not ctypes.windll.kernel32.SetProcessAffinityMask(h, requested_mask):
-                            raise ctypes.WinError()
-                        applied_mask = ctypes.c_size_t()
-                        system_mask = ctypes.c_size_t()
-                        if not ctypes.windll.kernel32.GetProcessAffinityMask(
-                            h, ctypes.byref(applied_mask), ctypes.byref(system_mask)
-                        ):
-                            raise ctypes.WinError()
-                        if applied_mask.value != requested_mask.value:
-                            raise RuntimeError(
-                                f"requested {mask}, Windows applied 0x{applied_mask.value:X}"
-                            )
-                        print(f"[env] affinity applied pid={self._process.pid} mask=0x{applied_mask.value:X}", flush=True)
-                        ctypes.windll.kernel32.CloseHandle(h)
-                except Exception as _e:  # never let a scheduling tweak break a launch
-                    print(f"[env] affinity {mask} not applied: {_e}", flush=True)
+            try:
+                self._apply_windows_scheduling(
+                    self.engine_priority or os.environ.get("OGRL_ENGINE_PRIORITY", "normal"),
+                    self.engine_affinity or os.environ.get("OGRL_ENGINE_AFFINITY"),
+                    "launch",
+                )
+            except Exception as _e:  # never let a scheduling tweak break a launch
+                print(f"[env] scheduling override not applied: {_e}", flush=True)
 
         deadline = time.perf_counter() + self._launch_timeout
         last_error = None
@@ -368,6 +353,62 @@ class OvergrowthEnv:
             self._fail_launch(f"obs_floats mismatch: engine publishes {self._shm.obs_floats}, this layout expects {self.layout.total_floats}")
         if self._shm.schema_version != SCHEMA_VERSION:
             self._fail_launch(f"schema_version mismatch: engine publishes {self._shm.schema_version}, obs_schema.py expects {SCHEMA_VERSION} -- rebuild the engine or update obs_schema.py")
+
+    def _apply_windows_scheduling(self, priority: str | None, affinity: str | None, reason: str) -> None:
+        """Apply and verify a live engine's optional Windows scheduling role."""
+        if sys.platform != "win32" or self._process is None:
+            return
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        k32.SetPriorityClass.restype = ctypes.c_int
+        k32.GetPriorityClass.argtypes = [ctypes.c_void_p]
+        k32.GetPriorityClass.restype = ctypes.c_uint32
+        k32.SetProcessAffinityMask.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+        k32.SetProcessAffinityMask.restype = ctypes.c_int
+        k32.GetProcessAffinityMask.argtypes = [
+            ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_size_t)
+        ]
+        k32.GetProcessAffinityMask.restype = ctypes.c_int
+        h = k32.OpenProcess(0x0200 | 0x0400, False, self._process.pid)  # SET_INFORMATION|QUERY_INFORMATION
+        if not h:
+            raise ctypes.WinError()
+        try:
+            priority_classes = {"normal": 0x00000020, "above": 0x00008000, "high": 0x00000080}
+            cls = priority_classes.get((priority or "").lower())
+            if cls is not None and not k32.SetPriorityClass(h, cls):
+                raise ctypes.WinError()
+            applied_mask = None
+            if affinity:
+                requested_mask = ctypes.c_size_t(int(affinity, 16))
+                if not k32.SetProcessAffinityMask(h, requested_mask):
+                    raise ctypes.WinError()
+                system_mask = ctypes.c_size_t()
+                applied_mask = ctypes.c_size_t()
+                if not k32.GetProcessAffinityMask(h, ctypes.byref(applied_mask), ctypes.byref(system_mask)):
+                    raise ctypes.WinError()
+                if applied_mask.value != requested_mask.value:
+                    raise RuntimeError(f"requested {affinity}, Windows applied 0x{applied_mask.value:X}")
+            applied_priority = k32.GetPriorityClass(h)
+            if not applied_priority:
+                raise ctypes.WinError()
+            print(
+                f"[env] scheduling applied reason={reason} pid={self._process.pid} "
+                f"priority=0x{applied_priority:X} "
+                f"affinity={f'0x{applied_mask.value:X}' if applied_mask is not None else 'unchanged'}",
+                flush=True,
+            )
+        finally:
+            k32.CloseHandle(h)
+
+    def apply_engine_scheduling(self, priority: str | None, affinity: str | None, reason: str) -> None:
+        """Move a live engine between active and standby scheduling roles."""
+        self.engine_priority = priority
+        self.engine_affinity = affinity
+        try:
+            self._apply_windows_scheduling(priority, affinity, reason)
+        except Exception as exc:  # scheduling is optional; gameplay must continue
+            print(f"[env] scheduling role {reason} not applied for {self.shm_name}: {exc}", flush=True)
 
     def _fail_launch(self, message: str) -> None:
         """Terminate and clean a partially-started engine before reporting failure."""
