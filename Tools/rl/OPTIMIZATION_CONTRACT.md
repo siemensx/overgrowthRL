@@ -1398,3 +1398,66 @@ on a two-point linear-drift assumption and is not a significance test. The
 direction is also consistent with both unadjusted local contrasts (T2 below
 the adjacent T1 point). Therefore the evidence remains negative for adopting
 T2 at n20/k4, while the broader thread/worker family remains partial.
+
+## OGRL-20260923-006 — PGO provenance audit and n2 viability failure
+
+**Timestamp:** 2026-09-23 12:21 PDT. **Host:** Windows trainer, Dell Latitude
+7450 / Core Ultra 7 165U. Instrumented Release executable
+`C:\ogrl\optimization\BuildWinPGOInstrument_20260923\Release\Overgrowth.exe`,
+14,204,416 bytes, SHA-256
+`9484da1dd3da18c1d824577335730a5f0770a669b974a2a23e1aa24cb772da5d`. Static
+provenance was confirmed from the build's CMake cache and MSBuild command
+logs. The instrumented engine was built from source commit
+`5c4e21d0be39e3872d3fd6e3f1acf444fb6231e2`; the no-checkpoint trainer/harness
+used commit `e759420e5ace7d5f48f44f31a83050fa18b7ad14`. Flags:
+`RL_MSVC_PGO_MODE=INSTRUMENT`, `RL_WINDOWS_FIXED_BASE=ON`,
+`BUILD_SERVER=OFF`; engine C++ command includes `/GL`; final link command
+includes `/LTCG:incremental /GENPROFILE:EXACT,PGD=C:/ogrl/optimization/pgo_20260923/Overgrowth.pgd`
+and `/DYNAMICBASE:NO`. Matching MSVC 14.44 `pgort140.dll` and `pgosweep.exe`
+were present; `pgosweep` reports version 14.44.35219.0. `profiles/` contained
+no prior PGC files.
+
+Following the advisor's bounded viability sequence, ran the instrumented
+binary at n2/k0, launch wave 1, normal engine/trainer priority, six maps,
+60-second ready deadline, 30 seconds of in-memory post-ready time if ready,
+and a 45-second stop grace. Collection/update/inter-op threads were 1/1/1;
+`--no-checkpoint` was explicit. The provenance-enhanced sweep recorded PGO
+engine SHA, source `e759420e5ace7d5f48f44f31a83050fa18b7ad14`, asset root, and
+read-only checkpoint SHA
+`1f98963795cb5d1123ee5ad8a51df870df917b387205f3d51e0c36635ce4d88d` before
+and after.
+
+Observed result: no `[RL_READY]` within 60.203 seconds, zero metrics, two
+engine startup logs, no actor proof, no PGC files, and no checkpoint write.
+The trainer did not service the stop during constructor startup; after the
+45-second grace, the harness's owned-process-tree fallback was used
+(`cleanup_escalated=true`, trainer return code 1). A post-check found no
+Overgrowth/Python processes, the checkpoint hash unchanged, and Tailscale/SSH
+still reachable. No host restart or service restart occurred. This fallback
+was limited to the two launched PGO engines and their trainer process; a fresh
+run-specific SHM prefix was used.
+
+Both engine logs reached `Loading nav mesh...` and reported absent cached
+`t_train_101/102.nav.xml`, `.nav.obj`, and `.nav` files under their isolated
+write directories. The same fixed-base Release build, loading map 101, rebuilt
+the navmesh and reached “Level load completed” about three seconds after
+`Loading nav mesh`. The PGO logs did not advance beyond missing-navmesh
+diagnostics before the timeout. **Inference, not proven cause:** exact PGO
+instrumentation may make the first-run navmesh rebuild prohibitively slow;
+there is no CPU/WPR trace yet to distinguish compute from blocking.
+
+The auxiliary live-profile collector also had a bug: it watched a predicted
+run-log path that omitted the environment suffix, so it did not attempt
+`pgosweep`; independently, the benchmark runner's actual readiness monitor
+also reported `ready=false`, so there was no ready-time point at which a sweep
+could be performed. The driver returned a blank top-level child exit field,
+but the sweep JSON provides trainer return code 1 and all required evidence.
+This is an orchestration failure to preserve and fix before any repeat.
+
+**Disposition:** PGO remains partial/unproven; do not repeat at n18/k6 or n2/k0
+until startup is diagnosed and the collector watches the exact run ID. Next
+safe diagnostic is a <=60-second lightweight CPU trace or equivalent
+read-only CPU sampling focused on the navmesh rebuild, plus checking whether a
+version-matched prebuilt navmesh can be loaded without changing gameplay
+semantics. Only then decide whether a lower-concurrency profile run is viable.
+The lever ledger remains 16/39 screened (41%), 18 partial, 5 open.
