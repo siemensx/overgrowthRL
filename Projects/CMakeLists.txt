@@ -71,6 +71,12 @@ IF(RL_NATIVE_ARM64_TRAINING)
     ADD_DEFINITIONS(-DOG_RL_NATIVE_ARM64_TRAINING=1 -DAS_DEPRECATED=1)
 ENDIF()
 
+IF(RL_ANGELSCRIPT_238 AND NOT RL_NATIVE_ARM64_TRAINING)
+    # Overgrowth's debugger and script helpers still use AngelScript APIs that
+    # 2.38 keeps available only through its deprecated-API compatibility switch.
+    ADD_DEFINITIONS(-DAS_DEPRECATED=1)
+ENDIF()
+
 #Assume we want steamworks support if we're building on the build server, until we start supporting more targets
 IF(BUILD_SERVER)
     SET(ENABLE_STEAMWORKS ON)
