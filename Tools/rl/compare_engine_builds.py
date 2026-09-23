@@ -3,8 +3,9 @@
 
 Runs the same legal, deterministic action trace against both binaries using
 the production RL shared-memory interface. It preserves each engine digest,
-native control trace, and attack-selection log; checks within-build
-repeatability; and compares physics digests plus Python observations/rewards.
+native control trace, engine stdout log, and attack-selection log; checks
+within-build repeatability; and compares physics digests plus Python
+observations/rewards.
 The output directory must be new.
 """
 from __future__ import annotations
@@ -14,6 +15,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -69,6 +71,16 @@ def _attack_events_observed_and_equal(left: dict, right: dict) -> bool:
     )
 
 
+def _preserve_engine_log(source: Path, destination: Path) -> str | None:
+    """Copy a run's sibling engine log into its unique replay artifact dir."""
+    if not source.is_file():
+        return None
+    if destination.exists():
+        raise FileExistsError(f"refusing to overwrite preserved engine log: {destination}")
+    shutil.copy2(source, destination)
+    return str(destination)
+
+
 def _run_one(
     *, repo_root: Path, binary: Path, runtime_dir: Path, output_dir: Path,
     label: str, map_index: int, repetition: int, level: str, seed: int,
@@ -87,6 +99,7 @@ def _run_one(
     os.environ["PATH"] = str(runtime_dir) + os.pathsep + previous_path
     env = None
     attack_lines: list[str] = []
+    preserved_engine_log: str | None = None
     engine_exit_code: int | None = None
     shutdown_timed_out = False
     try:
@@ -139,6 +152,9 @@ def _run_one(
             if log_path.exists():
                 attack_lines = [line for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines()
                                 if "RLATK " in line or "RLTHROW " in line]
+                preserved_engine_log = _preserve_engine_log(
+                    log_path, output_dir / f"{stem}.engine.log")
+            attack_log_path.write_text("\n".join(attack_lines) + ("\n" if attack_lines else ""), encoding="utf-8")
             env.close()
             env = None
     finally:
@@ -153,7 +169,6 @@ def _run_one(
 
     if not digest_path.exists() or not control_trace_path.exists():
         raise RuntimeError(f"engine did not finalize digest/control trace for {stem}")
-    attack_log_path.write_text("\n".join(attack_lines) + ("\n" if attack_lines else ""), encoding="utf-8")
     ticks = _tick_rows(digest_path)
     if not ticks:
         raise RuntimeError(f"engine produced no tick digest rows for {stem}")
@@ -170,6 +185,7 @@ def _run_one(
         "native_control_trace_sha256": _sha256(control_trace_path),
         "attack_log_sha256": _sha256(attack_log_path),
         "attack_event_count": len(attack_lines),
+        "engine_log_path": preserved_engine_log,
         "digest_sha256": _sha256(digest_path),
         "digest_path": str(digest_path),
         "native_control_trace_path": str(control_trace_path),

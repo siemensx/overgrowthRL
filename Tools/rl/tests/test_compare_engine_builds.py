@@ -3,11 +3,12 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 import sys
+import tempfile
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from compare_engine_builds import _actions, _attack_events_observed_and_equal
+from compare_engine_builds import _actions, _attack_events_observed_and_equal, _preserve_engine_log
 
 
 class CompareEngineBuildsTests(unittest.TestCase):
@@ -40,6 +41,24 @@ class CompareEngineBuildsTests(unittest.TestCase):
         left = {"attack_event_count": 1, "attack_log_sha256": "left"}
         right = {"attack_event_count": 1, "attack_log_sha256": "right"}
         self.assertFalse(_attack_events_observed_and_equal(left, right))
+
+    def test_engine_logs_are_preserved_without_overwriting(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "engine.log"
+            destination = root / "artifacts" / "engine.log"
+            destination.parent.mkdir()
+            source.write_text("candidate failure evidence\n", encoding="utf-8")
+
+            self.assertEqual(_preserve_engine_log(source, destination), str(destination))
+            self.assertEqual(destination.read_text(encoding="utf-8"), "candidate failure evidence\n")
+            with self.assertRaises(FileExistsError):
+                _preserve_engine_log(source, destination)
+
+    def test_missing_engine_log_is_reported_as_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.assertIsNone(_preserve_engine_log(root / "missing.log", root / "saved.log"))
 
 
 if __name__ == "__main__":
