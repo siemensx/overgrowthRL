@@ -1213,3 +1213,107 @@ frozen maps, then run matched real-PPO no-checkpoint ABBA under the established
 trainer configuration. Keep the new selector off unless correctness passes;
 retain even a small repeatable positive speed result per the owner's adoption
 rule.
+
+## OGRL-20260923-004 — Windows worker/thread screens, LTCG ABBA, and PGO startup failure
+
+**Timestamp:** 2026-09-23 11:19 PDT. **Source:** nested repository branch
+`optimize/overgrowth-training-throughput`, commit
+`5c4e21d0be39e3872d3fd6e3f1acf444fb6231e2`; the only nested-repository dirty
+paths remain two user-owned video deletions, left untouched. **Host:** Windows
+11 Dell trainer, Intel Core Ultra 7 165U (2 P-cores); remote access through the
+already-running Tailscale/SSH connection. No reboot, Tailscale/service change,
+scheduled task, production training run, or checkpoint write occurred.
+
+### No-checkpoint worker and update-thread screen
+
+Runs used the real trainer with an in-memory PPO update path, six-map corpus,
+checkpoint `run24_opt_smoke_20260921.pt` loaded read-only, and no
+`--checkpoint-path`. The short screen measured 120 seconds after readiness;
+the established workload settings were `n_steps=512`, one epoch, minibatch
+128, collection/inter-op threads 2/1, hard reset every 20, engine AboveNormal
+with mask `0xFFF`, trainer Normal. Every accepted point had completed cleanly
+and actor-count/map-load evidence; raw JSON and engine evidence are under
+`research-artifacts/OGRL-20260923-004-throughput/telemetry/thread_worker_sweeps/`.
+
+The worker screen tested n14/k4, n16/k8, n18/k6, n20/k4, n22/k2, and n24/k6.
+n18/k6 measured **1,013.277 useful transitions/s**, zero recoveries and zero
+pool misses. n20/k4 measured **962.719 useful transitions/s**, zero recoveries,
+and a 0.769% pool-miss rate. n14/k4 and n22/k2 failed before readiness;
+n16/k8 and n24/k6 completed but failed the exact character-count proof, so
+their speed numbers are invalid and excluded. The valid n18 point is one short
+screen, not a new sustained record.
+
+At n20/k4, the update-thread points were:
+
+| update threads | valid useful wall SPS points | evidence/disposition |
+|---:|---:|---|
+| 1 | 1,011.661; 928.479 | second point had 0.781% pool misses; no recoveries |
+| 2 | 1,045.068; 1,035.452 | both zero pool misses and recoveries; paired mean 1,040.260 SPS |
+| 4 | 971.166; startup failure; 655.278 retry | retry had 1.351% pool misses and fewer measured transitions; too noisy to rank |
+| 8 | 966.458; 1,054.030 | both valid; second was the highest 120-second point, not a five-minute result |
+
+The two T=2 points average **1,040.260 SPS versus 970.070 for T=1**, a
+matched-screen increase of **70.190 SPS / 7.236%**. Both T=2 runs were clean,
+which makes this the clearest new short-window systems lead. It remains a
+partial lever: run a longer, interleaved confirmation at the chosen worker
+count and compare learner/update time and policy-quality evidence before
+changing production defaults. T=8 averages 1,010.244 SPS over its two valid
+points; the T=4 samples are disrupted by startup failure and a low outlier.
+
+### LTCG controlled comparison
+
+The fixed-base status-quo Release engine and scoped Release LTCG candidate each
+passed the strict replay gate: 28/28 exact comparisons across ten repetitions
+per binary; 20 replays included observed attacks; 732 ticks; action/control,
+observation/reward and canonical attack-payload hashes matched exactly. Four
+300-second useful-throughput windows per arm produced:
+
+| binary arm | useful wall SPS, in order | mean |
+|---|---|---:|
+| status quo | 974.779, 914.221, 912.363, 1,021.810 | 955.793 |
+| LTCG | 958.256, 1,001.884, 962.186, 998.548 | 980.218 |
+
+The pooled observed change is **+24.425 SPS / +2.555%**. The four matched
+order-pair differences have mixed signs (two favor each arm); keep LTCG as a
+candidate and do not attribute a reliable sustained gain until the variance is
+resolved. The highest valid 300-second point in this block was status-quo A4
+at 1,021.810 SPS. The separate T=8 point at 1,054.030 was a 120-second run and
+must not replace that sustained figure.
+
+### Traditional MSVC PGO instrumented build and bounded failure
+
+Built a separate Release instrumented engine from this source commit with
+`RL_MSVC_PGO_MODE=INSTRUMENT`, `RL_WINDOWS_FIXED_BASE=ON`, CMake/MSVC 19.44
+(VS 2022), `/GENPROFILE:EXACT,PGD=...`, and no `BUILD_SERVER` mode. The build
+completed and linked a 14,204,416-byte executable; the PGD was initialized at
+26,849,280 bytes. CMake's embedded git describe remained
+`HEAD-HASH-NOTFOUND`; the reproducible source identity is the commit above.
+
+The first no-checkpoint n18/k6 profiling attempt exited during process startup
+with Windows status `0xC0000135`. Inspection of the instrumented binary's
+imports and installed MSVC 14.44 files identified missing `pgort140.dll` in
+the child PATH. Retried with the matching MSVC bin directory prepended only to
+that probe's child environment. The instrumented processes started, selected
+the assigned maps, and began configuration, but the all-worker ready barrier
+did not arrive within 180 seconds. At timeout the sweep requested its normal
+stop; initialization had not entered the trainer loop, so the 120-second
+grace expired and the harness used its process-tree-scoped fallback. The run
+is invalid: 0 metric rows, 24 engine startup logs, no `.pgc` profiles. SSH
+accepted TCP but timed out during banner exchange under that instrumented load
+for approximately five minutes; access then recovered. A subsequent read-only
+check found zero Overgrowth/Python processes and the checkpoint SHA-256 still
+`1F98963795CB5D1123EE5AD8A51DF870DF917B387205F3D51E0C36635CE4D88D`. No
+machine restart occurred. Raw run manifests/logs and build outputs remain on
+the trainer under `C:\ogrl\optimization\pgo_20260923\` and
+`C:\ogrl\overgrowthRL_clean\Tools\rl\runs\`.
+
+**Decision:** do not repeat instrumented PGO at n18/k6. The profile-use stage
+is blocked because no profile data was collected. An independent audit is
+pending through the requested ChatGPT-advisor skill. If that audit does not
+identify a lower-risk solution, profile acquisition must first use a reduced,
+bounded worker count and an explicit pre-ready cleanup budget; only use the
+profile-use binary after strict production-reference replay, then compare it
+against the identical status-quo build on matched 300-second no-checkpoint
+windows. The current lever ledger remains 16/39 screened (41%), 18/39 partial
+(46%), and 5/39 open (13%): the worker/thread families are still partial, and
+PGO remains unproven rather than exhausted.
