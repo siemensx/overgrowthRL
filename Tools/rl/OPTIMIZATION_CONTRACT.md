@@ -1461,3 +1461,81 @@ read-only CPU sampling focused on the navmesh rebuild, plus checking whether a
 version-matched prebuilt navmesh can be loaded without changing gameplay
 semantics. Only then decide whether a lower-concurrency profile run is viable.
 The lever ledger remains 16/39 screened (41%), 18 partial, 5 open.
+
+## OGRL-20260923-007 — CPU trace of the instrumented navmesh startup
+
+**Timestamp:** 2026-09-23 12:37 PDT. This follows OGRL-006 without another
+concurrent-worker PGO run. WPR was confirmed idle, then started with
+`wpr -start CPU -filemode` before one instrumented PGO engine (n1/k0) was
+launched through the provenance-recording, `--no-checkpoint` throughput
+harness. The trace stopped in a `finally` block after the harness's 60-second
+ready deadline and 45-second cleanup grace. The run again did not reach
+`[RL_READY]` (60.219 s); it had zero metrics, one engine log, no checkpoint
+write, unchanged input checkpoint SHA, and used the owned-process-tree fallback.
+The WPR stop succeeded; no WPR session, Overgrowth, or Python trainer remains.
+
+At an in-run process sample, the single PGO engine had accumulated 68.92 CPU
+seconds after about 70 seconds wall time (approximately one fully occupied
+logical CPU). The saved 152,043,520-byte ETL parsed successfully with
+`tracerpt`: 126-second trace, 900,439 events, zero lost; 116,947
+`PerfInfo/SampleProf` events. This supports CPU-bound startup rather than an
+idle semaphore wait, but it does not identify the hot function. WPA/WPAExporter
+was not found on the trainer, so no process-stack attribution was obtained.
+The raw ETL and 30,498-byte tracerpt summary remain at
+`C:\ogrl\optimization\pgo_20260923\profiles\`; raw trace data is not in git.
+
+**Disposition:** PGO startup is observed to consume about one CPU core while
+stalled in the navmesh-load phase, but attributing that work specifically to
+navmesh rebuild versus PGI probe overhead still needs WPA-level stacks. Do not
+repeat n1/n2/n18 profile attempts blindly. Next step is to analyze this saved
+ETL on a WPA-capable system or provision a portable analyzer, then decide
+whether the per-write-directory navmesh rebuild/cache path is the actionable
+startup cost. PGO remains partial; the overall lever coverage is unchanged.
+
+## OGRL-20260923-008 — T1 validity clarification and matched worker grid
+
+**Timestamp:** 2026-09-23 13:49 PDT. T1 denotes
+`--update-torch-threads 1`. Its earlier A1=1,013.950623 and A2=989.077696
+useful transitions/s were valid 300-second observations; they were not
+fabricated or invalidated by a later repeat. They did not by themselves prove
+an adopted speedup. The same-provenance T1 repeat measured 970.631143 SPS over
+300 seconds (median cycle 996.043, p10 810.572, 1.227% pool misses, zero
+recoveries), demonstrating meaningful run variation. The prior corrected
+T1/T2 contrast was −6.172% for T2 relative to T1 at n20/k4; that comparison
+does not imply a 6.172% gain in any saved or ongoing training run.
+
+The matched worker screen held source commit
+`e759420e5ace7d5f48f44f31a83050fa18b7ad14`, fixed-base engine SHA
+`9b2d423347284dfa7ebf99a8e65ec5ccf80d92896c623720d5c789d0545b5e9e`, engine
+priority ABOVE_NORMAL, affinity `0xFFF`, trainer priority Normal, T1, six maps,
+read-only checkpoint SHA
+`1f98963795cb5d1123ee5ad8a51df870df917b387205f3d51e0c36635ce4d88d`,
+collection/update/inter-op threads 2/1/1, 512 rollout, one epoch, minibatch
+128, hard reset 20, 60-second warmup and 120-second measurement. It used
+`--no-checkpoint`; transient PPO updates were discarded.
+
+| n/k | useful wall SPS | pool misses | status |
+|---:|---:|---:|---|
+| 20/4 | 1,015.588 | 0.000% | valid, 120-second screen |
+| 22/2 | 930.434 | 12.353% | valid, misses observed |
+| 14/4 | 905.108 | 0.000% | valid |
+| 18/0 | 658.044 | 100.000% | valid, no standby workers |
+| 18/6 | — | — | invalid pre-ready (4.015 s) |
+| 16/2 | — | — | invalid pre-ready (120.125 s deadline) |
+| 24/0 | — | — | invalid pre-ready (6.532 s) |
+
+The three startup failures are not zero-throughput results and remain
+diagnostically unresolved; per-engine logs are retained. All valid points
+passed actor/map proof, stopped cleanly, had zero recoveries, and left the
+checkpoint SHA unchanged. Post-run found no remaining benchmark process or
+live training process. The 1,015.588 SPS result is only a 120-second reading;
+the best validated 300-second point remains 1,021.810 SPS. No durable
+throughput uplift has been adopted (0%). Do not call the valid T1 measurement
+“not real”; distinguish it from a repeatable/adopted improvement.
+
+Full raw artifacts are in the outer repository at
+`research-artifacts/OGRL-20260923-004-throughput/telemetry/workers_grid2_fixedbase_above_fxff_t1_20260923_1327/`.
+Next: isolate Normal versus ABOVE_NORMAL engine priority at n20/k4, keeping
+affinity `0xFFF` and T1 fixed in an order-balanced 300-second comparison.
+Worker/thread coverage remains partial; overall inventory remains 16/39 fully
+screened, 18 partial, 5 open.
