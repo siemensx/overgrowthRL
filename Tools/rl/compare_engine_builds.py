@@ -15,6 +15,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -77,6 +78,8 @@ def _run_one(
     os.environ["PATH"] = str(runtime_dir) + os.pathsep + previous_path
     env = None
     attack_lines: list[str] = []
+    engine_exit_code: int | None = None
+    shutdown_timed_out = False
     try:
         shm_name = f"/ogrl_cmp_{label}_{map_index}_{repetition}_{uuid.uuid4().hex[:8]}"
         env = OvergrowthEnv(
@@ -119,9 +122,11 @@ def _run_one(
                     pass
             if env._process is not None:
                 try:
-                    env._process.wait(timeout=10)
-                except Exception:
-                    pass
+                    engine_exit_code = env._process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    shutdown_timed_out = True
+                    env._process.kill()
+                    engine_exit_code = env._process.wait(timeout=5)
             if log_path.exists():
                 attack_lines = [line for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines()
                                 if "RLATK " in line or "RLTHROW " in line]
@@ -131,6 +136,11 @@ def _run_one(
         if env is not None:
             env.close()
         os.environ["PATH"] = previous_path
+
+    if shutdown_timed_out:
+        raise RuntimeError(f"engine did not shut down gracefully for {stem}")
+    if engine_exit_code != 0:
+        raise RuntimeError(f"engine exited with code {engine_exit_code} for {stem}")
 
     if not digest_path.exists() or not control_trace_path.exists():
         raise RuntimeError(f"engine did not finalize digest/control trace for {stem}")
