@@ -24,6 +24,7 @@ import csv
 import json
 import os
 import re
+import shutil
 import signal
 import statistics as st
 import subprocess
@@ -179,6 +180,112 @@ def write_results(path: Path, results: list[dict]) -> None:
     os.replace(temporary, path)
 
 
+_CHARACTER_CACHE_RE = re.compile(r"Caching skeleton info")
+
+
+def collect_engine_character_logs(
+    repo: Path, run_id: str, n_envs: int, k_standby: int, levels: list[str], run_dir: Path
+) -> dict:
+    """Preserve this run's initial engine logs and verify every worker spawned.
+
+    Overgrowth writes the per-character "Caching skeleton info" marker to
+    ``<write-dir>/logfile.txt`` on Windows. The trainer's normal env cleanup
+    removes that directory, so throughput probes opt into retaining only the
+    initial active+standby engine directories until this function copies the
+    logs into the run artifact. It then removes only those run-specific temp
+    directories. This prevents empty/misconfigured levels from looking fast.
+    """
+    write_root = repo / ".rl_write_dirs"
+    prefix = f"env-ogrl_{run_id}"
+    expected_suffixes = {str(i) for i in range(n_envs)} | {f"s{i}" for i in range(k_standby)}
+    matches: list[tuple[Path, str]] = []
+    if write_root.exists():
+        for path in write_root.iterdir():
+            if not path.is_dir() or not path.name.startswith(prefix):
+                continue
+            tail = path.name[len(prefix):]
+            match = re.match(r"(\d+|s\d+)-", tail)
+            if match:
+                matches.append((path, match.group(1)))
+    matches.sort(key=lambda item: item[1])
+
+    evidence_dir = run_dir / "engine_logs"
+    evidence_dir.mkdir(exist_ok=False)
+    level_list = [level for level in levels if level]
+    records = []
+    for index, (path, suffix) in enumerate(matches):
+        logfile = path / "logfile.txt"
+        log_text = logfile.read_text(encoding="utf-8", errors="replace") if logfile.exists() else ""
+        character_count = len(_CHARACTER_CACHE_RE.findall(log_text))
+        if suffix.startswith("s"):
+            level_index = n_envs + int(suffix[1:])
+        else:
+            level_index = int(suffix)
+        assigned_level = level_list[level_index % len(level_list)] if level_list else None
+
+        record = {
+            "write_dir": path.name,
+            "worker_suffix": suffix,
+            "assigned_level": assigned_level,
+            "characters_from_engine_log": character_count,
+        }
+        if logfile.exists():
+            archived_log = evidence_dir / f"engine_{index:03d}.logfile.txt"
+            shutil.copy2(logfile, archived_log)
+            record["logfile"] = str(archived_log.relative_to(run_dir))
+        stdout_log = path.with_name(path.name + ".log")
+        if stdout_log.exists():
+            archived_stdout = evidence_dir / f"engine_{index:03d}.stdout.log"
+            shutil.copy2(stdout_log, archived_stdout)
+            record["stdout_log"] = str(archived_stdout.relative_to(run_dir))
+        records.append(record)
+
+    expected_suffix_set = expected_suffixes
+    observed_suffixes = {record["worker_suffix"] for record in records}
+    histogram: dict[str, int] = {}
+    for record in records:
+        key = str(record["characters_from_engine_log"])
+        histogram[key] = histogram.get(key, 0) + 1
+    valid = (
+        len(records) == n_envs + k_standby
+        and observed_suffixes == expected_suffix_set
+        and all(record["characters_from_engine_log"] >= 2 for record in records)
+    )
+    evidence = {
+        "source": "Overgrowth logfile.txt; count of 'Caching skeleton info' markers",
+        "expected_engine_count": n_envs + k_standby,
+        "observed_engine_count": len(records),
+        "minimum_characters_per_engine": 2,
+        "character_count_histogram": histogram,
+        "valid": valid,
+        "engines": records,
+    }
+    metadata = evidence_dir / "character_counts.json"
+    with metadata.open("x", encoding="utf-8", newline="\n") as handle:
+        json.dump(evidence, handle, indent=2)
+        handle.write("\n")
+
+    # The raw startup logs are now preserved in run_dir. Remove only the exact
+    # temp directories created for this run; never sweep the shared root.
+    cleanup_errors = []
+    for path, _suffix in matches:
+        try:
+            shutil.rmtree(path)
+        except OSError as exc:
+            cleanup_errors.append(f"{path.name}: {exc}")
+        stdout_log = path.with_name(path.name + ".log")
+        try:
+            stdout_log.unlink(missing_ok=True)
+        except OSError as exc:
+            cleanup_errors.append(f"{stdout_log.name}: {exc}")
+    evidence["cleanup_errors"] = cleanup_errors
+    if cleanup_errors:
+        with metadata.open("w", encoding="utf-8", newline="\n") as handle:
+            json.dump(evidence, handle, indent=2)
+            handle.write("\n")
+    return evidence
+
+
 def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
     repo = Path(args.repo_root)
     run_id = f"sweep_{tag}_n{n_envs}k{k_standby}"
@@ -213,6 +320,7 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
            "--torch-interop-threads", str(args.interop_threads),
            "--no-tapes", "--no-native-capture"] + args.extra
     env = dict(os.environ)
+    env["OGRL_RETAIN_INITIAL_ENGINE_ARTIFACTS"] = "1"
     log.parent.mkdir(parents=True, exist_ok=True)
     print(f"\n=== {run_id}: {args.warmup + args.measure:.0f}s ===", flush=True)
     launch_t = time.time()
@@ -261,6 +369,9 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
                 except Exception as cleanup_error:  # retain the original failure
                     print(f"benchmark cleanup failed for PID {proc.pid}: {cleanup_error}", file=sys.stderr)
             raise
+    character_evidence = collect_engine_character_logs(
+        repo, run_id, n_envs, k_standby, args.levels.split(","), run_dir
+    )
     metrics = run_dir / "metrics.jsonl"
     rows = []
     if metrics.exists():
@@ -286,7 +397,10 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
            "ready_wait_seconds": ready_wait, "launch_wall_seconds": time.time() - launch_t,
            "trainer_returncode": proc.returncode, "clean_stop": clean_stop,
            "cleanup_escalated": cleanup_escalated,
-           "measurement_cutoff_epoch": measurement_end}
+           "measurement_cutoff_epoch": measurement_end,
+           "characters_valid": character_evidence["valid"],
+           "engine_character_count_histogram": character_evidence["character_count_histogram"],
+           "engine_logs_preserved": len(character_evidence["engines"])}
     if sps:
         out.update({
             "sps_median": st.median(sps), "sps_mean": st.mean(sps), "sps_p10": sorted(sps)[len(sps) // 10],
@@ -302,7 +416,6 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
             "useful_wall_sps": (sum(r["perf"].get("valid_transition_count", 0) for r in measured_rows) /
                                 (win[-1]["t"] - win[0]["t"])) if len(win) > 1 else 0,
         })
-    print(json.dumps(out), flush=True)
     # Checkpoints are never written by this benchmark. If one unexpectedly
     # appears, preserve it as evidence and invalidate the point; never delete it.
     out["checkpoint_written"] = ckpt.exists()
@@ -319,7 +432,9 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
         and out["clean_stop"]
         and out["run_manifest_status"] == "completed"
         and not out["checkpoint_written"]
+        and out["characters_valid"]
     )
+    print(json.dumps(out), flush=True)
     if not out["valid_point"]:
         print(f"INVALID_POINT {run_id}: {json.dumps(out)}", file=sys.stderr, flush=True)
     return out

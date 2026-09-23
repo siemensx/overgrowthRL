@@ -141,6 +141,53 @@ class ThroughputSweepStopTests(unittest.TestCase):
             self.assertEqual(json.loads(result.read_text()), payload)
             self.assertFalse(result.with_suffix(".json.tmp").exists())
 
+    def test_engine_character_logs_are_counted_archived_and_scoped(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            run_id = "sweep_test_n2k2"
+            root = repo / ".rl_write_dirs"
+            root.mkdir()
+            for suffix, count in (("0", 4), ("1", 3), ("s0", 4), ("s1", 2)):
+                write_dir = root / f"env-ogrl_{run_id}{suffix}-test"
+                write_dir.mkdir()
+                (write_dir / "logfile.txt").write_text("Caching skeleton info\n" * count)
+                write_dir.with_name(write_dir.name + ".log").write_text("engine stdout\n")
+            unrelated = root / "env-ogrl_another_run0-test"
+            unrelated.mkdir()
+
+            run_dir = repo / "Tools" / "rl" / "runs" / run_id
+            run_dir.mkdir(parents=True)
+            evidence = throughput_sweep.collect_engine_character_logs(
+                repo, run_id, 2, 2, ["map-a", "map-b"], run_dir
+            )
+
+            self.assertTrue(evidence["valid"])
+            self.assertEqual(evidence["expected_engine_count"], 4)
+            self.assertEqual(evidence["character_count_histogram"], {"4": 2, "3": 1, "2": 1})
+            self.assertEqual(len(list((run_dir / "engine_logs").glob("*.logfile.txt"))), 4)
+            self.assertFalse(any(root.glob(f"env-ogrl_{run_id}*")))
+            self.assertTrue(unrelated.exists())
+
+    def test_character_gate_rejects_missing_or_empty_workers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            run_id = "sweep_invalid_n1k1"
+            root = repo / ".rl_write_dirs"
+            root.mkdir()
+            write_dir = root / f"env-ogrl_{run_id}0-test"
+            write_dir.mkdir()
+            (write_dir / "logfile.txt").write_text("Caching skeleton info\n")
+            run_dir = repo / "Tools" / "rl" / "runs" / run_id
+            run_dir.mkdir(parents=True)
+
+            evidence = throughput_sweep.collect_engine_character_logs(
+                repo, run_id, 1, 1, ["map-a", "map-b"], run_dir
+            )
+
+            self.assertFalse(evidence["valid"])
+            self.assertEqual(evidence["observed_engine_count"], 1)
+            self.assertEqual(evidence["engines"][0]["characters_from_engine_log"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -176,6 +176,8 @@ class VecOvergrowthEnv:
         # this counter plays the same "always increasing" role instead.
         self._reset_counter = 0
         self._reset_counter_lock = threading.Lock()
+        retain_initial_artifacts = os.environ.get("OGRL_RETAIN_INITIAL_ENGINE_ARTIFACTS") == "1"
+        initial_launch_complete = False
 
         def _make(shm_suffix: str, seed: int, worker_level: str) -> OvergrowthEnv:
             # Darwin's shm/sem name limit (~31 bytes) constrains shm_prefix +
@@ -195,6 +197,10 @@ class VecOvergrowthEnv:
                 equivalence_digest_path=(self.native_trace_dir / f"{shm_suffix}.jsonl") if self.native_trace_dir is not None else None,
                 equivalence_trace_path=(self.native_trace_dir / f"{shm_suffix}.input.jsonl") if self.native_trace_dir is not None else None,
                 extra_config_lines=list(self.engine_config_lines),
+                # The throughput harness keeps only the first engine logs so
+                # it can count characters from the real startup log after the
+                # process exits. Replacements/recoveries use ordinary cleanup.
+                keep_artifacts=retain_initial_artifacts and not initial_launch_complete,
             )
 
         # Parallel launch: each OvergrowthEnv.__init__ blocks on its own
@@ -233,6 +239,7 @@ class VecOvergrowthEnv:
             for start in range(0, len(specs), wave_size):
                 wave = specs[start:start + wave_size]
                 built.extend(self._pool.map(lambda spec: _make(*spec), wave))
+            initial_launch_complete = True
         except Exception:
             for env in built:
                 try:
