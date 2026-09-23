@@ -265,7 +265,13 @@ def _exact_head_kls(old_params, new_params) -> torch.Tensor:
 _update_counter = [0]
 
 
-def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dict, args) -> dict:
+def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dict, args,
+               update_forward=None) -> dict:
+    # Optional benchmark-only callable (e.g. torch.compile of the policy's
+    # update forward). The default remains the exact eager method, and all
+    # diagnostics/old-policy KL calculations continue to use the reference
+    # methods below.
+    update_forward = update_forward or policy.get_action_and_value
     _update_counter[0] += 1
     n = batch["obs"].shape[0]
     indices = np.arange(n)
@@ -313,7 +319,7 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
             # consistent across minibatches of possibly different composition.
             mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
-            _action, new_log_probs, entropy, new_values = policy.get_action_and_value(mb_obs, mb_actions, raw_continuous=mb_raw)
+            _action, new_log_probs, entropy, new_values = update_forward(mb_obs, mb_actions, raw_continuous=mb_raw)
             log_ratio = new_log_probs - mb_old_log_probs
             ratio = log_ratio.exp()
 

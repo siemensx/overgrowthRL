@@ -168,6 +168,9 @@ def parse_args():
                    help="PyTorch intra-op threads during tiny rollout inference; 1 avoids competing with engine workers")
     p.add_argument("--update-torch-threads", type=int, default=4,
                    help="PyTorch intra-op threads during PPO minibatch updates")
+    p.add_argument("--compile-update", action="store_true",
+                   help="benchmark-only: compile the PPO policy minibatch forward/backward with TorchInductor; "
+                        "requires a configured C++ compiler (MSVC developer environment on Windows). Default is eager.")
     p.add_argument("--torch-interop-threads", type=int, default=1,
                    help="PyTorch inter-op threads, set once at startup")
     p.add_argument("--log-path", default=None)
@@ -567,6 +570,12 @@ def main():
     policy = ActorCritic(layout, frame_stack=args.frame_stack).to(device)
     policy.detach_critic_features = bool(args.critic_detach_shared)
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.learning_rate, eps=1e-5)
+    update_forward = policy.get_action_and_value
+    if args.compile_update:
+        if device.type != "cpu":
+            raise ValueError("--compile-update is currently benchmarked only for CPU training")
+        update_forward = torch.compile(policy.get_action_and_value, backend="inductor")
+        print("[learner] TorchInductor enabled for PPO update forward; eager remains reference for diagnostics", flush=True)
     obs_normalizer = ObservationNormalizer(layout, frame_stack=args.frame_stack)
     reward_normalizer = RewardNormalizer(args.gamma, n_envs=args.n_envs)
     # Remote rollout workers (optional). Accepted BEFORE the first update so the
@@ -974,7 +983,7 @@ def main():
                 args.entropy_coef = args.entropy_coef_start + (args.entropy_coef_final - args.entropy_coef_start) * anneal_progress
 
             torch.set_num_threads(args.update_torch_threads)
-            stats = ppo_update(policy, optimizer, batch, args)
+            stats = ppo_update(policy, optimizer, batch, args, update_forward=update_forward)
 
             update += 1
             explained_var = _explained_variance(batch["values"].cpu().numpy(), batch["returns"].cpu().numpy())
