@@ -8,7 +8,12 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from compare_engine_builds import _actions, _attack_events_observed_and_equal, _preserve_engine_log
+from compare_engine_builds import (
+    _actions,
+    _attack_events_observed_and_equal,
+    _preserve_engine_log,
+    _read_attack_lines,
+)
 
 
 class CompareEngineBuildsTests(unittest.TestCase):
@@ -59,6 +64,22 @@ class CompareEngineBuildsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             self.assertIsNone(_preserve_engine_log(root / "missing.log", root / "saved.log"))
+
+    def test_attack_events_use_internal_windows_log_before_stdout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            stdout = root / "engine.stdout.log"
+            internal = root / "logfile.txt"
+            stdout.write_text("RLATK id=0 kind=wrong\n", encoding="utf-8")
+            internal.write_text("RLATK id=0 kind=stationary\n", encoding="utf-8")
+
+            self.assertEqual(
+                _read_attack_lines(stdout, internal),
+                ["RLATK id=0 kind=stationary"],
+            )
+
+            internal.unlink()
+            self.assertEqual(_read_attack_lines(stdout, internal), ["RLATK id=0 kind=wrong"])
 
 
 if __name__ == "__main__":

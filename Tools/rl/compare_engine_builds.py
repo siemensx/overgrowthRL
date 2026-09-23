@@ -81,6 +81,15 @@ def _preserve_engine_log(source: Path, destination: Path) -> str | None:
     return str(destination)
 
 
+def _read_attack_lines(stdout_log: Path, internal_log: Path) -> list[str]:
+    """Read attack telemetry from the canonical game log, with stdout fallback."""
+    source = internal_log if internal_log.is_file() else stdout_log
+    if not source.is_file():
+        return []
+    return [line for line in source.read_text(encoding="utf-8", errors="replace").splitlines()
+            if "RLATK " in line or "RLTHROW " in line]
+
+
 def _run_one(
     *, repo_root: Path, binary: Path, runtime_dir: Path, output_dir: Path,
     label: str, map_index: int, repetition: int, level: str, seed: int,
@@ -150,14 +159,11 @@ def _run_one(
                     shutdown_timed_out = True
                     env._process.kill()
                     engine_exit_code = env._process.wait(timeout=5)
+            internal_log = env._write_dir / "logfile.txt"
+            attack_lines = _read_attack_lines(log_path, internal_log)
             if log_path.exists():
-                attack_lines = [line for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-                                if "RLATK " in line or "RLTHROW " in line]
                 preserved_engine_log = _preserve_engine_log(
                     log_path, output_dir / f"{stem}.engine.log")
-            # On Windows the engine's internal log is rooted directly in the
-            # per-run write directory (not its Data subfolder).
-            internal_log = env._write_dir / "logfile.txt"
             preserved_internal_log = _preserve_engine_log(
                 internal_log, output_dir / f"{stem}.game.log")
             attack_log_path.write_text("\n".join(attack_lines) + ("\n" if attack_lines else ""), encoding="utf-8")
