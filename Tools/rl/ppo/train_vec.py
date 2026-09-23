@@ -323,6 +323,47 @@ def _raise_keyboard_interrupt(signum, frame):
     raise KeyboardInterrupt
 
 
+def _apply_windows_process_scheduling(priority: str, affinity: str | None, kernel32=None) -> int | None:
+    """Set and verify this process's Windows priority and optional CPU mask.
+
+    ctypes defaults to a 32-bit ``int`` return value and argument conversion.
+    Windows HANDLEs are pointer-sized, so declare every API signature before
+    passing the pseudo-handle returned by GetCurrentProcess().
+    """
+    import ctypes
+
+    k32 = kernel32 if kernel32 is not None else ctypes.windll.kernel32
+    k32.GetCurrentProcess.argtypes = []
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    k32.SetPriorityClass.restype = ctypes.c_int
+    k32.SetProcessAffinityMask.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+    k32.SetProcessAffinityMask.restype = ctypes.c_int
+    k32.GetProcessAffinityMask.argtypes = [
+        ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_size_t)
+    ]
+    k32.GetProcessAffinityMask.restype = ctypes.c_int
+
+    handle = k32.GetCurrentProcess()
+    priority_classes = {"normal": 0x20, "above": 0x8000, "high": 0x80}
+    priority_class = priority_classes.get(priority.lower())
+    if priority_class is not None and not k32.SetPriorityClass(handle, priority_class):
+        raise ctypes.WinError()
+
+    if not affinity:
+        return None
+    requested = ctypes.c_size_t(int(affinity, 16))
+    if not k32.SetProcessAffinityMask(handle, requested):
+        raise ctypes.WinError()
+    applied = ctypes.c_size_t()
+    system = ctypes.c_size_t()
+    if not k32.GetProcessAffinityMask(handle, ctypes.byref(applied), ctypes.byref(system)):
+        raise ctypes.WinError()
+    if applied.value != requested.value:
+        raise RuntimeError(f"requested {affinity}, Windows applied 0x{applied.value:X}")
+    return applied.value
+
+
 def main():
     signal.signal(signal.SIGTERM, _raise_keyboard_interrupt)
     args = parse_args()
@@ -346,32 +387,11 @@ def main():
         # feature-gated process-affinity/priority experiment; it does not
         # constrain engines, which apply their own affinity after launch.
         try:
-            import ctypes
             _pri = os.environ.get("OGRL_TRAINER_PRIORITY", "normal").lower()
-            _cls = {"normal": 0x20, "above": 0x8000, "high": 0x80}.get(_pri)
-            if _cls:
-                if not ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), _cls):
-                    raise ctypes.WinError()
             _mask_text = os.environ.get("OGRL_TRAINER_AFFINITY")
-            if _mask_text:
-                _k32 = ctypes.windll.kernel32
-                _k32.SetProcessAffinityMask.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
-                _k32.SetProcessAffinityMask.restype = ctypes.c_int
-                _k32.GetProcessAffinityMask.argtypes = [
-                    ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_size_t)
-                ]
-                _k32.GetProcessAffinityMask.restype = ctypes.c_int
-                _handle = _k32.GetCurrentProcess()
-                _requested = ctypes.c_size_t(int(_mask_text, 16))
-                if not _k32.SetProcessAffinityMask(_handle, _requested):
-                    raise ctypes.WinError()
-                _applied = ctypes.c_size_t()
-                _system = ctypes.c_size_t()
-                if not _k32.GetProcessAffinityMask(_handle, ctypes.byref(_applied), ctypes.byref(_system)):
-                    raise ctypes.WinError()
-                if _applied.value != _requested.value:
-                    raise RuntimeError(f"requested {_mask_text}, Windows applied 0x{_applied.value:X}")
-                print(f"[trainer] affinity applied mask=0x{_applied.value:X}", flush=True)
+            _applied = _apply_windows_process_scheduling(_pri, _mask_text)
+            if _applied is not None:
+                print(f"[trainer] affinity applied mask=0x{_applied:X}", flush=True)
         except Exception as _e:
             print(f"[trainer] scheduling override not fully applied: {_e}", flush=True)
     torch.set_num_interop_threads(args.torch_interop_threads)
