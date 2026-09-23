@@ -337,6 +337,8 @@ def _apply_windows_process_scheduling(priority: str, affinity: str | None, kerne
     k32.GetCurrentProcess.restype = ctypes.c_void_p
     k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
     k32.SetPriorityClass.restype = ctypes.c_int
+    k32.GetPriorityClass.argtypes = [ctypes.c_void_p]
+    k32.GetPriorityClass.restype = ctypes.c_uint32
     k32.SetProcessAffinityMask.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
     k32.SetProcessAffinityMask.restype = ctypes.c_int
     k32.GetProcessAffinityMask.argtypes = [
@@ -347,8 +349,17 @@ def _apply_windows_process_scheduling(priority: str, affinity: str | None, kerne
     handle = k32.GetCurrentProcess()
     priority_classes = {"normal": 0x20, "above": 0x8000, "high": 0x80}
     priority_class = priority_classes.get(priority.lower())
-    if priority_class is not None and not k32.SetPriorityClass(handle, priority_class):
-        raise ctypes.WinError()
+    if priority_class is not None:
+        if not k32.SetPriorityClass(handle, priority_class):
+            raise ctypes.WinError()
+        applied_priority = k32.GetPriorityClass(handle)
+        if not applied_priority:
+            raise ctypes.WinError()
+        if applied_priority != priority_class:
+            raise RuntimeError(
+                f"requested priority class 0x{priority_class:X}, "
+                f"Windows applied 0x{applied_priority:X}"
+            )
 
     if not affinity:
         return None

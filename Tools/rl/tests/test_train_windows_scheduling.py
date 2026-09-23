@@ -26,14 +26,17 @@ class FakeKernel32:
     def __init__(self):
         self.priority_calls = []
         self.affinity = 0
+        self.priority_class = 0
         self.handle = ctypes.c_void_p(-1).value
         self.GetCurrentProcess = FakeFunction(lambda: self.handle)
         self.SetPriorityClass = FakeFunction(self._set_priority)
+        self.GetPriorityClass = FakeFunction(lambda handle: self.priority_class)
         self.SetProcessAffinityMask = FakeFunction(self._set_affinity)
         self.GetProcessAffinityMask = FakeFunction(self._get_affinity)
 
     def _set_priority(self, handle, priority_class):
         self.priority_calls.append((handle, priority_class))
+        self.priority_class = priority_class
         return 1
 
     def _set_affinity(self, handle, requested):
@@ -56,6 +59,7 @@ class WindowsSchedulingSignatures(unittest.TestCase):
         self.assertEqual(api.priority_calls, [(api.handle, 0x8000)])
         self.assertIs(api.GetCurrentProcess.restype, ctypes.c_void_p)
         self.assertIs(api.SetPriorityClass.argtypes[0], ctypes.c_void_p)
+        self.assertIs(api.GetPriorityClass.argtypes[0], ctypes.c_void_p)
         self.assertIs(api.SetProcessAffinityMask.argtypes[0], ctypes.c_void_p)
         self.assertEqual(api.SetProcessAffinityMask.argtypes[1], ctypes.c_size_t)
 
