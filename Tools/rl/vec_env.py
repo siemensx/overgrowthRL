@@ -49,7 +49,7 @@ import os
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence, Callable
@@ -67,6 +67,64 @@ class _Standby:
     env: OvergrowthEnv
     obs: np.ndarray  # this env's current (already-reset, ready-to-serve) observation
     scenario: dict    # the scenario that obs's episode was reset with -- see VecOvergrowthEnv._reset_env
+
+
+def _build_initial_wave(
+    pool: ThreadPoolExecutor, make: Callable, wave: Sequence[tuple]
+) -> list[OvergrowthEnv]:
+    """Build every launch in a wave and close every success if any peer fails.
+
+    ``Executor.map`` raises as soon as the first failed result is consumed. Any
+    later futures in that same wave may still return live engine-owning envs;
+    abandoning the iterator loses those handles and leaks their subprocesses.
+    Collect all futures before returning/raising, while retaining spec order.
+    """
+    futures = {pool.submit(make, *spec): index for index, spec in enumerate(wave)}
+    results: list[OvergrowthEnv | None] = [None] * len(wave)
+    successful: set[int] = set()
+    first_error: BaseException | None = None
+
+    try:
+        for future in as_completed(futures):
+            index = futures[future]
+            try:
+                results[index] = future.result()
+                successful.add(index)
+            except BaseException as exc:
+                if first_error is None:
+                    first_error = exc
+    except BaseException:
+        # An interrupt must not abandon still-starting engines either. Cancel
+        # work that has not begun, wait for in-flight launches, then reclaim
+        # every env that completed successfully before propagating the interrupt.
+        for future in futures:
+            future.cancel()
+        wait(futures)
+        for future, index in futures.items():
+            if index in successful or future.cancelled():
+                continue
+            try:
+                results[index] = future.result()
+                successful.add(index)
+            except BaseException:
+                pass
+        for index in successful:
+            try:
+                results[index].close()
+            except Exception:
+                pass
+        raise
+
+    if first_error is not None:
+        for index in successful:
+            try:
+                results[index].close()
+            except Exception:
+                pass
+        raise first_error
+    if any(result is None for result in results):
+        raise RuntimeError("an initial engine launch completed without returning an environment")
+    return [result for result in results if result is not None]
 
 
 class VecOvergrowthEnv:
@@ -238,14 +296,16 @@ class VecOvergrowthEnv:
         try:
             for start in range(0, len(specs), wave_size):
                 wave = specs[start:start + wave_size]
-                built.extend(self._pool.map(lambda spec: _make(*spec), wave))
+                built.extend(_build_initial_wave(self._pool, _make, wave))
             initial_launch_complete = True
-        except Exception:
+        except BaseException:
             for env in built:
                 try:
                     env.close()
                 except Exception:
                     pass
+            self._reset_pool.shutdown(wait=True, cancel_futures=True)
+            self._pool.shutdown(wait=True, cancel_futures=True)
             raise
         self.envs: list[OvergrowthEnv] = built[:n_envs]
         standby_envs = built[n_envs:]
