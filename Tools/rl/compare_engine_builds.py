@@ -67,7 +67,8 @@ def _attack_events_observed_and_equal(left: dict, right: dict) -> bool:
     return (
         left.get("attack_event_count", 0) > 0
         and right.get("attack_event_count", 0) > 0
-        and left.get("attack_log_sha256") == right.get("attack_log_sha256")
+        and left.get("attack_event_count") == right.get("attack_event_count")
+        and left.get("attack_payload_sha256") == right.get("attack_payload_sha256")
     )
 
 
@@ -88,6 +89,16 @@ def _read_attack_lines(stdout_log: Path, internal_log: Path) -> list[str]:
         return []
     return [line for line in source.read_text(encoding="utf-8", errors="replace").splitlines()
             if "RLATK " in line or "RLTHROW " in line]
+
+
+def _canonical_attack_lines(lines: list[str]) -> list[str]:
+    """Drop timestamp/logger prefixes but retain the full event payload."""
+    canonical = []
+    for line in lines:
+        match = re.search(r"\b(?:RLATK|RLTHROW)\s+.*", line)
+        if match:
+            canonical.append(match.group(0))
+    return canonical
 
 
 def _run_one(
@@ -195,7 +206,11 @@ def _run_one(
         "action_sha256": action_hash.hexdigest(),
         "observation_reward_sha256": observation_reward_hash.hexdigest(),
         "native_control_trace_sha256": _sha256(control_trace_path),
-        "attack_log_sha256": _sha256(attack_log_path),
+        "attack_log_raw_sha256": _sha256(attack_log_path),
+        "attack_payload_sha256": hashlib.sha256(
+            ("\n".join(_canonical_attack_lines(attack_lines)) + ("\n" if attack_lines else ""))
+            .encode("utf-8")
+        ).hexdigest(),
         "attack_event_count": len(attack_lines),
         "engine_log_path": preserved_engine_log,
         "internal_engine_log_path": preserved_internal_log,

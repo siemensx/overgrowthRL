@@ -10,6 +10,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from compare_engine_builds import (
     _actions,
+    _canonical_attack_lines,
     _attack_events_observed_and_equal,
     _preserve_engine_log,
     _read_attack_lines,
@@ -34,17 +35,28 @@ class CompareEngineBuildsTests(unittest.TestCase):
         self.assertEqual(_actions(0), [])
 
     def test_empty_attack_logs_do_not_establish_event_equivalence(self) -> None:
-        empty = {"attack_event_count": 0, "attack_log_sha256": "same"}
+        empty = {"attack_event_count": 0, "attack_payload_sha256": "same"}
         self.assertFalse(_attack_events_observed_and_equal(empty, empty))
 
     def test_nonempty_identical_attack_logs_establish_event_equivalence(self) -> None:
-        left = {"attack_event_count": 2, "attack_log_sha256": "same"}
-        right = {"attack_event_count": 1, "attack_log_sha256": "same"}
+        left = {"attack_event_count": 2, "attack_payload_sha256": "same"}
+        right = {"attack_event_count": 2, "attack_payload_sha256": "same"}
         self.assertTrue(_attack_events_observed_and_equal(left, right))
 
+    def test_timestamp_prefix_is_excluded_from_attack_payload(self) -> None:
+        left = ["2026/09/23 08:47:54 [i][us]: aschar.as:9491: RLATK id=0 kind=air dist=7.61"]
+        right = ["2026/09/23 08:48:00 [i][us]: aschar.as:9491: RLATK id=0 kind=air dist=7.61"]
+        self.assertEqual(_canonical_attack_lines(left), ["RLATK id=0 kind=air dist=7.61"])
+        self.assertEqual(_canonical_attack_lines(left), _canonical_attack_lines(right))
+
+    def test_attack_event_count_mismatch_fails(self) -> None:
+        left = {"attack_event_count": 2, "attack_payload_sha256": "same"}
+        right = {"attack_event_count": 1, "attack_payload_sha256": "same"}
+        self.assertFalse(_attack_events_observed_and_equal(left, right))
+
     def test_mismatched_attack_logs_fail_event_equivalence(self) -> None:
-        left = {"attack_event_count": 1, "attack_log_sha256": "left"}
-        right = {"attack_event_count": 1, "attack_log_sha256": "right"}
+        left = {"attack_event_count": 1, "attack_payload_sha256": "left"}
+        right = {"attack_event_count": 1, "attack_payload_sha256": "right"}
         self.assertFalse(_attack_events_observed_and_equal(left, right))
 
     def test_engine_logs_are_preserved_without_overwriting(self) -> None:
