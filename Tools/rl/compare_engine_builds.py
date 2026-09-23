@@ -155,7 +155,9 @@ def _run_one(
                                 if "RLATK " in line or "RLTHROW " in line]
                 preserved_engine_log = _preserve_engine_log(
                     log_path, output_dir / f"{stem}.engine.log")
-            internal_log = env._write_dir / "Data" / "logfile.txt"
+            # On Windows the engine's internal log is rooted directly in the
+            # per-run write directory (not its Data subfolder).
+            internal_log = env._write_dir / "logfile.txt"
             preserved_internal_log = _preserve_engine_log(
                 internal_log, output_dir / f"{stem}.game.log")
             attack_log_path.write_text("\n".join(attack_lines) + ("\n" if attack_lines else ""), encoding="utf-8")
