@@ -205,11 +205,20 @@ def _character_scenario_evidence(
         for match in _CHARACTER_NOTICE_RE.finditer(log_text)
     }
     character_ids = sorted({character_id for pair in pairs for character_id in pair})
-    expected_ids = list(range(expected_opponents + 1)) if expected_opponents is not None else []
-    expected_pairs = {
+    # ``opponents_max`` is a curriculum ceiling, not the opponent count in
+    # every sampled episode. The trainer can legitimately draw (for example)
+    # either 1v1 or 1v3 from a max-three curriculum. Derive the observed
+    # scenario width from the actual IDs, then require a contiguous actor set
+    # and every pair notice for that set. Requiring every engine to instantiate
+    # the curriculum maximum falsely rejects valid narrow scenarios, especially
+    # standby engines that have not yet been promoted.
+    max_expected_ids = list(range(expected_opponents + 1)) if expected_opponents is not None else []
+    observed_opponents = max(character_ids) if character_ids and character_ids[0] == 0 else None
+    observed_ids = list(range(observed_opponents + 1)) if observed_opponents is not None else []
+    observed_pairs = {
         (left, right)
-        for left in expected_ids
-        for right in expected_ids
+        for left in observed_ids
+        for right in observed_ids
         if left < right
     }
     logged_level_match = bool(
@@ -222,15 +231,24 @@ def _character_scenario_evidence(
     )
     return {
         "expected_opponents_from_restored_curriculum": expected_opponents,
-        "expected_character_ids": expected_ids,
+        "expected_character_ids": max_expected_ids,
+        "observed_opponents_from_notice_logs": observed_opponents,
         "observed_character_ids_from_notice_logs": character_ids,
         "observed_character_pairs_from_notice_logs": [list(pair) for pair in sorted(pairs)],
-        "complete_expected_pair_set": bool(expected_pairs) and expected_pairs.issubset(pairs),
+        "complete_observed_pair_set": bool(observed_pairs) and observed_pairs.issubset(pairs),
+        "scenario_width_within_curriculum": (
+            expected_opponents is not None
+            and observed_opponents is not None
+            and 1 <= observed_opponents <= expected_opponents
+            and character_ids == observed_ids
+        ),
         "logged_level_matches_assignment": logged_level_match,
         "valid": (
             expected_opponents is not None
-            and character_ids == expected_ids
-            and expected_pairs.issubset(pairs)
+            and observed_opponents is not None
+            and 1 <= observed_opponents <= expected_opponents
+            and character_ids == observed_ids
+            and observed_pairs.issubset(pairs)
             and logged_level_match
         ),
     }

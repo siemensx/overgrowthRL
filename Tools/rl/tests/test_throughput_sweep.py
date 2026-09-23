@@ -223,6 +223,39 @@ class ThroughputSweepStopTests(unittest.TestCase):
                 )
                 self.assertEqual(evidence["valid"], expected_valid)
 
+    def test_character_gate_accepts_sampled_width_below_curriculum_max(self):
+        evidence = throughput_sweep._character_scenario_evidence(
+            'Chose "C:/levels/map-a.xml" (valid)\n'
+            "Telling characters 0 and 1 to notice each other.\n",
+            expected_opponents=3,
+            expected_level="arenas/map-a.xml",
+        )
+        self.assertTrue(evidence["valid"])
+        self.assertEqual(evidence["expected_character_ids"], [0, 1, 2, 3])
+        self.assertEqual(evidence["observed_opponents_from_notice_logs"], 1)
+        self.assertTrue(evidence["scenario_width_within_curriculum"])
+        self.assertTrue(evidence["complete_observed_pair_set"])
+
+    def test_character_gate_rejects_incomplete_or_over_limit_sampled_width(self):
+        incomplete = throughput_sweep._character_scenario_evidence(
+            'Chose "C:/levels/map-a.xml" (valid)\n'
+            "Telling characters 0 and 1 to notice each other.\n"
+            "Telling characters 0 and 2 to notice each other.\n",
+            expected_opponents=3,
+            expected_level="arenas/map-a.xml",
+        )
+        over_limit = throughput_sweep._character_scenario_evidence(
+            'Chose "C:/levels/map-a.xml" (valid)\n'
+            "Telling characters 0 and 1 to notice each other.\n"
+            "Telling characters 0 and 2 to notice each other.\n"
+            "Telling characters 0 and 3 to notice each other.\n"
+            "Telling characters 0 and 4 to notice each other.\n",
+            expected_opponents=3,
+            expected_level="arenas/map-a.xml",
+        )
+        self.assertFalse(incomplete["valid"])
+        self.assertFalse(over_limit["valid"])
+
     def test_restored_opponent_count_comes_from_trainer_output(self):
         with tempfile.TemporaryDirectory() as temp:
             log = Path(temp) / "trainer.log"
