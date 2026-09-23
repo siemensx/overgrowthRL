@@ -64,6 +64,19 @@ def refuse_busy_engine_host() -> None:
         )
 
 
+def _complete_measurement_rows(rows: list[dict]) -> list[dict]:
+    """Drop the first row after warmup: its interval may straddle the boundary.
+
+    The elapsed-time denominator starts at that row's timestamp, so per-update
+    diagnostics must likewise start with the following complete interval.
+    """
+    return rows[1:] if len(rows) > 1 else []
+
+
+def _metric_column(rows: list[dict], key: str) -> list:
+    return [r["perf"][key] for r in rows if r.get("perf", {}).get(key) is not None]
+
+
 def wait_for_ready(log: Path, proc: subprocess.Popen, timeout: float) -> tuple[float | None, float]:
     """Wait for the post-reset all-active-worker readiness barrier."""
     started = time.monotonic()
@@ -264,9 +277,9 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
     win = [r for r in rows if ready_at is not None
            and r["t"] - ready_at >= args.warmup
            and (measurement_end is None or r["t"] <= measurement_end)]
-    measured_rows = win[1:] if len(win) > 1 else []
+    measured_rows = _complete_measurement_rows(win)
     def col(k):
-        return [r["perf"][k] for r in win if r.get("perf", {}).get(k) is not None]
+        return _metric_column(measured_rows, k)
     sps = col("steps_per_second_cycle")
     out = {"run_id": run_id, "n_envs": n_envs, "k_standby": k_standby, "rows_total": len(rows), "rows_measured": len(win),
            "exited_early": exited_early, "ready": ready_at is not None, "ready_at": ready_at,

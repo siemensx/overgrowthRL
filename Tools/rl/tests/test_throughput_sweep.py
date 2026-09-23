@@ -52,6 +52,20 @@ class _EscalatedStopProcess:
 
 
 class ThroughputSweepStopTests(unittest.TestCase):
+    def test_per_update_metrics_exclude_warmup_straddling_row(self):
+        rows = [
+            {"perf": {"steps_per_second_cycle": 999.0, "pool_misses": 9}},
+            {"perf": {"steps_per_second_cycle": 501.0, "pool_misses": 0}},
+            {"perf": {"steps_per_second_cycle": 503.0, "pool_misses": 1}},
+        ]
+        measured = throughput_sweep._complete_measurement_rows(rows)
+        self.assertEqual(throughput_sweep._metric_column(measured, "steps_per_second_cycle"), [501.0, 503.0])
+        self.assertEqual(throughput_sweep._metric_column(measured, "pool_misses"), [0, 1])
+
+    def test_no_complete_interval_yields_no_per_update_metrics(self):
+        self.assertEqual(throughput_sweep._complete_measurement_rows([]), [])
+        self.assertEqual(throughput_sweep._complete_measurement_rows([{"perf": {"x": 1}}]), [])
+
     def test_windows_process_preflight_is_read_only(self):
         result = SimpleNamespace(
             stdout='"Overgrowth.exe","1234","Console","1","10,000 K"\n'

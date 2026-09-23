@@ -60,6 +60,15 @@ def _tick_rows(path: Path) -> list[dict]:
     return [row for row in load_digest(path) if row.get("kind") == "tick"]
 
 
+def _attack_events_observed_and_equal(left: dict, right: dict) -> bool:
+    """Empty attack logs cannot establish combat-event equivalence."""
+    return (
+        left.get("attack_event_count", 0) > 0
+        and right.get("attack_event_count", 0) > 0
+        and left.get("attack_log_sha256") == right.get("attack_log_sha256")
+    )
+
+
 def _run_one(
     *, repo_root: Path, binary: Path, runtime_dir: Path, output_dir: Path,
     label: str, map_index: int, repetition: int, level: str, seed: int,
@@ -160,6 +169,7 @@ def _run_one(
         "observation_reward_sha256": observation_reward_hash.hexdigest(),
         "native_control_trace_sha256": _sha256(control_trace_path),
         "attack_log_sha256": _sha256(attack_log_path),
+        "attack_event_count": len(attack_lines),
         "digest_sha256": _sha256(digest_path),
         "digest_path": str(digest_path),
         "native_control_trace_path": str(control_trace_path),
@@ -226,24 +236,32 @@ def main() -> int:
             for repeat in group[1:]:
                 result = compare_digests(first["_tick_rows"], repeat["_tick_rows"], strict=True,
                                          pos_tol=0.0, vel_tol=0.0, scalar_tol=0.0)
+                attack_events_observed = (
+                    first["attack_event_count"] > 0 and repeat["attack_event_count"] > 0
+                )
                 passed = (result["passed"]
                           and first["action_sha256"] == repeat["action_sha256"]
                           and first["observation_reward_sha256"] == repeat["observation_reward_sha256"]
                           and first["native_control_trace_sha256"] == repeat["native_control_trace_sha256"]
-                          and first["attack_log_sha256"] == repeat["attack_log_sha256"])
+                          and _attack_events_observed_and_equal(first, repeat))
                 comparisons.append({"level": level, "comparison": f"within_{label}",
                                     "repetition": repeat["repetition"], "passed": passed,
+                                    "attack_events_observed": attack_events_observed,
                                     "digest": result})
         for repetition, (reference, candidate) in enumerate(zip(pair_runs["reference"], pair_runs["candidate"])):
             result = compare_digests(reference["_tick_rows"], candidate["_tick_rows"], strict=True,
                                      pos_tol=0.0, vel_tol=0.0, scalar_tol=0.0)
+            attack_events_observed = (
+                reference["attack_event_count"] > 0 and candidate["attack_event_count"] > 0
+            )
             passed = (result["passed"]
                       and reference["action_sha256"] == candidate["action_sha256"]
                       and reference["observation_reward_sha256"] == candidate["observation_reward_sha256"]
                       and reference["native_control_trace_sha256"] == candidate["native_control_trace_sha256"]
-                      and reference["attack_log_sha256"] == candidate["attack_log_sha256"])
+                      and _attack_events_observed_and_equal(reference, candidate))
             comparisons.append({"level": level, "comparison": "reference_vs_candidate",
                                 "repetition": repetition, "passed": passed,
+                                "attack_events_observed": attack_events_observed,
                                 "digest": result})
         results.extend({k: v for k, v in run.items() if k != "_tick_rows"}
                        for group in pair_runs.values() for run in group)
@@ -261,6 +279,11 @@ def main() -> int:
         "act_period": args.act_period,
         "repetitions": args.repetitions,
         "checkpoint_written": False,
+        "attack_event_runs": sum(run["attack_event_count"] > 0 for run in results),
+        "attack_event_runs_total": len(results),
+        "attack_event_coverage_complete": bool(results) and all(
+            run["attack_event_count"] > 0 for run in results
+        ),
         "comparisons_passed": sum(bool(row["passed"]) for row in comparisons),
         "comparisons_total": len(comparisons),
         "passed": bool(comparisons) and all(row["passed"] for row in comparisons),
