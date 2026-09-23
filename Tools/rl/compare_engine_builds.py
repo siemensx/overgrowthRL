@@ -100,6 +100,7 @@ def _run_one(
     env = None
     attack_lines: list[str] = []
     preserved_engine_log: str | None = None
+    preserved_internal_log: str | None = None
     engine_exit_code: int | None = None
     shutdown_timed_out = False
     try:
@@ -154,6 +155,9 @@ def _run_one(
                                 if "RLATK " in line or "RLTHROW " in line]
                 preserved_engine_log = _preserve_engine_log(
                     log_path, output_dir / f"{stem}.engine.log")
+            internal_log = env._write_dir / "Data" / "logfile.txt"
+            preserved_internal_log = _preserve_engine_log(
+                internal_log, output_dir / f"{stem}.game.log")
             attack_log_path.write_text("\n".join(attack_lines) + ("\n" if attack_lines else ""), encoding="utf-8")
             env.close()
             env = None
@@ -186,6 +190,7 @@ def _run_one(
         "attack_log_sha256": _sha256(attack_log_path),
         "attack_event_count": len(attack_lines),
         "engine_log_path": preserved_engine_log,
+        "internal_engine_log_path": preserved_internal_log,
         "digest_sha256": _sha256(digest_path),
         "digest_path": str(digest_path),
         "native_control_trace_path": str(control_trace_path),
