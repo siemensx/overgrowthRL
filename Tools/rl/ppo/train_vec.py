@@ -719,7 +719,6 @@ def main():
             episode_lengths_this_update = []
             episode_components_this_update = []  # list of per-episode component dicts, this update only
             outcomes_this_update = {"won": 0, "lost": 0, "timeout": 0}
-            actions_this_update = []  # OGRL-20260817-028 Sec8.2: raw sampled actions, for action_stats below
             emergence = EmergenceAccumulator()  # Sec8.3: fresh each update, same sample size as action_stats
             collection_start = time.perf_counter()
             # Tiny policy batches lose more to thread-pool coordination than
@@ -747,7 +746,6 @@ def main():
                 with torch.inference_mode():   # 2026-09-20: 0.96 -> 0.61 ms per forward on the trainer (no autograd bookkeeping)
                     actions, log_probs, _entropy, values, raw_cont = policy.get_action_and_value(obs_tensor, return_raw=True)
                 actions_np = actions.cpu().numpy()
-                actions_this_update.append(actions_np)
                 _t1 = time.perf_counter()
 
                 raw_next_obs, rewards, terminals, truncateds, infos = vec_env.step(actions_np)
@@ -876,7 +874,10 @@ def main():
             # separated a coin-flip policy from a controller in run5-9
             # (-027 Sec1.3: 0.09 in the broken runs, 0.35 in run9). One numpy
             # reduction over this update's collected actions.
-            actions_arr = np.stack(actions_this_update)  # (n_steps, n_envs, 8)
+            # The rollout buffer already owns an exact copy of every sampled
+            # action. Reuse it for telemetry instead of retaining a parallel
+            # list and stacking a second full batch after collection.
+            actions_arr = buffer.actions  # (n_steps, n_envs, 8)
             button_names = ["jump", "crouch", "attack", "grab", "drop", "walk"]
             button_pressed = actions_arr[:, :, 2:8] > 0.5  # (n_steps, n_envs, 6)
             per_env_press_rate = button_pressed.mean(axis=0)  # (n_envs, 6)
