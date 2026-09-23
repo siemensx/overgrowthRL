@@ -1328,3 +1328,54 @@ against the identical status-quo build on matched 300-second no-checkpoint
 windows. The current lever ledger remains 16/39 screened (41%), 18/39 partial
 (46%), and 5/39 open (13%): the worker/thread families are still partial, and
 PGO remains unproven rather than exhausted.
+
+## OGRL-20260923-005 — five-minute update-thread ABBA confirmation
+
+**Timestamp:** 2026-09-23 12:09 PDT. **Host:** Windows trainer, Dell Latitude
+7450 / Core Ultra 7 165U. **Source:** `e759420e5ace7d5f48f44f31a83050fa18b7ad14`
+with only generated Python `__pycache__` paths dirty. **Engine:** fixed-base
+Release `C:\ogrl\optimization\BuildWinDet232Fixed_20260923\Release\Overgrowth.exe`,
+SHA-256 `9b2d423347284dfa7ebf99a8e65ec5ccf80d92896c623720d5c789d0545b5e9e`.
+Purchased assets were read in place from Steam. The read-only resume checkpoint
+was `run24_opt_smoke_20260921.pt`, 5,792,935 bytes, SHA-256
+`1f98963795cb5d1123ee5ad8a51df870df917b387205f3d51e0c36635ce4d88d`.
+
+At n20/k4, six fixed training maps (101–106), 60-second warmup, and 300-second
+measurement, an ABBA order compared update-torch-threads 1 (A) against 2 (B).
+Other settings were held fixed: collection/inter-op threads 2/1, hard reset 20,
+512 rollout steps, one epoch, minibatch 128, engine AboveNormal/affinity
+`0xFFF`, trainer Normal. Every valid point used `--no-checkpoint`, clean stop,
+actor and map proof, the same engine SHA and checkpoint SHA, and zero recoveries.
+
+| order | update threads | useful wall transitions/s | pool misses |
+|---|---:|---:|---:|
+| A1 | 1 | 1,013.950623 | 0.998% |
+| B1 | 2 | 936.273412 | 1.085% |
+| B2 | 2 | 950.194767 | 0.000% |
+| A2 | 1 | 989.077696 | 0.402% |
+
+Both midpoint B observations were slower than their corresponding edge A
+observations: B1−A1 = −77.677212 SPS (−7.661%); B2−A2 = −38.882929 SPS
+(−3.931%). The ABBA means, which cancel a linear time/order drift, were
+1,001.514160 SPS for update-threads 1 and 943.234089 SPS for update-threads 2:
+**−58.280070 SPS / −5.819%** for thread 2. This reverses the earlier
+120-second +7.236% screen; do not adopt update-threads 2 at n20/k4 on that
+short screen. This settles that specific comparison negatively, but does not
+complete the broader update-thread/worker matrix.
+
+The first attempted A2 accidentally resolved the checkout-default executable
+instead of the fixed-base binary and failed pre-ready; it is invalid. A second
+explicitly pinned attempt failed when one child exited before IPC connection
+after six engine logs; it too is invalid. The third A2 attempt above completed
+with all 24 actors and valid map proof. All three attempts preserved the input
+checkpoint; the successful harness record verifies identical before/after
+SHA-256. No persistent training or machine/Tailscale restart occurred.
+
+The best valid 300-second useful-wall observation in the preceding comparison
+remains the status-quo **1,021.810 SPS** point; this confirmation establishes no
+adopted throughput growth. The 16/39 (41%) fully screened, 18 partial, and 5
+open lever counts do not change: update threads are still only partially
+screened across worker counts and related learner settings. Raw run JSONs and
+logs remain on the trainer under
+`C:\ogrl\optimization\threadConfirm20260923\` and the corresponding
+`Tools\rl\runs\` directories; no raw telemetry or weight file was added to git.
