@@ -127,6 +127,47 @@ def _build_initial_wave(
     return [result for result in results if result is not None]
 
 
+def _collect_initial_resets(pool: ThreadPoolExecutor, reset: Callable, envs: Sequence) -> list:
+    """Finish every initial standby reset before propagating any failure.
+
+    ``Executor.map`` can raise on the first failed standby while other reset
+    threads still wait on engine IPC. Collect all futures (each IPC wait is
+    bounded) so constructor cleanup cannot race a sibling reset thread.
+    """
+    futures = {pool.submit(reset, env): index for index, env in enumerate(envs)}
+    results: list[object | None] = [None] * len(envs)
+    first_error: BaseException | None = None
+    try:
+        for future in as_completed(futures):
+            index = futures[future]
+            try:
+                results[index] = future.result()
+            except BaseException as exc:
+                if first_error is None:
+                    first_error = exc
+    except BaseException:
+        for future in futures:
+            future.cancel()
+        wait(futures)
+        raise
+    if first_error is not None:
+        raise first_error
+    if any(result is None for result in results):
+        raise RuntimeError("an initial standby reset completed without an observation")
+    return [result for result in results if result is not None]
+
+
+def _cleanup_failed_initialization(envs: Sequence, executors: Sequence[ThreadPoolExecutor]) -> None:
+    """Close every engine and shut down both pools after constructor failure."""
+    for env in envs:
+        try:
+            env.close()
+        except Exception:
+            pass
+    for executor in executors:
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
 class VecOvergrowthEnv:
     def __init__(
         self,
@@ -298,25 +339,25 @@ class VecOvergrowthEnv:
                 wave = specs[start:start + wave_size]
                 built.extend(_build_initial_wave(self._pool, _make, wave))
             initial_launch_complete = True
-        except BaseException:
-            for env in built:
-                try:
-                    env.close()
-                except Exception:
-                    pass
-            self._reset_pool.shutdown(wait=True, cancel_futures=True)
-            self._pool.shutdown(wait=True, cancel_futures=True)
-            raise
-        self.envs: list[OvergrowthEnv] = built[:n_envs]
-        standby_envs = built[n_envs:]
+            self.envs: list[OvergrowthEnv] = built[:n_envs]
+            standby_envs = built[n_envs:]
 
-        if standby_envs:
-            # Get every standby to a real, ready-to-serve observation before
-            # training's first step() call -- a standby with no observation
-            # yet isn't actually ready to swap in.
-            standby_results = list(self._pool.map(lambda env: self._reset_env(env), standby_envs))
-            with self._standby_lock:
-                self._standby = [_Standby(env, obs, scenario) for env, (obs, scenario) in zip(standby_envs, standby_results)]
+            if standby_envs:
+                # Get every standby to a real, ready-to-serve observation before
+                # training's first step() call -- a standby with no observation
+                # yet isn't actually ready to swap in. Collect the whole reset
+                # wave so one failed IPC wait cannot strand sibling futures.
+                standby_results = _collect_initial_resets(
+                    self._pool, self._reset_env, standby_envs
+                )
+                with self._standby_lock:
+                    self._standby = [
+                        _Standby(env, obs, scenario)
+                        for env, (obs, scenario) in zip(standby_envs, standby_results)
+                    ]
+        except BaseException:
+            _cleanup_failed_initialization(built, (self._reset_pool, self._pool))
+            raise
 
     def _next_reset_seed(self, env: OvergrowthEnv) -> int:
         with self._reset_counter_lock:
