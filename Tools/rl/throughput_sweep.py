@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
@@ -31,6 +32,73 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+try:
+    from .paths import aux_data, engine_binary
+except ImportError:  # script execution from Tools/rl
+    from paths import aux_data, engine_binary
+
+
+def file_fingerprint(path: Path) -> dict:
+    """Identify an input binary/checkpoint exactly without loading it."""
+    resolved = Path(path).resolve(strict=True)
+    digest = hashlib.sha256()
+    with resolved.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    stat = resolved.stat()
+    return {"path": str(resolved), "bytes": stat.st_size, "sha256": digest.hexdigest()}
+
+
+def resolve_input_checkpoint(repo: Path, checkpoint: str | Path) -> Path:
+    """Resolve relative resume paths as train_vec.py does from repo cwd."""
+    path = Path(checkpoint)
+    return path if path.is_absolute() else repo / path
+
+
+def source_identity(repo: Path) -> dict:
+    """Record the exact checkout and whether tracked/untracked source is dirty."""
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True, timeout=5,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", str(repo), "status", "--porcelain"],
+            capture_output=True, text=True, check=True, timeout=5,
+        ).stdout.splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return {"commit": None, "dirty": None, "dirty_paths": []}
+    return {
+        "commit": commit or None,
+        "dirty": bool(status),
+        "dirty_paths": [line[3:] for line in status],
+    }
+
+
+def experiment_identity(repo: Path, args) -> dict:
+    """Capture the exact engine, assets, checkpoint and throughput protocol."""
+    engine = engine_binary(repo)
+    checkpoint = resolve_input_checkpoint(repo, args.resume_from)
+    return {
+        "source": source_identity(repo),
+        "engine": file_fingerprint(engine),
+        "assets_root": str(aux_data()),
+        "assets_root_exists": aux_data().is_dir(),
+        "resume_checkpoint": file_fingerprint(checkpoint),
+        "protocol": {
+            "levels": [level for level in args.levels.split(",") if level],
+            "warmup_seconds": args.warmup,
+            "measure_seconds": args.measure,
+            "collection_threads": args.collection_threads,
+            "update_threads": args.update_threads,
+            "interop_threads": args.interop_threads,
+            "hard_reset_every": args.hard_reset_every,
+            "n_steps": args.n_steps,
+            "n_epochs": args.n_epochs,
+            "minibatch_size": args.minibatch_size,
+        },
+    }
 
 
 def find_existing_engines() -> list[str]:
@@ -412,6 +480,7 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
     for artifact in (run_dir, log, ckpt):
         if artifact.exists():
             raise FileExistsError(f"refusing to overwrite prior benchmark artifact: {artifact}")
+    experiment = experiment_identity(repo, args)
     cmd = [sys.executable, "-u", str(repo / "Tools" / "rl" / "ppo" / "train_vec.py"),
            "--repo-root", str(repo), "--levels", args.levels,
            "--shm-prefix", shm_prefix, "--n-envs", str(n_envs), "--k-standby", str(k_standby),
@@ -506,6 +575,7 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
         return _metric_column(measured_rows, k)
     sps = col("steps_per_second_cycle")
     out = {"run_id": run_id, "n_envs": n_envs, "k_standby": k_standby, "rows_total": len(rows), "rows_measured": len(win),
+           "experiment": experiment,
            "exited_early": exited_early, "ready": ready_at is not None, "ready_at": ready_at,
            "ready_wait_seconds": ready_wait, "launch_wall_seconds": time.time() - launch_t,
            "trainer_returncode": proc.returncode, "clean_stop": clean_stop,
@@ -539,6 +609,18 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
         out["run_manifest_status"] = json.loads(manifest_path.read_text(encoding="utf-8")).get("status")
     except (OSError, ValueError, AttributeError):
         out["run_manifest_status"] = None
+    checkpoint_path = Path(experiment["resume_checkpoint"]["path"])
+    try:
+        checkpoint_after = file_fingerprint(checkpoint_path)
+    except OSError:
+        checkpoint_after = None
+    out["resume_checkpoint_after_sha256"] = (
+        checkpoint_after["sha256"] if checkpoint_after is not None else None
+    )
+    out["resume_checkpoint_unchanged"] = (
+        checkpoint_after is not None
+        and checkpoint_after["sha256"] == experiment["resume_checkpoint"]["sha256"]
+    )
     out["valid_point"] = bool(
         out["ready"]
         and not out["exited_early"]
@@ -547,6 +629,7 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
         and out["clean_stop"]
         and out["run_manifest_status"] == "completed"
         and not out["checkpoint_written"]
+        and out["resume_checkpoint_unchanged"]
         and out["characters_valid"]
     )
     print(json.dumps(out), flush=True)

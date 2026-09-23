@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import subprocess
@@ -298,6 +299,57 @@ class ThroughputSweepStopTests(unittest.TestCase):
             self.assertEqual(throughput_sweep.restored_opponents_from_log(log), 3)
             log.write_text("training started\n", encoding="utf-8")
             self.assertIsNone(throughput_sweep.restored_opponents_from_log(log))
+
+
+class ThroughputSweepProvenanceTests(unittest.TestCase):
+    def test_file_fingerprint_records_resolved_path_size_and_sha256(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "engine.bin"
+            payload = b"engine-build-fingerprint"
+            target.write_bytes(payload)
+
+            fingerprint = throughput_sweep.file_fingerprint(target)
+
+            self.assertEqual(fingerprint["path"], str(target.resolve()))
+            self.assertEqual(fingerprint["bytes"], len(payload))
+            self.assertEqual(fingerprint["sha256"], hashlib.sha256(payload).hexdigest())
+
+    def test_relative_resume_checkpoint_resolves_from_repo_root(self):
+        repo = Path("/repo/checkout")
+        self.assertEqual(
+            throughput_sweep.resolve_input_checkpoint(repo, "weights/run.pt"),
+            repo / "weights" / "run.pt",
+        )
+
+    def test_experiment_identity_captures_engine_checkpoint_and_protocol(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            engine = repo / "engine.exe"
+            checkpoint = repo / "run.pt"
+            engine.write_bytes(b"engine")
+            checkpoint.write_bytes(b"read-only-checkpoint")
+            args = SimpleNamespace(
+                resume_from="run.pt",
+                levels="arenas/a.xml,arenas/b.xml",
+                warmup=60.0,
+                measure=300.0,
+                collection_threads=2,
+                update_threads=1,
+                interop_threads=1,
+                hard_reset_every=20,
+                n_steps=512,
+                n_epochs=1,
+                minibatch_size=128,
+            )
+            with mock.patch.object(throughput_sweep, "engine_binary", return_value=engine):
+                with mock.patch.object(throughput_sweep, "aux_data", return_value=repo):
+                    identity = throughput_sweep.experiment_identity(repo, args)
+
+            self.assertEqual(identity["engine"]["sha256"], hashlib.sha256(b"engine").hexdigest())
+            self.assertEqual(identity["resume_checkpoint"]["bytes"], len(b"read-only-checkpoint"))
+            self.assertEqual(identity["protocol"]["levels"], ["arenas/a.xml", "arenas/b.xml"])
+            self.assertEqual(identity["protocol"]["update_threads"], 1)
+            self.assertEqual(identity["assets_root"], str(repo))
 
 
 if __name__ == "__main__":

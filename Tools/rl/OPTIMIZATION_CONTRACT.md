@@ -1243,6 +1243,17 @@ n16/k8 and n24/k6 completed but failed the exact character-count proof, so
 their speed numbers are invalid and excluded. The valid n18 point is one short
 screen, not a new sustained record.
 
+**Provenance caveat:** the legacy machine-readable worker/thread summaries
+contain source/runtime config and actor proof but do not record the resolved
+engine executable path/SHA or the input checkpoint SHA. Thus their SPS values
+are observed, but the extra 7.236% thread-2 signal is not yet attributable to
+an exact engine binary with the same standard as the LTCG ABBA. The
+`throughput_sweep.py` harness now adds source/dirty state, engine path/size/SHA,
+asset root, input-checkpoint path/size/SHA, the full timed protocol, and a
+post-run checkpoint-unchanged check to every point. It also invalidates any
+point whose input checkpoint changed. Repeat the thread comparison with this
+metadata before calling the difference build-attributed growth.
+
 At n20/k4, the update-thread points were:
 
 | update threads | valid useful wall SPS points | evidence/disposition |
