@@ -36,6 +36,8 @@
 #include <Internal/timer.h>
 #include <Internal/profiler.h>
 
+#include <Main/rl_benchmark.h>
+
 #include <Compat/fileio.h>
 #include <Utility/assert.h>
 #include <Logging/logdata.h>
@@ -211,6 +213,14 @@ ASContext::ASContext(const char *name, const ASData &as_data) : scenegraph(as_da
     engine->SetEngineProperty(asEP_ALLOW_MULTILINE_STRINGS, true);
     engine->SetEngineProperty(asEP_ALLOW_UNSAFE_REFERENCES, true);
     engine->SetEngineProperty(asEP_OPTIMIZE_BYTECODE, true);
+    // Training/evaluation never use AngelScript's statement-level debugger or
+    // line profiler callbacks. Omitting line-cue bytecode removes interpreter
+    // work while retaining the engine's normal game/script semantics. Keep the
+    // default unchanged for interactive play and all debugging/profiling paths.
+    if (RLBenchmark::Enabled() && !kDebugLineCallback && !asdebugger_enabled &&
+        !asprofiler_enabled && !as_script_profile_enabled) {
+        engine->SetEngineProperty(asEP_BUILD_WITHOUT_LINE_CUES, true);
+    }
 
     // Configure the script engine with all the functions,
     // and variables that the script should be able to use.
