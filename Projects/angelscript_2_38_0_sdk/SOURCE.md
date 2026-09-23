@@ -5,8 +5,10 @@
 - SHA-256: `b33b5dbcda10317ef67d628353d83246984ce6fcac102d4dc2aed121eba52e6f`
 - Vendored subset: `sdk/angelscript/`
 
-This version is selected only by `RL_NATIVE_ARM64_TRAINING`. Existing builds
-continue to compile against the original AngelScript 2.32.0 tree.
+By default, builds continue to use the original AngelScript 2.32.0 tree.
+`RL_NATIVE_ARM64_TRAINING` selects this version for the Apple Silicon build;
+`RL_ANGELSCRIPT_238` is a default-off experiment switch for equivalence and
+performance testing on other targets, including the Windows trainer.
 
 ## Local ARM64 correction
 

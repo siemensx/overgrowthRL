@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import throughput_sweep  # noqa: E402
+
+
+class _CleanStopProcess:
+    returncode = None
+
+    def __init__(self, run_dir: Path):
+        self.run_dir = run_dir
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout=None):
+        control = json.loads((self.run_dir / "control.json").read_text(encoding="utf-8"))
+        if control["command"] != "stop":
+            raise AssertionError("trainer was not asked to stop cleanly")
+        self.returncode = 0
+        return 0
+
+    def terminate(self):
+        raise AssertionError("clean control stop should not terminate the trainer")
+
+
+class _EscalatedStopProcess:
+    pid = 4321
+    returncode = None
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout=None):
+        if self.returncode is None:
+            raise subprocess.TimeoutExpired("trainer", timeout)
+        return self.returncode
+
+    def terminate(self):
+        raise AssertionError("fallback must target the process tree, not just its parent")
+
+
+class ThroughputSweepStopTests(unittest.TestCase):
+    def test_windows_process_preflight_is_read_only(self):
+        result = SimpleNamespace(
+            stdout='"Overgrowth.exe","1234","Console","1","10,000 K"\n'
+        )
+        with mock.patch.object(throughput_sweep.os, "name", "nt"):
+            with mock.patch.object(throughput_sweep.subprocess, "run", return_value=result) as run:
+                existing = throughput_sweep.find_existing_engines()
+        self.assertEqual(existing, ["PID 1234"])
+        self.assertEqual(
+            run.call_args.args[0],
+            ["tasklist.exe", "/FI", "IMAGENAME eq Overgrowth.exe", "/FO", "CSV", "/NH"],
+        )
+
+    def test_busy_host_is_refused_without_killing_anything(self):
+        with mock.patch.object(throughput_sweep, "find_existing_engines", return_value=["PID 1234"]):
+            with self.assertRaisesRegex(RuntimeError, "refusing throughput sweep"):
+                throughput_sweep.refuse_busy_engine_host()
+
+    def test_stop_request_is_atomic_parseable_utf8_without_bom(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "run"
+            throughput_sweep.request_stop(run_dir)
+            data = (run_dir / "control.json").read_bytes()
+            self.assertFalse(data.startswith(b"\xef\xbb\xbf"))
+            self.assertEqual(json.loads(data.decode("utf-8"))["command"], "stop")
+            self.assertFalse((run_dir / "control.json.tmp").exists())
+
+    def test_clean_update_boundary_stop_is_not_escalated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            clean, escalated = throughput_sweep.stop_trainer(
+                _CleanStopProcess(Path(temp)), Path(temp), 1.0
+            )
+        self.assertTrue(clean)
+        self.assertFalse(escalated)
+
+    def test_timeout_uses_bounded_termination_fallback(self):
+        proc = _EscalatedStopProcess()
+
+        def kill_owned_tree(*args, **kwargs):
+            proc.returncode = 1
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as temp:
+            with mock.patch.object(throughput_sweep, "request_stop", side_effect=OSError("read-only")):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    if throughput_sweep.os.name == "nt":
+                        with mock.patch.object(throughput_sweep.subprocess, "run", side_effect=kill_owned_tree) as run:
+                            clean, escalated = throughput_sweep.stop_trainer(proc, Path(temp), 0.01)
+                        self.assertEqual(run.call_args.args[0], ["taskkill.exe", "/PID", "4321", "/T", "/F"])
+                    else:
+                        with mock.patch.object(throughput_sweep.os, "killpg", side_effect=kill_owned_tree) as killpg:
+                            clean, escalated = throughput_sweep.stop_trainer(proc, Path(temp), 0.01)
+                        self.assertEqual(killpg.call_args.args, (4321, throughput_sweep.signal.SIGTERM))
+        self.assertFalse(clean)
+        self.assertTrue(escalated)
+
+    def test_existing_run_artifact_is_rejected_without_modification(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "Tools" / "rl" / "runs" / "sweep_tag_n2k1"
+            run_dir.mkdir(parents=True)
+            marker = run_dir / "keep.txt"
+            marker.write_text("prior evidence")
+            args = SimpleNamespace(repo_root=temp)
+            with self.assertRaises(FileExistsError):
+                throughput_sweep.run_point(args, 2, 1, "tag")
+            self.assertEqual(marker.read_text(), "prior evidence")
+
+    def test_summary_writer_atomically_publishes_results(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result = Path(temp) / "summary.json"
+            payload = [{"valid_point": True}]
+            throughput_sweep.write_results(result, payload)
+            self.assertEqual(json.loads(result.read_text()), payload)
+            self.assertFalse(result.with_suffix(".json.tmp").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -7,6 +7,15 @@ each lever has a test, a budget, a confirm threshold, a kill threshold, and a
 place in the order. A lever that is not on this list does not get pulled
 without being added here first.
 
+**Adoption rule updated 2026-09-22 per owner direction:** there is no fixed
+minimum percentage gain for a safe, semantics-preserving optimization. A
+repeatable positive gain is worth retaining even when it is small, because
+independent gains can compound. Use paired/reversed-order repeats and confidence
+intervals to separate signal from thermal/order noise; do not reject a lever
+merely for missing a 5% bar. Correctness, map coverage, useful transitions,
+pool/recovery health, and checkpoint safety remain hard gates. A one-off positive
+measurement is a lead, not an adopted gain.
+
 Throughput reference: 715 steps/s active on the Windows trainer. 10M steps ≈ 4 h.
 Bench = `evaluate.py`, seeds 900000+, t_train_101, 1v3, unarmed, d=1.0,
 1200-step cap. **Corrected 2026-09-20:** the engine is not deterministic
@@ -999,3 +1008,208 @@ the actual `info["level"]` in every PPO update. This is telemetry only; it does
 not change pool scheduling, map assignment, resets, or gameplay. A future
 training gate must inspect these counters before accepting a long run. The
 implementation passed `py_compile` and the 11-test checkpoint-safety suite.
+
+## OGRL-20260922-006 — collector/engine follow-through and OEM thermal profile
+
+### Current n18/k6 throughput and line-cue build
+
+The current stable reference remains the Release x64 status-quo engine with
+line cues enabled, n18/k6, engine AboveNormal/`0xFFF`, trainer Normal, Torch
+2/4/1, hard-reset-every 20, six maps, and the in-memory 512/128/1 PPO probe.
+It is not the production PPO recipe and never writes checkpoints. The previous
+five-minute sustained record remains **903.840 useful wall transitions/s**
+(60 s warmup + 300 s measurement, zero pool misses). The fresh matched control
+arms below averaged 896.860, consistent with that record within normal thermal
+variation; short peaks near 1,000/s are not sustained evidence.
+
+An ABBA compared the new benchmark-only AngelScript no-line-cue binary with the
+status-quo binary. All four completed arms had zero recoveries and zero pool
+misses; each full measured arm contained 267,264 useful transitions except the
+slower B2 arm at 239,616.
+
+| arm | binary SHA-256 | useful wall SPS |
+|---|---|---:|
+| A1 control | `19EAB598E098A2C66CDA190675C8278636598D1DC1A929829CA709B43B854C13` | 897.052 |
+| B1 no-line-cue | `F8EFFE0C8D84AF91A82BE8D4C2BF396C7F902D523769804959471997832BBA59` | 920.692 |
+| B2 no-line-cue | same B binary | 842.092 |
+| A2 control retry | same A binary | 896.669 |
+
+Pooled B averaged 881.392 versus A 896.860 (−1.7%). The effect changes size
+with run order and is not repeatable as a gain; keep the feature gated and do
+not adopt it for speed. The initial A2 launch failed before readiness and has
+no metric; the uniquely tagged A2 retry is the value above. The engine-side
+replay test was exact for 140/140 comparisons across maps 101–105. Map 106 has
+baseline same-seed divergence, and the attack-event side log was empty; therefore
+this is not yet a complete attack-event equivalence certificate across all six
+maps. Raw build/run files are still on the trainer under `C:\ogrl\optimization`
+and its clean checkout run directory; fetch and archive them after remote access
+returns.
+
+### Batch wait and frame-stack preallocation
+
+The existing untracked evidence in
+`research-artifacts/OGRL-20260921-006-optimization/telemetry/` contains two
+real-PPO no-checkpoint ABBA screens that were not yet transcribed into this
+contract. Both tested n18/k6, the same six-map/timing stack, and zero
+recoveries/pool misses. Their per-arm summary JSONs do not record their source
+commit or full window settings, so retain those provenance gaps rather than
+backfilling assumptions.
+
+| lever | forward A control | forward B | reverse B | reverse A | pooled result |
+|---|---:|---:|---:|---:|---|
+| `OGRL_BATCH_WAIT=1` | 922.656 | 819.280 | 797.394 | 844.392 | 808.337 vs 883.524 SPS; −8.5% |
+| `OGRL_PREALLOC_FRAME_STACK=1` | 958.481 | 827.912 | 778.554 | 804.235 | 803.233 vs 881.358 SPS; −8.9% |
+
+Both alternatives lost in each paired ordering and are rejected for this host.
+Keep both default-off; preserve the implementations for future profiling, not
+as active speed settings. Separately, the SHM ndarray fast path ABBA remains
+near tied (839.5 vs 842.0 SPS with the sign reversing by order); it is not an
+adopted gain either.
+
+### Dell thermal lever: staged, not yet verified active
+
+This corrects the earlier statement that firmware cooling was exhausted. The
+trainer had only been shown to use Windows High Performance plus its stock Dell
+`Optimized` thermal profile; DCC had not been installed, so OEM UltraPerformance
+was still an untested lever. Dell's own DCC guide lists `Optimized`, `Cool`,
+`Quiet`, and `UltraPerformance`; the Latitude 7450 manual confirms
+`Optimized` is its default. This is an OEM profile, not a firmware-limit
+override.
+
+Downloaded Dell Command Configure 5.2.2.292, SHA-256
+`bac829a34b53eaa98afa10c033646932db9f9775d285799180d5bec30fe90225`; the
+package and extracted MSI both passed Authenticode validation. Installed the
+Dell utility with restart suppressed, read `ThermalManagement=Optimized`, set
+only `ThermalManagement=UltraPerformance`, and read back that value with exit
+code 0. Then verified no Overgrowth/Python process, confirmed the run24 resume
+checkpoint SHA-256 was still
+`1F98963795CB5D1123EE5AD8A51DF870DF917B387205F3D51E0C36635CE4D88D`, and
+disabled six expired one-shot tasks (run24/run25 training and FB1–FB4 eval) to
+prevent an unintended launch during restart. Those task changes are reversible.
+
+The idle trainer was rebooted to apply the OEM setting. At the last check,
+Tailscale marked `100.118.2.91` offline and SSH port 22 was also unavailable
+over the configured LAN address. Therefore the post-reboot mode, device health,
+and any throughput effect are **unverified**. Do not claim UltraPerformance is
+active or count it as an adopted gain until SSH returns, CCTK reads the profile
+back, and the six-map n18/k6 benchmark is repeated. Do not modify voltage,
+firmware power limits, fan overrides, or thermal safety controls.
+
+### Benchmark harness hardening
+
+Uncommitted source changes in `Tools/rl/throughput_sweep.py` now request
+`control.json` stop at an update boundary (BOM-free UTF-8, atomic replace),
+wait for a clean `completed` manifest, use bounded terminate/kill only as a
+fallback, clip measurement rows to the requested window, mark invalid starts
+as failures, and refuse to overwrite prior run or checkpoint artifacts. This
+preserves no-checkpoint probe semantics and avoids stale `running` manifests.
+Three unit tests for clean stop, fallback, and control-file encoding pass, as
+do `py_compile`, `git diff --check`, and all 11 checkpoint-safety tests. It has
+not yet been deployed to the trainer because SSH went offline during the OEM
+reboot.
+
+### Finite lever-coverage accounting
+
+For an honest progress percentage, this contract tracks 39 concrete
+optimization families—not every possible future optimization. “Screened” means
+the family has an evidence-backed setting decision or explicit inspection;
+“partial” means evidence exists but the causal/end-to-end gate is incomplete;
+“open” means no adequate test has run.
+
+| coverage | count | families |
+|---|---:|---|
+| Screened or inspected | 16/39 (41%) | engine priority; active affinity; trainer scheduling; standby placement; collection threads; reset cadence; soft-reset fidelity; sync vs async; SHM ndarray path; Win32 batch wait; preallocated frame stack; null-sound early-out; line-cue suppression; Defender exclusions; Windows AC power plan; CPU topology/masks |
+| Partial | 18/39 (46%) | active-worker count; standby depth; six-map/per-map balance; update threads; inter-op threads; rollout horizon; minibatch/epochs; inference mode; observation/finite-check path; reward/entity bookkeeping; ctypes signatures; headless-path delta; global/targeted MSVC LTCG (global BUILD_SERVER-coupled attempt diverged; isolated Release-only candidate prepared); profile-guided optimization; WPR/WPA hotspot analysis; Dell UltraPerformance (set before reboot, post-reboot readback unavailable); startup/reset path hardening; I/O/telemetry overhead |
+| Open | 5/39 (13%) | bounded launch-wave A/B; nonblocking-evaluation overhead gate; accelerator/backend comparison; 15/20/30 Hz decision-rate quality-and-throughput gate; AngelScript runtime upgrade and production-equivalent engine hot-path optimization |
+
+Thus 34/39 (87%) have at least been touched by evidence or inspection, but
+only 16/39 (41%) are screened; **23/39 (59%) remain partial or open**. This is
+coverage of the declared inventory, not a claim that optimization is exhausted.
+Next highest-value safe work after connectivity returns: read back the staged
+thermal mode without rebooting; verify and benchmark the isolated MSVC LTCG
+candidate; deploy the benchmark fix; use a WPA-capable ETW analysis or bounded
+native profiler to identify another hot path; and test engine edits only after
+production-reference replay. The SHM array path's pooled result is near zero and
+needs a substantially longer paired run before a default change.
+
+### Remote reboot safety correction (2026-09-23)
+
+The owner confirmed that this trainer's Tailscale connection must be started
+manually at the machine after reboot. This was also consistent with the manual
+Tailscale setup step in `Tools/rl/remote/WINDOWS_HOST_SETUP.md`, which I failed
+to check before rebooting for the OEM thermal change. That reboot caused an
+avoidable loss of remote access while the owner was away. **Do not reboot or
+power-cycle the trainer remotely** unless the owner explicitly authorizes that
+specific action and local recovery or verified independent management is
+available. Do not assume SSH/Tailscale being online before reboot means it will
+return after reboot. No further restart is authorized for the current work.
+
+## OGRL-20260923-001 — isolated MSVC LTCG experiment prepared
+
+The earlier `BUILD_SERVER=ON` result is not a clean LTCG comparison because that
+switch changes deployment, packaging, console, Steamworks, and other build
+settings in addition to `/GL` and `/LTCG`. Added the default-off CMake option
+`RL_MSVC_LTCG`, which applies CMake IPO only to the Release `Overgrowth` and
+`angelscript` targets, checks that the MSVC toolchain supports IPO, and does not
+change `BUILD_SERVER` or any physics/runtime setting. Official compiler docs
+confirm `/GL` enables cross-module optimization and requires the cooperating
+link-time stage; CMake's IPO target property is the supported target-scoped path.
+
+The option is an experiment switch, not an adopted build. On this Mac, a full
+Release CMake configure with the option off completed under AppleClang 17.0.0;
+turning it on correctly stopped at the non-MSVC guard. No engine was compiled,
+no Windows flag line was inspected, and no throughput or replay conclusion is
+claimed. The Windows gate is: configure with `BUILD_SERVER=OFF` and
+`RL_MSVC_LTCG=ON`; prove `/GL` appears on both AngelScript and Overgrowth Release
+compiles and `/LTCG` on the Overgrowth link; run the strict deterministic replay
+gate against the same-source non-LTCG build; then run an interleaved real-PPO
+no-checkpoint benchmark. Keep the option off unless every gate passes.
+
+## OGRL-20260923-003 — scoped benchmark cleanup and AngelScript runtime lead
+
+### Throughput probe safety
+
+Source audit found the checked-out `throughput_sweep.py` still called a
+machine-wide `taskkill /IM Overgrowth.exe` before a sweep and after every point.
+That can kill an unrelated trainer or interactive game, contrary to the Windows
+handoff rule. This turn did not invoke the sweep on the trainer. Replaced the
+global kill with a read-only preflight that refuses to run while any Overgrowth
+process exists, and a bounded fallback scoped to the benchmark Python process
+and its child tree (`taskkill /PID <owned-pid> /T /F` on Windows; a private
+POSIX process group elsewhere). Normal shutdown first uses the trainer's
+update-boundary `control.json` stop. The probe now always omits
+`--checkpoint-path`, never deletes checkpoints, reserves unique run/log paths,
+refuses pre-existing summary output, and atomically writes its result summary.
+An unexpected checkpoint is preserved and invalidates the point rather than
+being removed.
+
+Seven focused harness tests now cover a read-only busy-host check, BOM-free
+atomic stop requests, clean stop, owned-process-tree fallback, refusal to
+overwrite old telemetry, and atomic summary output. The full local safety set
+(`test_throughput_sweep`, strict engine comparison tests, and checkpoint safety)
+passes 20 tests; `py_compile` and `git diff --check` pass. Process-tree
+termination and Windows process-list parsing were tested with mocks on the
+Mac, not exercised on Windows. No trainer process, engine, checkpoint, or
+scheduled task was touched by this turn.
+
+### AngelScript 2.38 candidate
+
+Official AngelScript change notes identify a runtime-performance improvement in
+2.37 that reduces script-function-call overhead; the vendored 2.38 SDK includes
+that release and its subsequent fixes. Overgrowth currently selects 2.32 on
+Windows and 2.38 only for `RL_NATIVE_ARM64_TRAINING`. Added default-off
+`RL_ANGELSCRIPT_238` to make the newer runtime a separately testable build
+candidate without changing default builds. Official release note:
+[AngelScript change history](https://angelcode.com/angelscript/changes.php).
+
+Observed locally: CMake Release configuration with the option ON selected and
+reported AngelScript 2.38.0, and the vendored `angelscript` library compiled
+successfully with AppleClang 17.0.0. This is a dependency compile check only:
+the Overgrowth executable was not built, the Windows/MSVC path was not tested,
+no replay equivalence test ran, and no speed gain is claimed. The Windows gate
+is to build status quo 2.32 and candidate 2.38 from the same source, verify
+scripts/API initialization and strict transition/attack-event replay across the
+frozen maps, then run matched real-PPO no-checkpoint ABBA under the established
+trainer configuration. Keep the new selector off unless correctness passes;
+retain even a small repeatable positive speed result per the owner's adoption
+rule.

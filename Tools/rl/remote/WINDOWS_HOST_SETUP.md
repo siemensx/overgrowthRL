@@ -73,6 +73,15 @@ A browser opens; sign in with the same account you'll use on the Mac. Then:
 
 That is all you need to do on Windows.
 
+### Remote reboot safety
+
+The owner confirmed on 2026-09-22 that this trainer does not become remotely
+reachable through Tailscale after a reboot until someone starts Tailscale at
+the machine. Therefore an agent must **not reboot or power-cycle the trainer
+remotely** unless the owner explicitly authorizes that specific reboot and a
+person or verified independent management path is available to restore access.
+Do not infer pre-login Tailscale startup from successful SSH before reboot.
+
 ---
 
 ## Part 2 — on the Mac (I run this)
