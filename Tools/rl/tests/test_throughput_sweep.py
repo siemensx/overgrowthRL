@@ -52,6 +52,37 @@ class _EscalatedStopProcess:
 
 
 class ThroughputSweepStopTests(unittest.TestCase):
+    def test_pre_ready_failure_finalizes_only_the_owned_running_manifest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "run"
+            run_dir.mkdir()
+            manifest_path = run_dir / "run.json"
+            manifest_path.write_text(json.dumps({"status": "running", "run_id": "failed-start"}))
+
+            throughput_sweep.mark_pre_ready_failure(run_dir, ready_at=None, returncode=1)
+
+            manifest = json.loads(manifest_path.read_text())
+            self.assertEqual(manifest["status"], "failed")
+            self.assertEqual(manifest["run_id"], "failed-start")
+            self.assertEqual(manifest["failure"]["stage"], "before_rl_ready")
+            self.assertEqual(manifest["failure"]["trainer_returncode"], 1)
+            self.assertIsNotNone(manifest["ended_at"])
+            self.assertFalse(manifest_path.with_suffix(".json.tmp").exists())
+
+    def test_pre_ready_finalizer_preserves_terminal_or_ready_manifests(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "run"
+            run_dir.mkdir()
+            manifest_path = run_dir / "run.json"
+            for manifest, ready_at in (
+                ({"status": "completed", "run_id": "finished"}, None),
+                ({"status": "running", "run_id": "ready"}, 123.0),
+            ):
+                manifest_path.write_text(json.dumps(manifest))
+                before = manifest_path.read_bytes()
+                throughput_sweep.mark_pre_ready_failure(run_dir, ready_at, returncode=1)
+                self.assertEqual(manifest_path.read_bytes(), before)
+
     def test_per_update_metrics_exclude_warmup_straddling_row(self):
         rows = [
             {"perf": {"steps_per_second_cycle": 999.0, "pool_misses": 9}},

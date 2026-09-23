@@ -78,6 +78,40 @@ def _metric_column(rows: list[dict], key: str) -> list:
     return [r["perf"][key] for r in rows if r.get("perf", {}).get(key) is not None]
 
 
+def mark_pre_ready_failure(run_dir: Path, ready_at: float | None, returncode: int | None) -> None:
+    """Close a manifest left `running` when startup failed before train_vec's try/finally.
+
+    `VecOvergrowthEnv` is constructed before the trainer's main try/finally.
+    If an engine exits during construction, the child process ends without
+    calling RunLogger.finish(), leaving a misleading live/stale manifest.
+    The sweep owns this reserved run directory and only calls this after the
+    child has exited, so it can safely finalize that specific early failure.
+    """
+    if ready_at is not None:
+        return
+    path = run_dir / "run.json"
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict) or manifest.get("status") != "running":
+            return
+        manifest["status"] = "failed"
+        manifest["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        manifest["failure"] = {
+            "stage": "before_rl_ready",
+            "trainer_returncode": returncode,
+            "summary": "trainer exited or was stopped before the all-worker ready barrier",
+        }
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        if temporary.exists():
+            raise FileExistsError(f"refusing to overwrite unfinished run manifest: {temporary}")
+        with temporary.open("x", encoding="utf-8", newline="\n") as handle:
+            json.dump(manifest, handle, indent=2)
+            handle.write("\n")
+        os.replace(temporary, path)
+    except (OSError, ValueError, TypeError) as exc:
+        print(f"could not finalize pre-ready run manifest {path}: {exc}", file=sys.stderr)
+
+
 def wait_for_ready(log: Path, proc: subprocess.Popen, timeout: float) -> tuple[float | None, float]:
     """Wait for the post-reset all-active-worker readiness barrier."""
     started = time.monotonic()
@@ -427,6 +461,7 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
                 measurement_cutoff_epoch = time.time()
                 stop_attempted = True
                 clean_stop, cleanup_escalated = stop_trainer(proc, run_dir, args.stop_grace)
+                mark_pre_ready_failure(run_dir, ready_at, proc.returncode)
             else:
                 try:
                     proc.wait(timeout=args.warmup + args.measure)
