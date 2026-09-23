@@ -1379,3 +1379,22 @@ screened across worker counts and related learner settings. Raw run JSONs and
 logs remain on the trainer under
 `C:\ogrl\optimization\threadConfirm20260923\` and the corresponding
 `Tools\rl\runs\` directories; no raw telemetry or weight file was added to git.
+
+### OGRL-20260923-005 correction — uneven ABBA spacing
+
+**Timestamp:** 2026-09-23 12:13 PDT. This corrects the OGRL-005 statement that
+the unweighted A/B means cancel linear time drift. Actual ready times were
+18:34:20.735, 18:40:52.552, 18:47:32.416, and 19:02:39.197 UTC; the A1→B1,
+B1→B2, and B2→A2 gaps were 391.817, 399.864, and 906.781 seconds. The two
+failed A2 launches made the last gap materially longer, so the raw means
+(T1 1,001.514160; T2 943.234089 SPS; −5.819%) are descriptive but do not by
+themselves cancel a linear drift.
+
+For a linear-drift adjustment, interpolate the T1 useful-wall rate between A1
+and A2 at the mean timestamp of the two T2 measurement midpoints. The weight
+from A1 to A2 is 0.348402849; interpolated T1 is 1,005.284825 SPS versus the
+T2 mean 943.234089 SPS: **−62.050735 SPS / −6.172%**. This adjustment depends
+on a two-point linear-drift assumption and is not a significance test. The
+direction is also consistent with both unadjusted local contrasts (T2 below
+the adjacent T1 point). Therefore the evidence remains negative for adopting
+T2 at n20/k4, while the broader thread/worker family remains partial.
