@@ -411,11 +411,33 @@ class OvergrowthEnv:
             print(f"[env] scheduling role {reason} not applied for {self.shm_name}: {exc}", flush=True)
 
     def _fail_launch(self, message: str) -> None:
-        """Terminate and clean a partially-started engine before reporting failure."""
+        """Clean a failed launch while retaining its small diagnostic log."""
+        log_path = self._write_dir.parent / f"{self._write_dir.name}.log"
+        log_bytes = None
+        try:
+            self._log_file.flush()
+            log_bytes = log_path.read_bytes()
+        except OSError:
+            pass
         try:
             self.close()
         except Exception as cleanup_error:  # noqa: BLE001 - preserve the launch error
             print(f"[env] launch cleanup failed for {self.shm_name}: {cleanup_error}", flush=True)
+        if log_bytes:
+            safe_name = "".join(
+                ch if ch.isalnum() or ch in "-_" else "_"
+                for ch in self.shm_name.strip("/")
+            )
+            failure_dir = self.repo_root / "Tools" / "rl" / "runs" / "engine_failures"
+            failure_dir.mkdir(parents=True, exist_ok=True)
+            failure_log = failure_dir / f"{safe_name}.log"
+            if failure_log.exists():
+                failure_log = failure_dir / f"{safe_name}_{time.time_ns()}.log"
+            try:
+                failure_log.write_bytes(log_bytes)
+                message = f"{message}; engine startup log preserved at {failure_log}"
+            except OSError as log_error:
+                print(f"[env] could not preserve failed launch log: {log_error}", flush=True)
         raise RuntimeError(message)
 
     def close(self) -> None:
