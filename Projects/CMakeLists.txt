@@ -53,6 +53,7 @@ OPTION(BUILD_OVERGROWTH "Build the main game" ON)
 OPTION(RL_NATIVE_ARM64_TRAINING "Build the stripped Apple Silicon RL training executable" OFF)
 OPTION(RL_ANGELSCRIPT_238 "Use vendored AngelScript 2.38.0 for an engine-equivalence/performance test" OFF)
 OPTION(RL_MSVC_LTCG "Enable Release-only MSVC whole-program optimization for Overgrowth and AngelScript" OFF)
+OPTION(RL_WINDOWS_FIXED_BASE "Disable ASLR for Windows same-seed determinism probes only" OFF)
 OPTION(MONITOR_MEMORY "Monitor memory usage and make avaiable ingame" Off)
 OPTION(OPEN_CONSOLE "Open a console on startup on windows" On)
 OPTION(FORCE_OPENGL_ERROR_CHECKING "Force OpenGL error checking in Release" Off)
@@ -1211,6 +1212,14 @@ IF(BUILD_OVERGROWTH)
     SET_TARGET_PROPERTIES(Overgrowth PROPERTIES
         OUTPUT_NAME ${OVERGROWTH_OUTPUT_NAME}
     )
+    IF(RL_WINDOWS_FIXED_BASE)
+        IF(NOT WIN32 OR NOT MSVC)
+            MESSAGE(FATAL_ERROR "RL_WINDOWS_FIXED_BASE is only supported for Windows/MSVC determinism probes")
+        ENDIF()
+        # This is a correctness-test control, not a production optimization:
+        # suppress ASLR so identical Windows seed/action traces can be compared.
+        SET_PROPERTY(TARGET Overgrowth APPEND_STRING PROPERTY LINK_FLAGS " /DYNAMICBASE:NO")
+    ENDIF()
     IF(RL_MSVC_LTCG)
         IF(NOT MSVC)
             MESSAGE(FATAL_ERROR "RL_MSVC_LTCG requires the MSVC toolchain")
