@@ -1539,3 +1539,34 @@ Next: isolate Normal versus ABOVE_NORMAL engine priority at n20/k4, keeping
 affinity `0xFFF` and T1 fixed in an order-balanced 300-second comparison.
 Worker/thread coverage remains partial; overall inventory remains 16/39 fully
 screened, 18 partial, 5 open.
+
+## OGRL-20260923-009 — engine-priority comparison interrupted by startup
+
+**Timestamp:** 2026-09-23 14:07 PDT. A read-only CCTK query returned
+`ThermalManagement=UltraPerformance` (exit 0). No setting change or restart
+occurred. While this profile was configured, an n20/k4, T1, affinity-`0xFFF`
+Normal-priority engine control completed 300 seconds at 625.966 useful wall
+SPS (cycle median 629.643, p10 592.955, 1.198% pool misses, zero recoveries).
+The first AboveNormal arm failed before `[RL_READY]` at 124.438 seconds with
+trainer code 1 and 24 retained engine logs; invalid, no SPS. Do not interpret
+this single startup failure as an AboveNormal loss.
+
+The intended Normal/Above/Above/Normal sequence stopped because the second
+identical B row reused B1's generated run ID. The existing no-overwrite guard
+raised `FileExistsError` before launching B2; the final A2 was consequently
+not run. The input checkpoint hash is unchanged, no checkpoint was written,
+and post-check found no benchmark process. Raw A1/B1 telemetry and engine logs
+are preserved in the outer repository under
+`research-artifacts/OGRL-20260923-004-throughput/telemetry/enginepriority_abba_attempt1_20260923_1355/`.
+No priority effect is established.
+
+**Harness fix:** `throughput_sweep.py` now includes a stable one-based point
+index in every run tag, so repeated configurations have distinct run IDs
+without weakening the no-overwrite safety check. Added a regression test.
+Validation: 21 throughput-sweep unit tests passed; Python compilation and
+`git diff --check` passed. The fix is still local until committed and pushed;
+deploy only by fast-forwarding the clean idle trainer checkout. Then rerun a
+complete unique-ID priority ABBA under the verified UltraPerformance profile.
+Thermal profile is configured/readable but a matched sustained before/after
+cooling experiment is still needed; do not count it as a throughput gain.
+Coverage remains 16/39 fully screened, 18 partial, 5 open.

@@ -302,6 +302,19 @@ class ThroughputSweepStopTests(unittest.TestCase):
 
 
 class ThroughputSweepProvenanceTests(unittest.TestCase):
+    def test_repeated_grid_conditions_get_distinct_artifact_tags(self):
+        overrides = {
+            "OGRL_ENGINE_PRIORITY": "above",
+            "OGRL_ENGINE_AFFINITY": "0xFFF",
+        }
+        first = throughput_sweep.grid_point_tag("priority_abba", 1, overrides)
+        second = throughput_sweep.grid_point_tag("priority_abba", 2, overrides)
+
+        self.assertNotEqual(first, second)
+        self.assertIn("p01", first)
+        self.assertIn("p02", second)
+        self.assertTrue(first.endswith("above_0xFFF"))
+
     def test_file_fingerprint_records_resolved_path_size_and_sha256(self):
         with tempfile.TemporaryDirectory() as temp:
             target = Path(temp) / "engine.bin"

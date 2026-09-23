@@ -282,6 +282,12 @@ def write_results(path: Path, results: list[dict]) -> None:
     os.replace(temporary, path)
 
 
+def grid_point_tag(base: str, point_index: int, overrides: dict[str, str]) -> str:
+    """Return a unique artifact tag even when a grid repeats one condition."""
+    suffix = "_".join(value for value in overrides.values() if value)
+    return f"{base}_p{point_index:02d}" + (f"_{suffix}" if suffix else "")
+
+
 _CHARACTER_CACHE_RE = re.compile(r"Caching skeleton info")
 _CHARACTER_NOTICE_RE = re.compile(
     r"Telling characters\s+(\d+)\s+and\s+(\d+)\s+to notice each other"
@@ -680,7 +686,7 @@ def main() -> int:
         raise FileExistsError(f"unfinished sweep summary exists: {temporary_out}")
     out.parent.mkdir(parents=True, exist_ok=True)
     results = []
-    for g in args.grid:
+    for point_index, g in enumerate(args.grid, start=1):
         refuse_busy_engine_host()
         spec, _, envs = g.partition(":")
         n, k = (int(x) for x in spec.lower().split("x"))
@@ -688,7 +694,8 @@ def main() -> int:
         saved = {kk: os.environ.get(kk) for kk in overrides}
         os.environ.update(overrides)
         try:
-            r = run_point(args, n, k, args.tag + ("_" + "_".join(v for v in overrides.values()) if overrides else ""))
+            tag = grid_point_tag(args.tag, point_index, overrides)
+            r = run_point(args, n, k, tag)
         finally:
             for kk, vv in saved.items():
                 if vv is None: os.environ.pop(kk, None)
