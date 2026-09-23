@@ -150,7 +150,12 @@ class ThroughputSweepStopTests(unittest.TestCase):
             for suffix, count in (("0", 4), ("1", 3), ("s0", 4), ("s1", 2)):
                 write_dir = root / f"env-ogrl_{run_id}{suffix}-test"
                 write_dir.mkdir()
-                (write_dir / "logfile.txt").write_text("Caching skeleton info\n" * count)
+                map_name = "map-a.xml" if suffix in {"0", "s0"} else "map-b.xml"
+                (write_dir / "logfile.txt").write_text(
+                    "Caching skeleton info\n" * count
+                    + f'Chose "C:/Levels/arenas/{map_name}" (valid)\n'
+                    + "Telling characters 0 and 1 to notice each other.\n"
+                )
                 write_dir.with_name(write_dir.name + ".log").write_text("engine stdout\n")
             unrelated = root / "env-ogrl_another_run0-test"
             unrelated.mkdir()
@@ -158,12 +163,22 @@ class ThroughputSweepStopTests(unittest.TestCase):
             run_dir = repo / "Tools" / "rl" / "runs" / run_id
             run_dir.mkdir(parents=True)
             evidence = throughput_sweep.collect_engine_character_logs(
-                repo, run_id, 2, 2, ["map-a", "map-b"], run_dir
+                repo, run_id, 2, 2, ["arenas/map-a.xml", "arenas/map-b.xml"], run_dir,
+                expected_opponents=1,
             )
 
             self.assertTrue(evidence["valid"])
             self.assertEqual(evidence["expected_engine_count"], 4)
-            self.assertEqual(evidence["character_count_histogram"], {"4": 2, "3": 1, "2": 1})
+            self.assertEqual(evidence["expected_opponents_from_restored_curriculum"], 1)
+            self.assertEqual(
+                evidence["skeleton_cache_marker_histogram_diagnostic_only"],
+                {"4": 2, "3": 1, "2": 1},
+            )
+            self.assertTrue(all(engine["valid"] for engine in evidence["engines"]))
+            self.assertTrue(all(
+                engine["observed_character_ids_from_notice_logs"] == [0, 1]
+                for engine in evidence["engines"]
+            ))
             self.assertEqual(len(list((run_dir / "engine_logs").glob("*.logfile.txt"))), 4)
             self.assertFalse(any(root.glob(f"env-ogrl_{run_id}*")))
             self.assertTrue(unrelated.exists())
@@ -181,12 +196,44 @@ class ThroughputSweepStopTests(unittest.TestCase):
             run_dir.mkdir(parents=True)
 
             evidence = throughput_sweep.collect_engine_character_logs(
-                repo, run_id, 1, 1, ["map-a", "map-b"], run_dir
+                repo, run_id, 1, 1, ["arenas/map-a.xml", "arenas/map-b.xml"], run_dir,
+                expected_opponents=1,
             )
 
             self.assertFalse(evidence["valid"])
             self.assertEqual(evidence["observed_engine_count"], 1)
-            self.assertEqual(evidence["engines"][0]["characters_from_engine_log"], 1)
+            self.assertEqual(evidence["engines"][0]["skeleton_cache_markers_diagnostic_only"], 1)
+            self.assertEqual(evidence["engines"][0]["observed_character_ids_from_notice_logs"], [])
+
+    def test_character_gate_rejects_wrong_actor_count_and_map(self):
+        cases = (
+            ('Chose "C:/levels/map-a.xml" (valid)\n',
+             "Telling characters 0 and 1 to notice each other.\n", True),
+            ('Chose "C:/levels/map-a.xml" (valid)\n',
+             "Telling characters 0 and 1 to notice each other.\n"
+             "Telling characters 0 and 2 to notice each other.\n", False),
+            ('Chose "C:/levels/map-b.xml" (valid)\n',
+             "Telling characters 0 and 1 to notice each other.\n", False),
+        )
+        for level_line, notices, expected_valid in cases:
+            with self.subTest(expected_valid=expected_valid, notices=notices):
+                evidence = throughput_sweep._character_scenario_evidence(
+                    level_line + notices, expected_opponents=1,
+                    expected_level="arenas/map-a.xml",
+                )
+                self.assertEqual(evidence["valid"], expected_valid)
+
+    def test_restored_opponent_count_comes_from_trainer_output(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log = Path(temp) / "trainer.log"
+            log.write_text(
+                "restored curriculum: d_max=1.00 opponents_max=2\n"
+                "restored curriculum: d_max=1.00 opponents_max=3\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(throughput_sweep.restored_opponents_from_log(log), 3)
+            log.write_text("training started\n", encoding="utf-8")
+            self.assertIsNone(throughput_sweep.restored_opponents_from_log(log))
 
 
 if __name__ == "__main__":

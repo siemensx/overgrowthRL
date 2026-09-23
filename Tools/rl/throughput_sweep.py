@@ -181,19 +181,76 @@ def write_results(path: Path, results: list[dict]) -> None:
 
 
 _CHARACTER_CACHE_RE = re.compile(r"Caching skeleton info")
+_CHARACTER_NOTICE_RE = re.compile(
+    r"Telling characters\s+(\d+)\s+and\s+(\d+)\s+to notice each other"
+)
+_RESTORED_OPPONENTS_RE = re.compile(r"restored curriculum:.*?opponents_max=(\d+)")
+
+
+def restored_opponents_from_log(log: Path) -> int | None:
+    """Read the actual resumed curriculum width, not just the CLI default."""
+    try:
+        text = log.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    matches = _RESTORED_OPPONENTS_RE.findall(text)
+    return int(matches[-1]) if matches else None
+
+
+def _character_scenario_evidence(
+    log_text: str, expected_opponents: int | None, expected_level: str | None
+) -> dict:
+    pairs = {
+        tuple(sorted((int(match.group(1)), int(match.group(2)))))
+        for match in _CHARACTER_NOTICE_RE.finditer(log_text)
+    }
+    character_ids = sorted({character_id for pair in pairs for character_id in pair})
+    expected_ids = list(range(expected_opponents + 1)) if expected_opponents is not None else []
+    expected_pairs = {
+        (left, right)
+        for left in expected_ids
+        for right in expected_ids
+        if left < right
+    }
+    logged_level_match = bool(
+        expected_level
+        and re.search(
+            rf'Chose "[^"\r\n]*[/\\]{re.escape(Path(expected_level).name)}"',
+            log_text,
+            re.IGNORECASE,
+        )
+    )
+    return {
+        "expected_opponents_from_restored_curriculum": expected_opponents,
+        "expected_character_ids": expected_ids,
+        "observed_character_ids_from_notice_logs": character_ids,
+        "observed_character_pairs_from_notice_logs": [list(pair) for pair in sorted(pairs)],
+        "complete_expected_pair_set": bool(expected_pairs) and expected_pairs.issubset(pairs),
+        "logged_level_matches_assignment": logged_level_match,
+        "valid": (
+            expected_opponents is not None
+            and character_ids == expected_ids
+            and expected_pairs.issubset(pairs)
+            and logged_level_match
+        ),
+    }
 
 
 def collect_engine_character_logs(
-    repo: Path, run_id: str, n_envs: int, k_standby: int, levels: list[str], run_dir: Path
+    repo: Path, run_id: str, n_envs: int, k_standby: int, levels: list[str], run_dir: Path,
+    expected_opponents: int | None,
 ) -> dict:
-    """Preserve this run's initial engine logs and verify every worker spawned.
+    """Preserve initial engine logs and verify each worker's actual scenario.
 
-    Overgrowth writes the per-character "Caching skeleton info" marker to
+    The level script logs every character-ID pair at match setup. Checking
+    that exact set against the restored opponent curriculum rejects empty or
+    wrong-sized scenarios. Also verify the worker loaded its assigned map.
+    Skeleton-cache markers remain useful diagnostics, but are not actor counts:
+    they can repeat on episode resets. Overgrowth writes both records to
     ``<write-dir>/logfile.txt`` on Windows. The trainer's normal env cleanup
-    removes that directory, so throughput probes opt into retaining only the
-    initial active+standby engine directories until this function copies the
-    logs into the run artifact. It then removes only those run-specific temp
-    directories. This prevents empty/misconfigured levels from looking fast.
+    removes that directory, so throughput probes retain only initial worker
+    directories until this function archives the logs and cleans those exact
+    run-specific temp directories.
     """
     write_root = repo / ".rl_write_dirs"
     prefix = f"env-ogrl_{run_id}"
@@ -216,7 +273,7 @@ def collect_engine_character_logs(
     for index, (path, suffix) in enumerate(matches):
         logfile = path / "logfile.txt"
         log_text = logfile.read_text(encoding="utf-8", errors="replace") if logfile.exists() else ""
-        character_count = len(_CHARACTER_CACHE_RE.findall(log_text))
+        cache_markers = len(_CHARACTER_CACHE_RE.findall(log_text))
         if suffix.startswith("s"):
             level_index = n_envs + int(suffix[1:])
         else:
@@ -227,7 +284,8 @@ def collect_engine_character_logs(
             "write_dir": path.name,
             "worker_suffix": suffix,
             "assigned_level": assigned_level,
-            "characters_from_engine_log": character_count,
+            "skeleton_cache_markers_diagnostic_only": cache_markers,
+            **_character_scenario_evidence(log_text, expected_opponents, assigned_level),
         }
         if logfile.exists():
             archived_log = evidence_dir / f"engine_{index:03d}.logfile.txt"
@@ -244,19 +302,20 @@ def collect_engine_character_logs(
     observed_suffixes = {record["worker_suffix"] for record in records}
     histogram: dict[str, int] = {}
     for record in records:
-        key = str(record["characters_from_engine_log"])
+        key = str(record["skeleton_cache_markers_diagnostic_only"])
         histogram[key] = histogram.get(key, 0) + 1
     valid = (
         len(records) == n_envs + k_standby
         and observed_suffixes == expected_suffix_set
-        and all(record["characters_from_engine_log"] >= 2 for record in records)
+        and expected_opponents is not None
+        and all(record["valid"] for record in records)
     )
     evidence = {
-        "source": "Overgrowth logfile.txt; count of 'Caching skeleton info' markers",
+        "source": "Overgrowth logfile.txt; character-ID pair notices plus assigned-map load",
+        "expected_opponents_from_restored_curriculum": expected_opponents,
         "expected_engine_count": n_envs + k_standby,
         "observed_engine_count": len(records),
-        "minimum_characters_per_engine": 2,
-        "character_count_histogram": histogram,
+        "skeleton_cache_marker_histogram_diagnostic_only": histogram,
         "valid": valid,
         "engines": records,
     }
@@ -370,7 +429,8 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
                     print(f"benchmark cleanup failed for PID {proc.pid}: {cleanup_error}", file=sys.stderr)
             raise
     character_evidence = collect_engine_character_logs(
-        repo, run_id, n_envs, k_standby, args.levels.split(","), run_dir
+        repo, run_id, n_envs, k_standby, args.levels.split(","), run_dir,
+        restored_opponents_from_log(log),
     )
     metrics = run_dir / "metrics.jsonl"
     rows = []
@@ -399,7 +459,9 @@ def run_point(args, n_envs: int, k_standby: int, tag: str) -> dict:
            "cleanup_escalated": cleanup_escalated,
            "measurement_cutoff_epoch": measurement_end,
            "characters_valid": character_evidence["valid"],
-           "engine_character_count_histogram": character_evidence["character_count_histogram"],
+           "expected_opponents_from_restored_curriculum": character_evidence["expected_opponents_from_restored_curriculum"],
+           "engine_character_log_evidence": character_evidence["valid"],
+           "skeleton_cache_marker_histogram_diagnostic_only": character_evidence["skeleton_cache_marker_histogram_diagnostic_only"],
            "engine_logs_preserved": len(character_evidence["engines"])}
     if sps:
         out.update({
