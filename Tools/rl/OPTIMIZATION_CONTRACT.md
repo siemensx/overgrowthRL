@@ -1656,3 +1656,92 @@ the launcher already defaults to AboveNormal/`0xFFF`. A reciprocal
 Normal-then-Above pair is running to complete a drift-balanced four-point
 comparison. Keep every repeatable positive gain; do not decide from this
 single pair.
+
+## OGRL-20260923-013 — final saved-recipe screens and close-out
+
+**Timestamp:** 2026-09-23 18:58 PDT. This entry closes the current optimization
+session at the owner's explicit “You are done” instruction. No further engine,
+benchmark, trainer, checkpoint, reboot, or service action was taken to prepare
+the report. Full synthesis and the 39-family outcome register are in
+`research-artifacts/OGRL-20260923-013-throughput/complete_optimization_log.md`.
+
+**Baseline correction:** the owner's pre-optimization 600–800 useful SPS
+baseline was valid. `launch_training.ps1` already defaulted to engine
+AboveNormal and affinity `0xFFF`; the earlier clean n14 comparison was
+700.120 Normal/no-affinity versus 833.627 AboveNormal/`0xFFF`. These are not
+newly achieved settings. A later current-recipe priority comparison on the
+actual default Release binary (SHA-256
+`6985e73dd06c572d8f474e53adf1d20d03ed039352d70ea904cccd3a89d769d0`), using
+the read-only n14 checkpoint, six maps, n14/k4, C/U/I 2/4/1, reset 50,
+256/4/256, and 60+300 s windows, measured AboveNormal 817.700/729.855 and
+Normal 798.984/818.135 useful wall SPS. Means were 773.777 vs 808.559
+(AboveNormal −4.30%). No priority change or new gain is supported; the prior
+AboveNormal default remains untouched.
+
+**Worker/standby split on the saved recipe:** source commit
+`c8a2dc84d10755ee9d746fd8d0a824441620c691`; actual clean-checkout default
+engine above; six maps; n14 checkpoint SHA
+`1f98963795cb5d1123ee5ad8a51df870df917b387205f3d51e0c36635ce4d88d`; C/U/I
+2/4/1, reset 50, horizon 256, four epochs, minibatch 256, 60 s warmup + 300 s
+measurement, wave 2, no checkpoint. Valid useful-wall SPS:
+
+| order | n/k | useful SPS | pool misses | result |
+|---|---:|---:|---:|---|
+| A1 | 14/4 | 810.818 | 0.244% | valid control |
+| B1 | 18/6 | 797.066 | 0% | valid |
+| B2 | 12/12 | 749.276 | 0% | valid |
+| B3 | 24/0 | 678.121 | 100% | valid but starved pool |
+| A2 | 14/4 | 774.319 | 0% | valid control |
+
+All points reached ready, proved expected actors/maps, stopped cleanly, had zero
+recoveries, wrote no checkpoint, and left the input checkpoint unchanged.
+Linear drift-adjusted effects against the bracketed n14 controls were n18/k6
+−0.581%, n12/k12 −5.451%, and n24/k0 −13.434%. There is no n/k change to
+adopt for this saved recipe.
+
+**Update-thread screen on that saved recipe:** order T4/T1/T2/T8/T4 produced
+794.945/711.134/744.022/753.472/754.418 useful SPS. Drift-adjusted contrasts
+against the T4 brackets were T1 −9.388%, T2 −3.954%, and T8 −1.451%. All valid
+points had zero recoveries, low pool-miss rates, clean stop and unchanged
+checkpoint. Keep the existing update-thread 4; do not transplant the n20
+512/128/1 short-screen thread result onto n14/256/4.
+
+**LTCG saved-recipe retest:** the new actual-recipe ABBA began with a valid
+default-build A1 at 801.069 useful SPS. B1 (LTCG) was in progress when the
+owner ended the work. At that explicit instruction, I wrote a graceful
+run-specific stop request and stopped/unregistered only that exact one-shot
+diagnostic task. B1 ended before `[RL_READY]` and is **interrupted/inconclusive**;
+it is not a performance failure. No checkpoint was written; the read-only
+input SHA stayed
+`1f98963795cb5d1123ee5ad8a51df870df917b387205f3d51e0c36635ce4d88d`. No
+Overgrowth/Python process or diagnostic task remained. The earlier LTCG
+candidate still has strict replay success and pooled +2.555% across four
+300-second arms per binary, but paired signs split 2–2; it remains unadopted.
+
+**1k decision:** the best supported five-minute systems candidate remains
+n18/k6, engine AboveNormal/`0xFFF`, trainer Normal, Torch 2/4/1, reset 20,
+512/128/1 at 903.840 useful SPS (zero pool misses). A valid 1,021.810 five-
+minute point exists, but it is one variable/noisy arm, not a repeated stable
+architecture. n20/k4/T1's two five-minute measurements averaged 1,001.514;
+its same-provenance repeat was 970.631, so three readings average about
+991.220. The latest current saved recipe is n14/k4 and 256/4/256, measuring
+754–811 SPS. No architecture is proven to sustain ≥1,000 useful SPS while
+also preserving the saved training recipe/checkpoint semantics. Do not claim
+stable 1k and do not change the training launcher. Keep n18/k6/512/128/1 as a
+systems benchmark candidate only; n20/k4/T1 remains a near-1k benchmark lead.
+
+**Persistent work and scope:** the optimization-only probes in the final
+period used the n14 checkpoint read-only and `--no-checkpoint`; no durable
+step/checkpoint growth occurred. Separately, the 2026-09-21 run25 boundary
+mistake is already recorded: it advanced from 264,001,244 to 268,402,396 and
+was stopped gracefully. The earlier Dell reboot to apply OEM UltraPerformance
+caused Tailscale/SSH unavailability because manual Tailscale recovery was not
+available; this was the agent's avoidable mistake. No further reboot or service
+restart occurred here. Latest ledger remains **16/39 screened, 19/39 partial,
+4/39 open**; the lever sweep is not exhausted. No complete same-setup
+three-days-ago-versus-final benchmark was completed.
+
+Raw worker, thread, priority, and interrupted-LTCG summaries, scripts, logs,
+and ZIPs are retained in the outer artifact folder
+`research-artifacts/OGRL-20260923-013-throughput/`; the ZIPs were integrity
+checked. This close-out changes documentation only, not engine/trainer source.
