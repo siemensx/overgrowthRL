@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -33,6 +34,7 @@ from obs_schema import DEFAULT_LAYOUT  # noqa: E402
 from ppo.normalize import ObservationNormalizer  # noqa: E402
 from ppo.policy import ActorCritic  # noqa: E402
 from async_vec_env import AsyncVecOvergrowthEnv  # noqa: E402
+from throughput_sweep import collect_engine_character_logs  # noqa: E402
 from vec_env import VecOvergrowthEnv  # noqa: E402
 
 
@@ -63,7 +65,13 @@ def run(args: argparse.Namespace) -> dict:
     normalizer = ObservationNormalizer(layout, frame_stack=frame_stack)
     normalizer.load_state_dict(checkpoint["obs_normalizer"])
 
-    tag = args.shm_tag or str(int(time.time()))
+    tag = args.shm_tag or str(time.time_ns())
+    scenario = {}
+    if args.opponents is not None:
+        scenario["opponents"] = args.opponents
+    if args.difficulty is not None:
+        scenario["difficulty"] = args.difficulty
+    scenario_fn = (lambda values=scenario: dict(values)) if scenario else None
     env_type = AsyncVecOvergrowthEnv if args.collector == "async" else VecOvergrowthEnv
     env_kwargs = {
         "n_envs": args.workers,
@@ -75,13 +83,33 @@ def run(args: argparse.Namespace) -> dict:
         "frame_stack": frame_stack,
         "max_episode_steps": args.max_episode_steps,
         "act_period": args.act_period,
+        "soft_reset": args.soft_reset,
+        "hard_reset_every": args.hard_reset_every,
+        "scenario_fn": scenario_fn,
     }
     if args.collector == "sync":
         env_kwargs["k_standby"] = args.k_standby
     else:
         env_kwargs["min_ready_batch"] = args.min_ready_batch
-        env_kwargs["max_batch_wait_seconds"] = args.max_batch_wait_ms / 1000.0
-    vec = env_type(**env_kwargs)
+        env_kwargs["max_batch_wait_seconds"] = args.max_ready_wait_ms / 1000.0
+    capture_engine_logs = args.capture_engine_logs
+    evidence_dir = Path(args.out).with_suffix("") if capture_engine_logs else None
+    if capture_engine_logs:
+        if evidence_dir.exists():
+            raise FileExistsError(f"scenario evidence directory already exists: {evidence_dir}")
+        if args.opponents is None:
+            raise ValueError("--capture-engine-logs requires an explicit --opponents value")
+        evidence_dir.mkdir(parents=True)
+    prior_retain_value = os.environ.get("OGRL_RETAIN_INITIAL_ENGINE_ARTIFACTS")
+    if capture_engine_logs:
+        os.environ["OGRL_RETAIN_INITIAL_ENGINE_ARTIFACTS"] = "1"
+    try:
+        vec = env_type(**env_kwargs)
+    finally:
+        if prior_retain_value is None:
+            os.environ.pop("OGRL_RETAIN_INITIAL_ENGINE_ARTIFACTS", None)
+        else:
+            os.environ["OGRL_RETAIN_INITIAL_ENGINE_ARTIFACTS"] = prior_retain_value
     try:
         raw_obs = vec.reset(seeds=[args.seed + i for i in range(args.workers)])
 
@@ -140,7 +168,7 @@ def run(args: argparse.Namespace) -> dict:
                 ready_waits.extend(rollout.ready_wait_seconds)
         measured_seconds = time.monotonic() - measured_start
         perf = vec.drain_perf()
-        return {
+        result = {
             "mode": "frozen_policy_collector",
             "collector": args.collector,
             "checkpoint": str(args.checkpoint),
@@ -153,6 +181,9 @@ def run(args: argparse.Namespace) -> dict:
             "frame_stack": frame_stack,
             "act_period": args.act_period,
             "levels": args.levels,
+            "scenario": scenario or None,
+            "soft_reset": args.soft_reset,
+            "hard_reset_every": args.hard_reset_every if args.soft_reset else None,
             "warmup_seconds": args.warmup_seconds,
             "measure_seconds": args.measure_seconds,
             "transitions": transitions,
@@ -178,6 +209,39 @@ def run(args: argparse.Namespace) -> dict:
     finally:
         vec.close()
 
+    if capture_engine_logs:
+        assert evidence_dir is not None
+        standby_count = args.k_standby if args.collector == "sync" else 0
+        evidence = collect_engine_character_logs(
+            Path(args.repo_root), f"fp_{tag}_", args.workers, standby_count,
+            list(args.levels), evidence_dir, args.opponents,
+        )
+        expected_ids = list(range(args.opponents + 1))
+        exact_actor_count = all(
+            engine.get("observed_character_ids_from_notice_logs") == expected_ids
+            for engine in evidence["engines"]
+        )
+        expected_maps = {Path(level).name.lower() for level in args.levels}
+        observed_maps = {
+            Path(engine["assigned_level"]).name.lower()
+            for engine in evidence["engines"]
+            if engine.get("assigned_level")
+        }
+        evidence["fixed_scenario_opponents"] = args.opponents
+        evidence["exact_actor_count_valid"] = exact_actor_count
+        evidence["expected_maps"] = sorted(expected_maps)
+        evidence["observed_maps"] = sorted(observed_maps)
+        evidence["all_maps_observed"] = expected_maps == observed_maps
+        evidence["valid"] = bool(
+            evidence["valid"] and exact_actor_count and expected_maps == observed_maps
+        )
+        result["engine_character_log_evidence"] = evidence
+        result["characters_valid"] = evidence["valid"]
+    else:
+        result["engine_character_log_evidence"] = None
+        result["characters_valid"] = None
+    return result
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -198,12 +262,29 @@ def main() -> int:
     parser.add_argument("--frame-stack", type=int, default=4)
     parser.add_argument("--act-period", type=int, default=4)
     parser.add_argument("--max-episode-steps", type=int, default=1200)
+    parser.add_argument("--opponents", type=int, default=None,
+                        help="fixed opponents per reset; omitted preserves the level's existing default")
+    parser.add_argument("--difficulty", type=float, default=None,
+                        help="fixed scenario difficulty in [0, 1]; omitted preserves the existing default")
+    parser.add_argument("--soft-reset", action="store_true",
+                        help="use the engine soft reset for episode transitions")
+    parser.add_argument("--hard-reset-every", type=int, default=50,
+                        help="force a hard reset every Nth physical-engine episode when soft reset is enabled")
+    parser.add_argument("--capture-engine-logs", action="store_true",
+                        help="archive startup logs and require exact actor-count and map evidence")
     parser.add_argument("--warmup-seconds", type=float, default=5.0)
     parser.add_argument("--measure-seconds", type=float, default=40.0)
     parser.add_argument("--seed", type=int, default=20260921)
     parser.add_argument("--shm-tag", default=None)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
+
+    if args.opponents is not None and args.opponents < 1:
+        parser.error("--opponents must be at least 1")
+    if args.difficulty is not None and not 0.0 <= args.difficulty <= 1.0:
+        parser.error("--difficulty must be in [0, 1]")
+    if args.soft_reset and args.hard_reset_every < 1:
+        parser.error("--hard-reset-every must be positive when --soft-reset is enabled")
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -217,7 +298,7 @@ def main() -> int:
         return 1
     out_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2), flush=True)
-    return 0
+    return 0 if result.get("characters_valid") is not False else 2
 
 
 if __name__ == "__main__":

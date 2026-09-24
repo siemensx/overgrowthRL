@@ -131,6 +131,7 @@ class AsyncVecOvergrowthEnv:
         self.native_trace_dir = Path(native_trace_dir) if native_trace_dir else None
         if self.native_trace_dir is not None:
             self.native_trace_dir.mkdir(parents=True, exist_ok=True)
+        retain_initial_artifacts = os.environ.get("OGRL_RETAIN_INITIAL_ENGINE_ARTIFACTS") == "1"
 
         self._perf_lock = threading.Lock()
         self._reset_seconds_accum = 0.0
@@ -157,6 +158,7 @@ class AsyncVecOvergrowthEnv:
                 act_period=act_period,
                 equivalence_digest_path=(self.native_trace_dir / f"{suffix}.jsonl") if self.native_trace_dir else None,
                 equivalence_trace_path=(self.native_trace_dir / f"{suffix}.input.jsonl") if self.native_trace_dir else None,
+                keep_artifacts=retain_initial_artifacts,
             )
 
         specs = [(str(i), base_seed + i, self.levels[i]) for i in range(n_envs)]
