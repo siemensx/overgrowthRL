@@ -5,6 +5,7 @@
 #include <Objects/movementobject.h>
 #include <UserInput/input.h>
 #include <Graphics/camera.h>
+#include <Internal/config.h>
 
 #include <algorithm>
 #include <array>
@@ -57,16 +58,41 @@ std::vector<ScriptEntry> g_script;  // sorted by step
 // native polling and receives no such clear. Resetting here makes both paths
 // exactly equivalent instead of allowing controller 1 to latch released
 // buttons or turn a held action into an ever-increasing depth_count.
+// OGRL-20260924-008: native held-key semantics, opt-in via config
+// `rl_button_edges: 1`. The reset above makes every held RL tick a fresh press
+// (depth_count == 1), so GetInputPressed() -- block start, roll, flip, air
+// attack, wall jump -- fires on EVERY tick a button is held. A human's key
+// counts up while held (input.cpp PlayerInputKeyDown), so "pressed" is the
+// first tick only. The concrete damage: UpdateActiveBlockMechanics re-arms the
+// 0.2 s block recharge on every press, so an RL agent holding grab blocks once
+// and is then locked out for as long as it holds -- run23-era policies hold
+// grab ~89% of decisions. Default 0 keeps every existing benchmark and
+// equivalence trace bit-identical.
+std::map<std::string, int> g_held_ticks;
+int g_button_edges = -1;  // -1 = not yet read from config
+
+bool ButtonEdgesEnabled() {
+    if (g_button_edges < 0) {
+        g_button_edges = config.HasKey("rl_button_edges") && config["rl_button_edges"].toNumber<int>() != 0 ? 1 : 0;
+    }
+    return g_button_edges == 1;
+}
+
 void ApplyKey(PlayerInput& control, const std::string& name, bool active, float depth) {
     KeyState& state = control.key_down[name];
     state.count = 0;
     state.depth_count = 0;
     state.depth = 0.0f;
     if (!active) {
+        g_held_ticks[name] = 0;
         return;
     }
-    state.count = 1;
-    state.depth_count = 1;
+    int held = 1;
+    if (ButtonEdgesEnabled()) {
+        held = ++g_held_ticks[name];
+    }
+    state.count = held;
+    state.depth_count = held;
     state.depth = depth;
 }
 
@@ -83,6 +109,8 @@ void Configure(bool enabled, int controller_id) {
     g_move_x = 0.0f;
     g_move_y = 0.0f;
     g_buttons.clear();
+    g_held_ticks.clear();
+    g_button_edges = -1;
     g_step_counter = 0;
     g_script.clear();
     g_script_period = 1;
@@ -140,6 +168,7 @@ void ResetForEpisode() {
     for (auto& button : g_buttons) {
         button.second = false;
     }
+    g_held_ticks.clear();
     g_step_counter = 0;
     g_history.clear();
 }
