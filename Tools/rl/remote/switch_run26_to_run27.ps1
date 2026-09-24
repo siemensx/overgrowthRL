@@ -4,11 +4,12 @@ $repo = 'C:\ogrl\overgrowthRL_clean'
 $log = 'C:\ogrl\switch27.log'
 function Say($m) { "[{0}] {1}" -f (Get-Date -Format s), $m | Add-Content $log }
 $metrics = "$repo\Tools\rl\runs\run26_win\metrics.jsonl"
-Say "waiting for run26 >= 270,000,000"
+if (-not $env:OGRL_SWITCH_AT) { $env:OGRL_SWITCH_AT = "0" }
+Say "waiting for run26 >= $env:OGRL_SWITCH_AT"
 while ($true) {
     $last = Get-Content $metrics -Tail 1 -ErrorAction SilentlyContinue
     if ($last) { try { $step = ($last | ConvertFrom-Json).global_step } catch { $step = 0 } }
-    if ($step -ge 270000000) { break }
+    if ($step -ge [int64]$env:OGRL_SWITCH_AT) { break }
     Start-Sleep 60
 }
 Say "run26 at $step; requesting graceful stop"
