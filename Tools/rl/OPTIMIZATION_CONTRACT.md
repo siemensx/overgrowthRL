@@ -1570,3 +1570,89 @@ complete unique-ID priority ABBA under the verified UltraPerformance profile.
 Thermal profile is configured/readable but a matched sustained before/after
 cooling experiment is still needed; do not count it as a throughput gain.
 Coverage remains 16/39 fully screened, 18 partial, 5 open.
+
+## OGRL-20260923-010 — wave-2 priority ABBA and checkpoint-matched follow-up
+
+**Timestamp:** 2026-09-23 15:56 PDT. A valid n20/k4 AboveNormal wave-2
+viability point measured 1,013.961 useful wall SPS over 60 seconds, with 0
+pool misses/recoveries, actor/map proof, clean stop, and unchanged checkpoint.
+Treat it as startup/viability evidence, not the sustained record.
+
+The unique-point-tag harness was deployed at source commit `c8a2dc84`. With
+`OGRL_LAUNCH_WAVE_SIZE=2`, n20/k4, T1, engine affinity `0xFFF`, trainer
+Normal, six maps, hard-reset 20, horizon 512, one epoch, minibatch 128, and
+60+300 s windows, the complete Normal/Above/Above/Normal ABBA measured:
+
+| arm | useful wall SPS | p10 | pool misses | recoveries |
+|---|---:|---:|---:|---:|
+| A1 Normal | 619.116 | 598.230 | 0.649% | 0 |
+| B1 AboveNormal | 981.080 | 819.720 | 0.615% | 0 |
+| B2 AboveNormal | 938.175 | 910.493 | 0.208% | 0 |
+| A2 Normal | 627.330 | 591.952 | 2.310% | 0 |
+
+All four rows are valid, passed exact 24-engine actor/map proof and clean stop,
+wrote no checkpoint, and preserved input checkpoint SHA
+`1f98963795cb5d1123ee5ad8a51df870df917b387205f3d51e0c36635ce4d88d`. Both
+adjacent contrasts favor AboveNormal (+58.465%, +49.551%). Raw means are
+623.223 vs 959.628 SPS. Ready-time interpolation at the midpoint of the B
+windows gives a drift-adjusted Normal rate of 623.182 SPS and AboveNormal
+**+53.988%**. Process readback verified priority classes and mask `0xFFF`.
+Raw summaries and run directories are in the outer repository at
+`research-artifacts/OGRL-20260923-004-throughput/telemetry/priority_abba_wave2_n20k4_t1_20260923/`;
+the archive passes `unzip -t`.
+
+**Do not apply this percentage to saved training.** The benchmark is a
+disposable throughput probe. Its input checkpoint was saved at n_envs=14;
+the harness explicitly enabled the existing worker-count migration to size
+per-worker reward-return accumulators for n20. Shared RMS statistics and model
+weights were loaded read-only, but the result does not authorize resuming the
+existing checkpoint at 20 workers. CCTK still reads `ThermalManagement=UltraPerformance`;
+no thermal/power change, restart, or scheduled training run occurred.
+
+The same-checkpoint n14/k4 ABBA is now running with the saved training recipe:
+collection/update/inter-op threads 2/4/1, hard-reset 50, horizon 256, four
+epochs, minibatch 256; all other priority-test controls remain fixed. This is
+the adoption gate. After the gate, finish the equal-total-24 worker/standby
+split screen and the remaining thread/settings matrix. The successful wave-2
+pilot moves launch-wave from open to partial; coverage is now 16/39 screened,
+19/39 partial, 4/39 open. Windows generated only Python cache directories;
+the local `.gitignore` additions for these and raw telemetry are not yet
+committed/deployed. Preserve all unrelated checkout changes.
+
+### OGRL-20260923-011 correction — AboveNormal predates this window
+
+`launch_training.ps1` already defaults to `EnginePriority="above"` and
+`EngineAffinity="0xFFF"`; the 9/21 clean comparison measured 700.120 wall SPS
+for Normal/no-affinity versus 833.627 for AboveNormal/`0xFFF`. The Sept. 23
+priority work is a repeat/attribution check, not a new discovery or a new
+adoption. The checkpoint-matched n14 attempt's valid first pair was 563.267
+Normal and 824.760 AboveNormal useful wall SPS (+46.4% raw ratio), but the
+Normal result is anomalously below the prior 700.120 control and documented
+600–800 SPS band. The second AboveNormal arm failed before readiness (zero
+metrics, only six engine logs); the SSH sweep exited before final Normal.
+No priority conclusion follows from this incomplete ABBA.
+
+Keep binary families separate: that interrupted attempt used fixed-base
+`BuildWinDet232Fixed_20260923` (SHA prefix `9B2D4233`); the follow-up uses the
+actual clean checkout's default `BuildWin64/Release` (SHA prefix `6985E73D`)
+because `OGRL_BINARY` is unset. The follow-up is a no-checkpoint, one-shot
+diagnostic task, not a persistent training job. CCTK remains
+`ThermalManagement=UltraPerformance`; temperature/fan telemetry is unavailable
+from the exposed ACPI zone provider, and no additional cooling effect is
+measured. Do not claim a same-recipe old-state-versus-final benchmark or
+checkpoint growth.
+
+### OGRL-20260923-012 — actual default-engine priority repeat
+
+The production fallback binary on clean source commit `c8a2dc84` is
+`BuildWin64/Release/Overgrowth.exe` (SHA-256
+`6985e73dd06c572d8f474e53adf1d20d03ed039352d70ea904cccd3a89d769d0`), because
+`OGRL_BINARY` is unset. Under the n14/k4 checkpoint recipe, a no-checkpoint
+Above-then-Normal pair with identical `0xFFF` affinity measured 817.700 and
+798.984 useful wall SPS (+2.342% AboveNormal). Both were valid, actor/map
+proven, zero-recovery, clean-stop points with unchanged checkpoint SHA. This
+small signal remains a candidate, not a new discovery or an adopted change;
+the launcher already defaults to AboveNormal/`0xFFF`. A reciprocal
+Normal-then-Above pair is running to complete a drift-balanced four-point
+comparison. Keep every repeatable positive gain; do not decide from this
+single pair.

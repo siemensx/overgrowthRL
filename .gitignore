@@ -46,6 +46,10 @@ tags
 # macOS turds
 .DS_Store
 
+# Python-generated caches are disposable, never source changes.
+__pycache__/
+*.py[cod]
+
 # Out-of-tree CMake build directories used by build_engine.sh / PGO
 BuildArm64/
 BuildArm64PGO/
