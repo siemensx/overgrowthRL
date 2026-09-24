@@ -230,6 +230,10 @@ class VecOvergrowthEnv:
             self.native_trace_dir.mkdir(parents=True, exist_ok=True)
         self._episode_steps = [0] * n_envs
         self._episode_kos = [0] * n_envs   # hostile knockouts so far this episode, per slot
+        # OGRL-20260924-010: behavioural telemetry, not reward. Rising edges of the
+        # agent's own ACTIVE_BLOCKING flag, logged per episode as the
+        # "block_start" reward component (added after the reward is summed).
+        self._prev_blocking = [False] * n_envs
         # Per-worker episode counter, used to vary the reset seed episode to
         # episode -- see step()'s reset call for why this exists at all.
         self._episode_counts = [0] * n_envs
@@ -548,6 +552,7 @@ class VecOvergrowthEnv:
                 self._episode_seed[i] = self.envs[i].last_reset_seed
                 self._episode_steps[i] = 0
                 self._episode_kos[i] = 0
+                self._prev_blocking[i] = False
                 self._episode_counts[i] += 1
                 # Must carry every key the normal path produces -- step() unpacks
                 # info["perf"] unconditionally, so a partial dict turns a recovered
@@ -590,6 +595,10 @@ class VecOvergrowthEnv:
             # opponent_knockout > 0, which mislabels a timeout whose final step
             # happens to land a KO; every collector now consumes this field.
             info["won"] = bool(won)
+            _frame_off = len(obs) - self.layout.total_floats
+            _blocking = bool(obs[_frame_off + self.layout.ACTIVE_BLOCKING] > 0.5)
+            rc["block_start"] = 1.0 if (_blocking and not self._prev_blocking[i]) else 0.0
+            self._prev_blocking[i] = _blocking
             if won:
                 clear_bonus = float(getattr(self.envs[i].reward_computer.config, "clear_bonus", 0.0) or 0.0)
                 if clear_bonus:
@@ -610,6 +619,7 @@ class VecOvergrowthEnv:
             if terminal or truncated:
                 self._episode_steps[i] = 0
                 self._episode_kos[i] = 0
+                self._prev_blocking[i] = False
                 self._episode_counts[i] += 1
                 standby = self._take_standby()
                 with self._perf_lock:
