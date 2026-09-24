@@ -6,6 +6,11 @@ legal action conversion match rollout collection, but this harness never
 creates an optimizer, computes a loss, updates parameters, or writes a
 checkpoint. It is deliberately separate from the training entrypoint so an
 optimization screen cannot accidentally become a PPO run.
+
+The async path is a frozen-policy throughput screen only. AsyncRollout currently
+folds truncations into its terminal mask and does not expose the timeout value
+bootstrap used by PPO training, so its output is not a training-equivalence
+result.
 """
 
 from __future__ import annotations
@@ -73,6 +78,9 @@ def run(args: argparse.Namespace) -> dict:
     }
     if args.collector == "sync":
         env_kwargs["k_standby"] = args.k_standby
+    else:
+        env_kwargs["min_ready_batch"] = args.min_ready_batch
+        env_kwargs["max_batch_wait_seconds"] = args.max_batch_wait_ms / 1000.0
     vec = env_type(**env_kwargs)
     try:
         raw_obs = vec.reset(seeds=[args.seed + i for i in range(args.workers)])
@@ -93,6 +101,11 @@ def run(args: argparse.Namespace) -> dict:
                 raise RuntimeError(f"policy returned {action_array.shape}, expected {expected_shape}")
             return normalized, action_array, log_prob.detach().numpy(), value.detach().numpy()
 
+        ready_batches: list[int] = []
+        ready_waits: list[float] = []
+        transitions = 0
+        policy_batches = 0
+
         if args.collector == "sync":
             def step_once(obs: np.ndarray) -> np.ndarray:
                 _normalized, action_array, _log_prob, _value = policy_action(obs)
@@ -103,9 +116,8 @@ def run(args: argparse.Namespace) -> dict:
             while time.monotonic() < warmup_deadline:
                 raw_obs = step_once(raw_obs)
 
-            transitions = 0
-            policy_batches = 0
             measured_start = time.monotonic()
+            inference_seconds = 0.0
             while time.monotonic() < measured_start + args.measure_seconds:
                 raw_obs = step_once(raw_obs)
                 transitions += args.workers
@@ -118,13 +130,14 @@ def run(args: argparse.Namespace) -> dict:
             while time.monotonic() < warmup_deadline:
                 vec.collect_rollout(args.rollout_steps, act_fn)
 
-            transitions = 0
-            policy_batches = 0
             measured_start = time.monotonic()
+            inference_seconds = 0.0
             while time.monotonic() < measured_start + args.measure_seconds:
                 rollout = vec.collect_rollout(args.rollout_steps, act_fn)
                 transitions += rollout.obs.shape[0] * rollout.obs.shape[1]
                 policy_batches += rollout.batches
+                ready_batches.extend(rollout.ready_batch_sizes)
+                ready_waits.extend(rollout.ready_wait_seconds)
         measured_seconds = time.monotonic() - measured_start
         perf = vec.drain_perf()
         return {
@@ -147,6 +160,13 @@ def run(args: argparse.Namespace) -> dict:
             "measured_seconds": measured_seconds,
             "decisions_per_second": transitions / measured_seconds if measured_seconds else 0.0,
             "policy_batches_per_second": policy_batches / measured_seconds if measured_seconds else 0.0,
+            "min_ready_batch": args.min_ready_batch if args.collector == "async" else None,
+            "max_batch_wait_ms": args.max_ready_wait_ms if args.collector == "async" else None,
+            "mean_ready_batch": float(np.mean(ready_batches)) if ready_batches else 0.0,
+            "p10_ready_batch": float(np.percentile(ready_batches, 10)) if ready_batches else 0.0,
+            "p90_ready_batch": float(np.percentile(ready_batches, 90)) if ready_batches else 0.0,
+            "mean_ready_wait_ms": float(np.mean(ready_waits) * 1000.0) if ready_waits else 0.0,
+            "p90_ready_wait_ms": float(np.percentile(ready_waits, 90) * 1000.0) if ready_waits else 0.0,
             "policy_inference_seconds": inference_seconds,
             "policy_inference_share": inference_seconds / measured_seconds if measured_seconds else 0.0,
             "environment_seconds": max(0.0, measured_seconds - inference_seconds),
@@ -169,6 +189,10 @@ def main() -> int:
     parser.add_argument("--collector", choices=("sync", "async"), default="sync")
     parser.add_argument("--rollout-steps", type=int, default=8,
                         help="time-major transitions per worker per async rollout")
+    parser.add_argument("--min-ready-batch", type=int, default=1,
+                        help="experimental async minimum ready workers per policy batch (1 keeps legacy behavior)")
+    parser.add_argument("--max-ready-wait-ms", type=float, default=0.5,
+                        help="maximum async cohort wait in milliseconds before scheduling ready workers")
     parser.add_argument("--torch-threads", type=int, default=2)
     parser.add_argument("--torch-interop-threads", type=int, default=1)
     parser.add_argument("--frame-stack", type=int, default=4)

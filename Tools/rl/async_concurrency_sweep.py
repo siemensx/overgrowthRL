@@ -34,6 +34,8 @@ def run_point(
     warmup_seconds: float,
     measure_seconds: float,
     rollout_steps: int,
+    min_ready_batch: int,
+    max_batch_wait_ms: float,
     seed: int,
     shm_tag: str,
 ) -> dict:
@@ -48,6 +50,8 @@ def run_point(
         frame_stack=1,
         max_episode_steps=max_episode_steps,
         act_period=act_period,
+        min_ready_batch=min_ready_batch,
+        max_batch_wait_seconds=max_batch_wait_ms / 1000.0,
     )
     launch_seconds = time.monotonic() - launch_start
     rng = np.random.default_rng(seed + 991)
@@ -69,12 +73,14 @@ def run_point(
         rollouts = 0
         episode_ends = 0
         ready_batches = []
+        ready_waits = []
         while time.monotonic() < measured_start + measure_seconds:
             rollout = vec.collect_rollout(rollout_steps, act_fn)
             transitions += rollout.obs.shape[0] * rollout.obs.shape[1]
             rollouts += 1
             episode_ends += int(rollout.terminals.sum())
             ready_batches.extend(rollout.ready_batch_sizes)
+            ready_waits.extend(rollout.ready_wait_seconds)
         measured_seconds = time.monotonic() - measured_start
         perf = vec.drain_perf()
         return {
@@ -91,6 +97,11 @@ def run_point(
             "episode_ends": episode_ends,
             "mean_ready_batch": float(np.mean(ready_batches)) if ready_batches else 0.0,
             "p95_ready_batch": float(np.percentile(ready_batches, 95)) if ready_batches else 0.0,
+            "p10_ready_batch": float(np.percentile(ready_batches, 10)) if ready_batches else 0.0,
+            "min_ready_batch": min_ready_batch,
+            "max_batch_wait_ms": max_batch_wait_ms,
+            "mean_ready_wait_ms": float(np.mean(ready_waits) * 1000.0) if ready_waits else 0.0,
+            "p90_ready_wait_ms": float(np.percentile(ready_waits, 90) * 1000.0) if ready_waits else 0.0,
             "reset_cpu_seconds": perf["reset_seconds"],
             "error": None,
         }
@@ -101,6 +112,9 @@ def run_point(
             "transitions": 0, "rollouts": 0, "measured_seconds": 0.0,
             "decisions_per_second": 0.0, "decisions_per_second_per_worker": 0.0,
             "episode_ends": 0, "mean_ready_batch": 0.0, "p95_ready_batch": 0.0,
+            "p10_ready_batch": 0.0, "min_ready_batch": min_ready_batch,
+            "max_batch_wait_ms": max_batch_wait_ms, "mean_ready_wait_ms": 0.0,
+            "p90_ready_wait_ms": 0.0,
             "reset_cpu_seconds": 0.0, "error": repr(exc),
         }
     finally:
@@ -118,6 +132,10 @@ def main() -> int:
     parser.add_argument("--warmup-seconds", type=float, default=3.0)
     parser.add_argument("--measure-seconds", type=float, default=15.0)
     parser.add_argument("--rollout-steps", type=int, default=128)
+    parser.add_argument("--min-ready-batch", type=int, default=1,
+                        help="experimental async minimum ready workers per policy batch")
+    parser.add_argument("--max-ready-wait-ms", type=float, default=0.5,
+                        help="maximum async cohort wait in milliseconds")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
@@ -130,7 +148,8 @@ def main() -> int:
             result = run_point(
                 args.repo_root, args.level, n_envs, args.act_period,
                 args.max_episode_steps, args.warmup_seconds, args.measure_seconds,
-                args.rollout_steps, 20260820 + n_envs * 100 + repetition, f"{n_envs}r{repetition}",
+                args.rollout_steps, args.min_ready_batch, args.max_ready_wait_ms,
+                20260820 + n_envs * 100 + repetition, f"{n_envs}r{repetition}",
             )
             result["repetition"] = repetition
             results.append(result)
@@ -169,4 +188,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

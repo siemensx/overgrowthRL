@@ -6,17 +6,20 @@ immediately schedules the next action for whichever engine is ready.  A
 worker performs its own reset inside that worker future, so a slow reset or a
 long collision sequence does not stop unrelated workers.
 
-This is still on-policy PPO: the caller supplies one action callback for the
-whole rollout and does not update the policy until every worker has contributed
-exactly ``n_steps`` transitions.  The only changed boundary is wall-clock
-scheduling.  ``AsyncRollout`` is time-major by worker index, so the existing
-vector GAE and PPO code can consume it without changing trajectory semantics.
+The caller supplies one frozen action callback for the whole rollout and does
+not update the policy until every worker has contributed exactly ``n_steps``
+transitions. This is useful for frozen-policy throughput screening, but it is
+not yet a drop-in PPO training collector: ``terminals`` currently folds
+truncations into the done mask and the rollout does not return the timeout
+value bootstrap required by PPO. Do not use it for training until truncation
+bootstrap is represented explicitly.
 """
 
 from __future__ import annotations
 
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
+import math
 import os
 import threading
 import time
@@ -56,6 +59,7 @@ class AsyncRollout:
     wall_seconds: float
     batches: int
     ready_batch_sizes: list[int]
+    ready_wait_seconds: list[float]
 
 
 class AsyncVecOvergrowthEnv:
@@ -77,10 +81,20 @@ class AsyncVecOvergrowthEnv:
         hard_reset_every: int = 50,
         scenario_fn: Callable[[], dict] | None = None,
         native_trace_dir: str | Path | None = None,
+        min_ready_batch: int = 1,
+        max_batch_wait_seconds: float = 0.0005,
     ):
         if n_envs < 1:
             raise ValueError("n_envs must be positive")
+        if isinstance(min_ready_batch, bool) or int(min_ready_batch) != min_ready_batch:
+            raise ValueError("min_ready_batch must be an integer")
+        if min_ready_batch < 1 or min_ready_batch > n_envs:
+            raise ValueError(f"min_ready_batch must be in [1, {n_envs}]")
+        if not math.isfinite(max_batch_wait_seconds) or max_batch_wait_seconds < 0:
+            raise ValueError("max_batch_wait_seconds must be finite and nonnegative")
         self.n_envs = n_envs
+        self.min_ready_batch = int(min_ready_batch)
+        self.max_batch_wait_seconds = float(max_batch_wait_seconds)
         # Map axis. A worker holds one level for its whole life: assigning per
         # worker rather than per episode means every PPO batch mixes maps, while
         # no episode ever pays a level reload it would not otherwise pay. Levels
@@ -273,6 +287,7 @@ class AsyncVecOvergrowthEnv:
         next_index = [0] * self.n_envs
         pending: dict[Future, tuple[int, int]] = {}
         ready_batch_sizes: list[int] = []
+        ready_wait_seconds: list[float] = []
 
         if self._current_obs is None:
             self.reset()
@@ -301,11 +316,30 @@ class AsyncVecOvergrowthEnv:
         try:
             while pending:
                 done, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
-                # Let already-finished engine calls join the same policy batch
-                # without imposing a meaningful wait on a straggler.
-                if len(done) < len(pending):
-                    extra, _ = wait(set(pending) - done, timeout=0.0005)
+                cohort_wait_start = time.monotonic()
+                # Preserve legacy batching by default: collect any peers that
+                # finish within 500us. Experimental cohorts can request a
+                # larger minimum and bounded wait; no worker is allowed to
+                # accumulate multiple outstanding actions or stale-policy
+                # transitions while waiting for the cohort.
+                if self.min_ready_batch > 1:
+                    deadline = cohort_wait_start + self.max_batch_wait_seconds
+                    target_batch_size = min(self.min_ready_batch, len(pending))
+                    while len(done) < target_batch_size:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        waiting = set(pending) - done
+                        if not waiting:
+                            break
+                        extra, _ = wait(waiting, timeout=remaining, return_when=FIRST_COMPLETED)
+                        if not extra:
+                            break
+                        done |= extra
+                elif len(done) < len(pending):
+                    extra, _ = wait(set(pending) - done, timeout=min(0.0005, self.max_batch_wait_seconds))
                     done |= extra
+                ready_wait_seconds.append(time.monotonic() - cohort_wait_start)
                 ready: list[int] = []
                 for future in done:
                     index, t = pending.pop(future)
@@ -344,6 +378,7 @@ class AsyncVecOvergrowthEnv:
             wall_seconds=max(1e-9, time.monotonic() - started),
             batches=len(ready_batch_sizes),
             ready_batch_sizes=ready_batch_sizes,
+            ready_wait_seconds=ready_wait_seconds,
         )
 
     def drain_perf(self) -> dict:
