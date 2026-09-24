@@ -31,6 +31,7 @@ import numpy as np
 from env import ACTION_DIM, OvergrowthEnv
 from obs_schema import DEFAULT_LAYOUT, ObsLayout
 from reward import RewardConfig
+from vec_env import _build_initial_wave, _cleanup_failed_initialization
 
 
 @dataclass
@@ -162,7 +163,20 @@ class AsyncVecOvergrowthEnv:
             )
 
         specs = [(str(i), base_seed + i, self.levels[i]) for i in range(n_envs)]
-        self.envs = list(self._pool.map(lambda spec: make(*spec), specs))
+        self.envs: list[OvergrowthEnv] = []
+        try:
+            # Keep the existing all-at-once async startup by default, while
+            # honoring the same bounded-wave override as VecOvergrowthEnv for
+            # hosts that cannot safely initialize many engines together.
+            launch_wave_size = int(os.environ.get("OGRL_LAUNCH_WAVE_SIZE", "0"))
+            if launch_wave_size <= 0:
+                launch_wave_size = len(specs)
+            for start in range(0, len(specs), launch_wave_size):
+                wave = specs[start:start + launch_wave_size]
+                self.envs.extend(_build_initial_wave(self._pool, make, wave))
+        except BaseException:
+            _cleanup_failed_initialization(self.envs, (self._pool,))
+            raise
         self._current_obs: np.ndarray | None = None
         self._closed = False
 

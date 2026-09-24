@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import os
 from pathlib import Path
 import sys
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -18,6 +21,45 @@ from env import ACTION_DIM  # noqa: E402
 
 
 class AsyncVecEnvBatching(unittest.TestCase):
+    def test_initial_launch_wave_setting_bounds_startup_and_preserves_order(self):
+        active = 0
+        max_active = 0
+        starts = []
+        lock = threading.Lock()
+
+        class FakeEnv:
+            def __init__(self, **kwargs):
+                nonlocal active, max_active
+                with lock:
+                    active += 1
+                    max_active = max(max_active, active)
+                    starts.append(kwargs["shm_name"])
+                self.level = kwargs["level"]
+                time.sleep(0.003)
+                with lock:
+                    active -= 1
+
+            def close(self):
+                pass
+
+        with patch.dict(os.environ, {"OGRL_LAUNCH_WAVE_SIZE": "1"}), \
+                patch("async_vec_env.OvergrowthEnv", FakeEnv):
+            vec = AsyncVecOvergrowthEnv(
+                n_envs=4,
+                repo_root="unused",
+                level=["map-a.xml", "map-b.xml"],
+                shm_prefix="/wave-test",
+            )
+            try:
+                self.assertEqual([env.level for env in vec.envs], [
+                    "map-a.xml", "map-b.xml", "map-a.xml", "map-b.xml"
+                ])
+            finally:
+                vec.close()
+
+        self.assertEqual(max_active, 1)
+        self.assertEqual(starts, ["/wave-test0", "/wave-test1", "/wave-test2", "/wave-test3"])
+
     def test_ready_cohort_keeps_worker_trajectories_aligned(self):
         vec = AsyncVecOvergrowthEnv.__new__(AsyncVecOvergrowthEnv)
         vec.n_envs = 4

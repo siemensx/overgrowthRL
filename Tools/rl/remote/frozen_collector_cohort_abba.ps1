@@ -21,8 +21,8 @@ $levels = @(
 )
 $arms = @(
   @{ name='A1_legacy'; minReady=1; waitMs=0.5; family='legacy' },
-  @{ name='B1_cohort4'; minReady=4; waitMs=$CohortWaitMs; family='cohort4' },
-  @{ name='B2_cohort4'; minReady=4; waitMs=$CohortWaitMs; family='cohort4' },
+  @{ name='B1_cohort16'; minReady=16; waitMs=$CohortWaitMs; family='cohort16' },
+  @{ name='B2_cohort16'; minReady=16; waitMs=$CohortWaitMs; family='cohort16' },
   @{ name='A2_legacy'; minReady=1; waitMs=0.5; family='legacy' }
 )
 
@@ -180,7 +180,7 @@ try {
   Pop-Location
 
   $legacy = @($records | Where-Object { $_.arm -like '*legacy*' } | ForEach-Object { [double]$_.decisions_per_second })
-  $cohort = @($records | Where-Object { $_.arm -like '*cohort4*' } | ForEach-Object { [double]$_.decisions_per_second })
+  $cohort = @($records | Where-Object { $_.arm -like '*cohort16*' } | ForEach-Object { [double]$_.decisions_per_second })
   $legacyMean = if ($legacy.Count) { [math]::Round((Get-Mean ([double[]]$legacy)), 3) } else { $null }
   $cohortMean = if ($cohort.Count) { [math]::Round((Get-Mean ([double[]]$cohort)), 3) } else { $null }
   $gainPercent = if ($legacyMean -and $legacyMean -gt 0 -and $null -ne $cohortMean) {
@@ -211,8 +211,8 @@ try {
     engine_affinity='0xFFF'
     launch_wave_size=$LaunchWaveSize
     legacy_mean_decisions_per_second=$legacyMean
-    cohort4_mean_decisions_per_second=$cohortMean
-    cohort4_change_percent=$gainPercent
+    cohort16_mean_decisions_per_second=$cohortMean
+    cohort16_change_percent=$gainPercent
     diagnostic_only=$true
     failure=$failure
     started_at=$started
