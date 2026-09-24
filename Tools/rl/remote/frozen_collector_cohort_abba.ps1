@@ -8,7 +8,8 @@ param(
   [int] $WarmupSeconds = 20,
   [int] $MeasureSeconds = 60,
   [int] $Seed = 2026092403,
-  [double] $CohortWaitMs = 5.0
+  [double] $CohortWaitMs = 5.0,
+  [int] $LaunchWaveSize = 1
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,7 +60,7 @@ try {
   $env:OGRL_ENGINE_PRIORITY = 'above'
   $env:OGRL_ENGINE_AFFINITY = '0xFFF'
   $env:OGRL_LEVEL_OFFSET = '0'
-  $env:OGRL_LAUNCH_WAVE_SIZE = '6'
+  $env:OGRL_LAUNCH_WAVE_SIZE = [string]$LaunchWaveSize
 
   $sourceCommit = (git rev-parse HEAD).Trim()
   $sourceDirty = @(git status --porcelain)
@@ -208,6 +209,7 @@ try {
     seed=$Seed
     engine_priority='above'
     engine_affinity='0xFFF'
+    launch_wave_size=$LaunchWaveSize
     legacy_mean_decisions_per_second=$legacyMean
     cohort4_mean_decisions_per_second=$cohortMean
     cohort4_change_percent=$gainPercent
