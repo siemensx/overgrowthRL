@@ -590,6 +590,11 @@ class VecOvergrowthEnv:
             # opponent_knockout > 0, which mislabels a timeout whose final step
             # happens to land a KO; every collector now consumes this field.
             info["won"] = bool(won)
+            if won:
+                clear_bonus = float(getattr(self.envs[i].reward_computer.config, "clear_bonus", 0.0) or 0.0)
+                if clear_bonus:
+                    reward = reward + clear_bonus
+                    rc["clear_bonus"] = clear_bonus
             terminal_obs = obs  # pre-reset observation, for the truncation bootstrap / info parity
             # Attribute this transition to the episode currently in slot i --
             # i.e. the one THIS step's outcome belongs to, sampled at the

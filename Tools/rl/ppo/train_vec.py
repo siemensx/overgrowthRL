@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Tools/rl
 from vec_env import VecOvergrowthEnv
 from obs_schema import DEFAULT_LAYOUT, SCHEMA_VERSION
 from curriculum import Curriculum, ScenarioSampler
-from reward import run8_reward_config
+from reward import run8_reward_config, win_reward_config
 from telemetry import RunLogger
 from tape import TapeRecorder, decision_record
 from ogreplay import runtime_fingerprint
@@ -158,7 +158,7 @@ def parse_args():
                          "default is the measured crossover point, not the deepest pool tested. Re-sweep if n_envs "
                          "changes; the optimum is n_envs-relative, not an absolute constant. 0 reproduces the "
                          "original fully-synchronous reset behavior.")
-    p.add_argument("--reward-profile", choices=["default", "run8"], default="default",
+    p.add_argument("--reward-profile", choices=["default", "run8", "win"], default="default",
                     help="'default' reproduces runs 1-7's RewardConfig exactly, for comparability. 'run8' "
                          "(OGRL-20260816-023) uses reward.run8_reward_config() -- symmetric +/-10 terminal outcome, "
                          "dense damage at a matched +/-1 scale, a much smaller time_cost, stall tax and ragdoll "
@@ -298,6 +298,13 @@ def parse_args():
     p.add_argument("--stop-below-free-gb", type=float, default=1.0,
                     help="stop cleanly (checkpoint saved) below this many GB free -- the harder floor under "
                          "--pause-below-free-gb, for when pausing alone isn't enough (nobody freed space).")
+    p.add_argument("--reset-critic", action="store_true",
+                   help="on resume, re-initialise the critic trunk/head, its Adam state and the reward normaliser. "
+                        "Required when --gamma or the reward profile changes: the old value scale is wrong.")
+    p.add_argument("--value-warmup-updates", type=int, default=0,
+                   help="first N updates of THIS process train the critic only (actor frozen, shared encoder "
+                        "detached for the critic). Use with --reset-critic so fresh-critic advantages cannot "
+                        "move the resumed actor.")
     p.add_argument("--resume-from", default=None,
                     help="OGRL-20260816-018: path to a checkpoint (policy/optimizer/both normalizers/global_step) "
                          "to continue training from, instead of a cold start. Use this for a reward/curriculum "
@@ -487,7 +494,8 @@ def main():
     # (reward.run8_reward_config()), with its own shaping fully zeroed --
     # runs 1-7's default profile and curriculum are completely unaffected by
     # this flag (base_config=None reproduces the exact old behavior).
-    reward_base_config = run8_reward_config() if args.reward_profile == "run8" else None
+    reward_base_config = (run8_reward_config() if args.reward_profile == "run8"
+                          else win_reward_config() if args.reward_profile == "win" else None)
     curriculum_kwargs = {"stall_intro_step": initial_global_step, "base_config": reward_base_config}
     if args.reward_profile == "run8":
         curriculum_kwargs["bootstrap_closing_weight"] = 0.0
@@ -659,6 +667,19 @@ def main():
         sampler.load_curriculum_state(resumed_checkpoint.get("curriculum"))
         print(f"restored curriculum: d_max={sampler.d_max:.2f} opponents_max={sampler.opponents_max}")
         print(f"resumed from {args.resume_from} at global_step={initial_global_step}")
+        if args.reset_critic:
+            # OGRL-20260924-007: the checkpoint's critic estimates returns under the
+            # old gamma and reward; keep them and the first advantages are wrong by
+            # construction. Re-init exactly as ActorCritic.__init__ does.
+            import torch.nn as _nn
+            for _m in list(policy.critic_trunk) + [policy.critic_out]:
+                if isinstance(_m, _nn.Linear):
+                    _nn.init.orthogonal_(_m.weight, 1.0 if _m is policy.critic_out else float(np.sqrt(2)))
+                    _nn.init.constant_(_m.bias, 0.0)
+            for _p in list(policy.critic_trunk.parameters()) + list(policy.critic_out.parameters()):
+                optimizer.state.pop(_p, None)
+            reward_normalizer = RewardNormalizer(args.gamma, n_envs=args.n_envs)
+            print(f"[reset-critic] critic re-initialised, reward normaliser fresh at gamma={args.gamma}", flush=True)
 
     global_step = initial_global_step
     update = 0  # this run's own update counter for ITS log/checkpoint cadence -- global_step is what actually
@@ -983,7 +1004,10 @@ def main():
                 args.entropy_coef = args.entropy_coef_start + (args.entropy_coef_final - args.entropy_coef_start) * anneal_progress
 
             torch.set_num_threads(args.update_torch_threads)
+            args._value_only = update < args.value_warmup_updates
+            policy.detach_critic_features = bool(args.critic_detach_shared) or args._value_only
             stats = ppo_update(policy, optimizer, batch, args, update_forward=update_forward)
+            stats["value_warmup"] = int(args._value_only)
 
             update += 1
             explained_var = _explained_variance(batch["values"].cpu().numpy(), batch["returns"].cpu().numpy())

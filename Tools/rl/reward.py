@@ -68,6 +68,9 @@ class RewardConfig:
     stall_grace_steps: int = 250         # steps of zero combat contact tolerated before the stall tax starts --
                                           # long enough to not punish early positioning/reads, short enough to bite
                                           # well before a 900-step episode cap (see compute())
+    clear_bonus: float = 0.0             # paid once, by vec_env, on the step the LAST hostile goes down.
+                                          # RewardComputer cannot see opponent count, so it is applied where
+                                          # the one win definition lives (vec_env.step). See win_reward_config().
 
 
 def run8_reward_config() -> RewardConfig:
@@ -110,6 +113,26 @@ def run8_reward_config() -> RewardConfig:
         stall_penalty_weight=0.0,
         stall_grace_steps=250,
     )
+
+
+def win_reward_config() -> RewardConfig:
+    """OGRL-20260924-007: make CLEARING the arena the objective, not knockouts.
+
+    run23 (2,756 episodes of 1v3, d=1.0) showed the win rate is the product of
+    three nearly equal per-opponent conversions (0.713, 0.710, 0.726), and that
+    under the default profile dying after two knockouts was worth +8 (2x8 KO,
+    +2 counter bug, -10 death) against +27 for a clear. Knockouts were the
+    objective; staying alive to finish was worth little. Here the same nominal
+    total for a clear (~24) is mostly paid on the clear itself:
+
+        KO 4 each + clear 12 = 24;  2 KOs then death = 8 - 12 = -4.
+
+    time_cost is halved (0.01 -> 0.005/decision; a timeout costs -6 not -12)
+    because the losses are fast and damage-heavy -- over-commitment, not
+    stalling, is the measured failure. Everything else is the default profile.
+    """
+    return RewardConfig(opponent_knockout_bonus=4.0, clear_bonus=12.0,
+                        self_knockout_penalty=12.0, time_cost=0.005)
 
 
 def _health_scalar(entity_or_self: dict | list) -> float:
@@ -345,7 +368,10 @@ class RewardComputer:
         # scalar and JSON-safe regardless of which transport representation is
         # active; this is a type normalization only, not a reward change.
         components = {name: float(value) for name, value in components.items()}
-        total = float(sum(components.values()))
+        # hostile_kos_this_step is an event COUNT for the win condition, not a
+        # reward term. It used to be summed in, silently adding +1 per knockout
+        # (run23 episode: 5.50 + 24 + 3 - 4.81 - 0.70 = 26.99). Fixed 2026-09-24.
+        total = float(sum(v for k, v in components.items() if k != "hostile_kos_this_step"))
         return total, components
 
 

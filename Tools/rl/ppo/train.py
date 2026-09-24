@@ -359,7 +359,8 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
             # -- single-sample outliers in the continuous head -- while the exact
             # KL never exceeded 0.015. Two thirds of every update was thrown away
             # on noise. The sampled value is still logged as approx_kl.
-            if (args.target_kl is not None and mb_index > 1 and mb_exact_kl > args.target_kl):
+            if (args.target_kl is not None and mb_index > 1 and mb_exact_kl > args.target_kl
+                    and not getattr(args, "_value_only", False)):
                 stats["early_stop_minibatch"] = mb_index - 1
                 stop_early = True
                 break
@@ -378,6 +379,12 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
 
             entropy_loss = entropy.mean()
             loss = policy_loss + args.value_coef * value_loss - args.entropy_coef * entropy_loss
+            if getattr(args, "_value_only", False):
+                # Critic warm-up after a critic reset (OGRL-20260924-007): advantages
+                # from a freshly initialised critic are noise, and stepping the actor
+                # on them undoes the policy we resumed. Train the critic alone; the
+                # caller also detaches the shared encoder so nothing actor-side moves.
+                loss = args.value_coef * value_loss
 
             _diag_due = (_update_counter[0] < 50) or (_update_counter[0] % 10 == 0)
             if mb_index == 1 and _diag_due and hasattr(policy, "shared_parameters"):
