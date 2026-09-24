@@ -228,9 +228,26 @@ void Apply(Engine* engine) {
     // remains body-relative in playercontrol.as.
     SceneGraph* scenegraph = engine->GetSceneGraph();
     if (scenegraph != nullptr) {
+        // OGRL-20260924-009: AI characters also carry controller_id 0; the
+        // first match is the player only by scenegraph-order luck. Prefer the
+        // player-controlled match (same rule as rl_shm_transport's
+        // FindControllerCharacter), falling back to the first match.
+        MovementObject* target = nullptr;
+        for (Object* object : scenegraph->movement_objects_) {
+            MovementObject* cand = static_cast<MovementObject*>(object);
+            if (cand->controller_id == g_controller_id) {
+                if (cand->controlled) {
+                    target = cand;
+                    break;
+                }
+                if (target == nullptr) {
+                    target = cand;
+                }
+            }
+        }
         for (Object* object : scenegraph->movement_objects_) {
             MovementObject* mo = static_cast<MovementObject*>(object);
-            if (mo->controller_id == g_controller_id) {
+            if (mo == target) {
                 int camera_id = mo->camera_id;
                 if (g_controller_id > 0) {
                     if (g_virtual_camera_id < 0) {

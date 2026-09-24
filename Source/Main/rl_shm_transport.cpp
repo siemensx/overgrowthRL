@@ -137,17 +137,31 @@ void SendScenarioMessages(Engine* engine, const ShmHeader* header) {
     scenegraph->level->Message(buf);
 }
 
+// OGRL-20260924-009: AI characters also carry controller_id 0, so "first
+// movement object on this controller" is the PLAYER only when the player
+// happens to come first in scenegraph order. arena_level_1v1_unarmed.as picks
+// the 1v1 player spawn at random, so for roughly half of all 1v1 episodes the
+// policy was fed an ENEMY's proprioception (and reward attribution keyed on
+// that enemy's id) as its own. Prefer the character that is actually
+// player-controlled; fall back to the first match only when none is, which is
+// what an externally driven non-player character (human duel) needs.
 MovementObject* FindControllerCharacter(SceneGraph* scenegraph, int controller_id) {
     if (scenegraph == nullptr) {
         return nullptr;
     }
+    MovementObject* first = nullptr;
     for (Object* object : scenegraph->movement_objects_) {
         MovementObject* mo = static_cast<MovementObject*>(object);
         if (mo->controller_id == controller_id) {
-            return mo;
+            if (mo->controlled) {
+                return mo;
+            }
+            if (first == nullptr) {
+                first = mo;
+            }
         }
     }
-    return nullptr;
+    return first;
 }
 
 // Match-only diagnostics are emitted immediately before the render pass.
@@ -426,16 +440,7 @@ bool Step(Engine* engine) {
     ++g_step_counter;
 
     SceneGraph* scenegraph = engine->GetSceneGraph();
-    MovementObject* character = nullptr;
-    if (scenegraph != nullptr) {
-        for (Object* object : scenegraph->movement_objects_) {
-            MovementObject* mo = static_cast<MovementObject*>(object);
-            if (mo->controller_id == g_controller_id) {
-                character = mo;
-                break;
-            }
-        }
-    }
+    MovementObject* character = FindControllerCharacter(scenegraph, g_controller_id);
 
     bool truncated = false;
     int written = 0;
