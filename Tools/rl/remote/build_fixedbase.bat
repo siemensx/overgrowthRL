@@ -7,7 +7,7 @@ set BLD=%~2
 set JOBS=%~3
 if "%JOBS%"=="" set JOBS=4
 echo [%date% %time%] configure %SRC% -> %BLD% > %BLD%.log
-cmake -S %SRC%\Projects -B %BLD% -G "Visual Studio 17 2022" -A x64 -DRL_WINDOWS_FIXED_BASE=ON -DRL_MSVC_LTCG=OFF -DRL_ANGELSCRIPT_238=OFF >> %BLD%.log 2>&1
+cmake -S %SRC%\Projects -B %BLD% -G "Visual Studio 17 2022" -A x64 -DRL_WINDOWS_FIXED_BASE=ON -DRL_MSVC_LTCG=OFF -DRL_ANGELSCRIPT_238=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5 >> %BLD%.log 2>&1
 if errorlevel 1 ( echo CONFIGURE_FAILED >> %BLD%.log & exit /b 1 )
 echo [%date% %time%] build >> %BLD%.log
 start "" /LOW /B /WAIT cmake --build %BLD% --config Release --target Overgrowth -- /m:%JOBS% /v:minimal >> %BLD%.log 2>&1
