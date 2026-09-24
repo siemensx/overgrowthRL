@@ -22,7 +22,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from env import OvergrowthEnv  # noqa: E402
-from obs_schema import DEFAULT_LAYOUT as L  # noqa: E402
+from obs_schema import DEFAULT_LAYOUT as L, ENTITY_FLOATS  # noqa: E402
 
 GRAB = 2 + 3  # [move_x, move_y, jump, crouch, attack, grab, drop, walk]
 
@@ -44,11 +44,19 @@ def main() -> int:
     try:
         obs = env.reset(seed=424242, difficulty=0.0, opponents=1)
         blocks, prev_blocking, blocking_ticks = 0, False, 0
+        max_recharge, wrong_self, self_ids = 0.0, 0, set()
         for t in range(args.decisions):
             action = np.zeros(8, dtype=np.float32)
             action[GRAB] = 0.0 if (t % args.period) == args.period - 1 else 1.0
             obs, _r, done, _info = env.step(action)
             blocking = obs[L.ACTIVE_BLOCKING] > 0.5
+            max_recharge = max(max_recharge, float(obs[L.ACTIVE_BLOCK_RECHARGE]))
+            self_ids.add(int(obs[0]))
+            for slot in range(L.max_visible_entities):
+                o = L.entities_start + slot * ENTITY_FLOATS
+                if obs[o] > 0.5 and obs[o + 18] > 0.5:
+                    wrong_self += 1
+                    break
             blocking_ticks += int(blocking)
             if blocking and not prev_blocking:
                 blocks += 1
@@ -56,7 +64,9 @@ def main() -> int:
             if done:
                 break
         out = {"edges": args.edges, "decisions": t + 1, "cycles": (t + 1) // args.period,
-               "block_starts": blocks, "decisions_blocking": blocking_ticks}
+               "block_starts": blocks, "decisions_blocking": blocking_ticks,
+               "max_recharge_seen": max_recharge, "self_ids": sorted(self_ids),
+               "decisions_self_not_player": wrong_self}
         print(json.dumps(out))
     finally:
         env.close()
