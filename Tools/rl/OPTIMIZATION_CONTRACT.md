@@ -1745,3 +1745,66 @@ Raw worker, thread, priority, and interrupted-LTCG summaries, scripts, logs,
 and ZIPs are retained in the outer artifact folder
 `research-artifacts/OGRL-20260923-013-throughput/`; the ZIPs were integrity
 checked. This close-out changes documentation only, not engine/trainer source.
+
+## OGRL-20260923-014 — fixed-base LTCG ABBA and final owner stop
+
+**Timestamp:** 2026-09-23 19:47 PDT. Follow-on to OGRL-013; the historical
+600–800 useful SPS status quo was real. `launch_training.ps1` already selected
+engine AboveNormal and affinity `0xFFF`; the earlier matched comparison was
+700.120 SPS Normal/no-affinity versus 833.627 SPS AboveNormal/`0xFFF`. These
+settings were pre-existing and were held constant in this test.
+
+### Fixed-base compiler comparison on the saved n14 recipe
+
+The corrected experiment compared the fixed-base stock Release binary SHA
+`9b2d423347284dfa7ebf99a8e65ec5ccf80d92896c623720d5c789d0545b5e9e` against
+the scoped-LTCG Release candidate SHA
+`16199181ccd068ed0963d0d1e6746e2ee6aae5e9a062ba98f3016b2d8b23fc7a`. Both
+were built from source commit `c8a2dc84d10755ee9d746fd8d0a824441620c691`;
+there were no gameplay/source changes in the comparison. The Windows checkout
+had generated Python cache paths only. Setup was n14/k4, six maps 101–106,
+AboveNormal/`0xFFF`, Torch C/U/I 2/4/1, hard reset every 50, PPO
+256/4/256, 60 s warmup + 300 s measured, launch wave 2, and read-only resume
+checkpoint `run24_opt_smoke_20260921.pt`. Each point had no checkpoint output.
+
+| ABBA order | engine | useful wall SPS | median cycle SPS | p10 | pool miss | recoveries |
+|---|---|---:|---:|---:|---:|---:|
+| A1 | fixed-base stock | 882.582 | 903.563 | 778.943 | 0.216% | 0 |
+| B1 | fixed-base LTCG | 876.558 | 881.651 | 825.057 | 0.218% | 0 |
+| B2 | fixed-base LTCG | 867.026 | 869.278 | 818.878 | 0.000% | 0 |
+| A2 | fixed-base stock | 839.031 | 834.522 | 785.326 | 0.000% | 0 |
+
+Stock mean 860.807 SPS; LTCG mean 871.792 SPS; raw contrast +10.985 SPS
+(+1.276%). Pair effects disagreed: B1/A1 −0.682%, B2/A2 +3.336%. The mean
+p10 values (782.135 stock, 821.967 LTCG) are descriptive and do not override
+the paired-sign disagreement. All four points were valid, actor/map proven,
+clean-stop, zero recovery, no-checkpoint, and preserved input checkpoint SHA
+`1f98963795cb5d1123ee5ad8a51df870df917b387205f3d51e0c36635ce4d88d`. Treat
+the +1.276% as a candidate requiring confirmation, not as either a rejection
+for being small or a proven adopted optimization. Keep LTCG partial. Do not
+merge these fixed-base results with the earlier default-Release binary series.
+
+### Close-out status
+
+No architecture is proven to sustain at least 1,000 useful wall transitions/s
+under repeated 300-second validated points. Best supported systems point is
+n18/k6 at 903.840 SPS using benchmark-only PPO 512/128/1. n20/k4/T1 yielded
+1,013.951, 989.078, and 970.631 SPS (mean 991.220); the valid 1,021.810 SPS
+reading remains a one-off. Do not change the n14 saved-recipe trainer from
+these systems probes without a learning-quality/sample-efficiency gate.
+
+The resume checkpoint SHA remained unchanged and no durable training steps
+were added in this continuation. At 19:47 PDT a read-only trainer check found
+no Overgrowth/Python processes or running OGRL diagnostic task. No reboot,
+power-cycle, Tailscale/service restart, or regular training occurred. A
+potential n20/k4/T1 fixed-base ABBA with explicit per-worker return reset was
+only drafted; following the owner's explicit stop instruction it was never
+launched, its unexecuted local draft was removed, and no remote command was
+sent. Raw summary, four point JSONs, stdout/stderr, and exit status are in
+`research-artifacts/OGRL-20260923-014-throughput/` in the outer repository.
+
+Coverage stays 16/39 screened, 19/39 partial, and 4/39 open. This is family
+count, not percent of possible speedup. The lever inventory is not exhausted;
+the owner has explicitly stopped further optimization. The complete
+cross-period synthesis is
+`research-artifacts/OGRL-20260923-013-throughput/complete_optimization_log.md`.
