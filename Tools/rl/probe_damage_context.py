@@ -31,7 +31,7 @@ SELF_STATES = ["neutral", "on_ground", "attacking", "reeling", "ragdoll"]
 
 
 def health(f, L):
-    return 0.5 * (f[L.TEMP_HEALTH] + f[L.BLOOD_HEALTH])
+    return float(0.5 * (f[L.TEMP_HEALTH] + f[L.BLOOD_HEALTH]))
 
 
 def situation(f, L, kos_so_far, opponents):
@@ -124,9 +124,9 @@ def main() -> int:
            "episodes": len(episodes), "wins": sum(e["outcome"] == "won" for e in episodes),
            "total_damage": round(total, 3), "damage_share_by_situation_before_hit": share,
            "hits_by_self_state": dict(hits), "episode_rows": episodes}
-    print(json.dumps(out))
+    print(json.dumps(out, default=float))
     if args.out:
-        Path(args.out).write_text(json.dumps(out, indent=1))
+        Path(args.out).write_text(json.dumps(out, indent=1, default=float))
     return 0
 
 
