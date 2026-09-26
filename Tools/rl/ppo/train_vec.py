@@ -34,6 +34,7 @@ import torch.nn as nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Tools/rl
 from vec_env import VecOvergrowthEnv
+from env import _cleanup_stale_write_dirs  # disk-low recovery reuses the launch-time stale sweep
 from obs_schema import DEFAULT_LAYOUT, SCHEMA_VERSION
 from curriculum import Curriculum, ScenarioSampler
 from reward import run8_reward_config, win_reward_config
@@ -764,8 +765,43 @@ def main():
                 if args.checkpoint_path:
                     _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step,
                                  curriculum=sampler.curriculum_state())
+                # Try to fix it ourselves BEFORE parking indefinitely
+                # (OGRL-20260926-002). This loop is the one place the run
+                # waits on a human, and on 2026-09-25 it waited 35 h for
+                # space that the run's own orphaned engine write-dirs were
+                # holding: 3,268 directories / 55.5 GB, reclaimable without
+                # touching anything live. Reaping is the same conservative
+                # sweep env.py runs at launch -- it deletes only `env-*`
+                # write-dirs no live process references, and does nothing at
+                # all if process liveness can't be determined. force=True
+                # because this process already swept this parent hours ago.
+                try:
+                    _reaped = _cleanup_stale_write_dirs(Path(args.repo_root) / ".rl_write_dirs", force=True)
+                    _now_gb = shutil.disk_usage(args.repo_root).free / (1024 ** 3)
+                    logger.log_event("disk_low_reap",
+                                     f"{run_id} reaped {_reaped} stale write-dir(s): {free_gb:.2f}GB -> {_now_gb:.2f}GB free",
+                                     body=f"at global_step={global_step}")
+                except Exception as _reap_error:  # noqa: BLE001 -- recovery is best-effort; never convert it into a crash
+                    logger.log_event("disk_low_reap_failed", f"{run_id} write-dir reap failed: {_reap_error}",
+                                     body=f"at global_step={global_step}")
+                _paused_since = time.time()
+                _last_nag = 0.0
                 while shutil.disk_usage(args.repo_root).free / (1024 ** 3) < args.pause_below_free_gb:
                     time.sleep(30.0)
+                    # A pause that nobody notices is indistinguishable from a
+                    # hang: run27's only record of 35 h parked here was ONE
+                    # events.jsonl line written at entry, with metrics.jsonl
+                    # frozen at the same timestamp -- which is exactly what a
+                    # deadlock looks like from the outside. Heartbeat every
+                    # 10 min so the state is legible while paused.
+                    if time.time() - _last_nag >= 600.0:
+                        _last_nag = time.time()
+                        _waited_h = (time.time() - _paused_since) / 3600.0
+                        logger.log_event("disk_low_waiting",
+                                         f"{run_id} still disk-paused after {_waited_h:.1f}h: "
+                                         f"{shutil.disk_usage(args.repo_root).free / (1024 ** 3):.2f}GB free "
+                                         f"< {args.pause_below_free_gb}",
+                                         body=f"at global_step={global_step}")
                     if logger.poll_control() == "stop":
                         logger.log_event("stop_requested", f"{run_id} stopped via dashboard control while disk-paused", body=f"at global_step={global_step}")
                         logger.clear_control()

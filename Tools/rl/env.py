@@ -39,20 +39,68 @@ _STALE_CLEANUP_LOCK = threading.Lock()
 _STALE_CLEANED_PARENTS: set[Path] = set()
 
 
-def _cleanup_stale_write_dirs(write_dir_parent: Path) -> None:
+def _live_process_command_lines() -> str | None:
+    """Every live process's full command line, as one blob, or None if that
+    could not be determined on this platform. Returning None means callers
+    MUST do nothing destructive -- "I don't know what's live" is never
+    allowed to read as "nothing is live".
+
+    Platform split exists because `ps` does not exist on Windows
+    (OGRL-20260926-002). The Windows branch of this used to be the Unix
+    `ps` call unconditionally, which raised FileNotFoundError, got caught
+    as OSError, and returned -- so the stale sweep was silently dead code
+    on the trainer for its entire life. 3,268 orphaned write-dirs / 55.5 GB
+    accumulated and filled the disk, which parked run27 in the disk-low
+    pause loop for 35 h. Do not collapse these branches back together.
+
+    `wmic` is deliberately NOT used: it is removed in current Windows 11
+    builds (measured exit=1 on the trainer). CIM over PowerShell costs
+    ~0.56 s and runs once per Python process, which is negligible against
+    an engine launch."""
+    if sys.platform == "win32":
+        try:
+            completed = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                 "Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }"],
+                capture_output=True, text=True, timeout=60,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        # A non-zero exit means the listing is untrustworthy -- refuse rather
+        # than treat an empty/failed query as "nothing is live". Note an
+        # EMPTY-but-successful listing is a legitimate first-launch state
+        # (no engines yet), so emptiness alone is not an error.
+        if completed.returncode != 0:
+            return None
+        return completed.stdout
+    try:
+        return subprocess.run(["ps", "-eo", "command"], capture_output=True, text=True, timeout=15).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _cleanup_stale_write_dirs(write_dir_parent: Path, force: bool = False) -> int:
     """Startup sweep for write-dirs (and their sibling .log files) orphaned
     by a prior engine process that never reached its own close() -- a hard
     kill, a crash, an abruptly terminated parent script. close()'s own
     cleanup (below) is real but can only run on a clean exit path, and this
     project has now hit the disk-full failure mode this guards against
-    TWICE (OGRL-20260815-034, and again 2026-08-17: 203 accumulated
-    write-dirs / 3.7GB brought free space down to ~2GB and triggered
-    run11's disk-safety-net stop). Only ever deletes a write-dir NOT
-    referenced by any live process's own --write-dir argument, so this can
-    never touch something actually in use -- if the liveness check itself
-    fails for any reason, it does nothing rather than risk deleting
-    something live. Best-effort, called once per env launch; cheap when
-    there's nothing stale to find."""
+    THREE times (OGRL-20260815-034; 2026-08-17: 203 accumulated write-dirs
+    / 3.7GB triggered run11's disk-safety-net stop; OGRL-20260926-002:
+    3,268 write-dirs / 55.5GB parked run27 for 35 h because this sweep was
+    dead code on Windows). Only ever deletes a write-dir NOT referenced by
+    any live process's own --write-dir argument, so this can never touch
+    something actually in use -- if the liveness check itself fails for any
+    reason, it does nothing rather than risk deleting something live.
+    Best-effort, called once per env launch; cheap when there's nothing
+    stale to find. Returns the number of write-dirs reaped.
+
+    force=True re-runs the sweep even if this process already swept this
+    parent. Used by the trainer's disk-low recovery, where a long-lived run
+    (whose one startup sweep happened hours ago) needs to reclaim space
+    accumulated SINCE then -- e.g. by concurrent eval subprocesses, which
+    launch their own engines and leave their own write-dirs behind."""
     write_dir_parent = write_dir_parent.resolve()
     # Vector launch constructs several OvergrowthEnv objects concurrently.
     # Running this liveness sweep independently in every constructor creates a
@@ -62,25 +110,48 @@ def _cleanup_stale_write_dirs(write_dir_parent: Path) -> None:
     # removes the directories created by this process, while the next Python
     # process gets a fresh stale sweep.
     with _STALE_CLEANUP_LOCK:
-        if write_dir_parent in _STALE_CLEANED_PARENTS:
-            return
+        if write_dir_parent in _STALE_CLEANED_PARENTS and not force:
+            return 0
         if not write_dir_parent.exists():
             _STALE_CLEANED_PARENTS.add(write_dir_parent)
-            return
-        try:
-            ps_output = subprocess.run(["ps", "-eo", "command"], capture_output=True, text=True, timeout=5).stdout
-        except (OSError, subprocess.TimeoutExpired):
-            return
+            return 0
+        ps_output = _live_process_command_lines()
+        if ps_output is None:
+            return 0  # liveness unknown -> delete nothing (see helper docstring)
+        # Case-folded, because Windows paths are case-insensitive and the OS
+        # reports a command line as it was passed -- a live sandbox whose
+        # recorded spelling differs only in case must still read as live.
+        # The error this biases toward is "keep a directory we could have
+        # reaped", which costs disk; the other direction deletes a sandbox a
+        # running engine is writing into.
+        ps_output = ps_output.casefold()
         import shutil
+        removed = 0
         for entry in write_dir_parent.iterdir():
             if entry.suffix == ".log":
                 continue  # handled alongside its write-dir below, not standalone
-            if f"--write-dir {entry}" in ps_output:
+            # Only ever reap the per-launch directories this function is
+            # responsible for. tempfile.mkdtemp(prefix=f"env-{shm}-") names
+            # them, and the random suffix makes the basename unique per
+            # launch, so matching the basename is both sufficient and
+            # robust to the path form/quoting/case the OS reports in a
+            # command line (an exact full-path substring match is not:
+            # Windows reports the path as passed, which need not equal
+            # Path.resolve()'s spelling). Fixed-name scratch dirs from
+            # other tools (bench, benchopts) are reused rather than
+            # accumulated, so they are not a leak and are left alone.
+            if not entry.name.startswith("env-"):
+                continue
+            if entry.name.casefold() in ps_output:
                 continue  # a live process still owns this one
             shutil.rmtree(entry, ignore_errors=True)
             log_path = write_dir_parent / f"{entry.name}.log"
             log_path.unlink(missing_ok=True)
+            removed += 1
+        if removed:
+            print(f"[env] reaped {removed} stale write-dir(s) under {write_dir_parent}", flush=True)
         _STALE_CLEANED_PARENTS.add(write_dir_parent)
+        return removed
 
 
 class OvergrowthEnv:
