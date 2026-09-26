@@ -97,6 +97,35 @@ class RunLogger:
         'resume' doesn't get reprocessed on the next poll."""
         self._safe(lambda: _atomic_write_json(self._control_path, {"command": None, "t": time.time()}))
 
+    def heartbeat(self, state: str, global_step: int, **detail) -> None:
+        """Rewrite heartbeat.json: "the loop reached this point at this time,
+        and here is what it is doing." Separate from metrics.jsonl because
+        metrics is written once per COMPLETED update -- so a loop stuck
+        anywhere inside an update produces no metrics line at all, and an
+        outside observer cannot distinguish "wedged" from "working on a slow
+        update" from "deliberately paused" (OGRL-20260926-002: run27 sat in
+        the disk-low pause for 35 h and looked exactly like a deadlock,
+        because its last metrics line and its single pause event shared one
+        timestamp).
+
+        `state` is why the loop is where it is: "collecting", "updating",
+        "disk_paused", "control_paused", "evaluating". A watchdog can then
+        act on "stale heartbeat" (wedged -> restart) without killing a run
+        that is honestly paused and reporting it. Cheap enough to call at
+        every phase boundary: one small atomic file rewrite, and it never
+        raises into the training loop."""
+        def _write():
+            _atomic_write_json(self.run_dir / "heartbeat.json", {
+                "t": time.time(),
+                "iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "pid": os.getpid(),
+                "run_id": self.run_id,
+                "state": state,
+                "global_step": int(global_step),
+                **detail,
+            })
+        self._safe(_write)
+
     def finish(self, status: str, final_global_step: int) -> None:
         def _write():
             self._manifest["status"] = status

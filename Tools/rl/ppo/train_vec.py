@@ -727,6 +727,9 @@ def main():
                 logger.log_event("pause", f"{run_id} paused via dashboard control", body=f"at global_step={global_step}")
                 while command == "pause":
                     time.sleep(0.5)
+                    # Keep reporting while paused, so an idle-but-healthy run
+                    # never reads as wedged to a watchdog.
+                    logger.heartbeat("control_paused", global_step, update=update)
                     command = logger.poll_control()
                 if command == "stop":
                     stopped_while_paused = True
@@ -762,6 +765,15 @@ def main():
             if free_gb < args.pause_below_free_gb:
                 logger.log_event("disk_low_pause", f"{run_id} pausing: {free_gb:.2f}GB free < --pause-below-free-gb {args.pause_below_free_gb}",
                                   body=f"at global_step={global_step}")
+                # Announce the state BEFORE the checkpoint save and the reap,
+                # not after: those can take minutes on a nearly-full disk, and
+                # until the first in-loop beat lands the heartbeat still says
+                # "collecting". A watchdog firing in that window would read a
+                # stale collecting beat and recover a run that is in fact
+                # pausing deliberately.
+                logger.heartbeat("disk_paused", global_step, update=update,
+                                 free_gb=round(free_gb, 3), need_gb=args.pause_below_free_gb,
+                                 paused_seconds=0.0)
                 if args.checkpoint_path:
                     _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step,
                                  curriculum=sampler.curriculum_state())
@@ -788,6 +800,10 @@ def main():
                 _last_nag = 0.0
                 while shutil.disk_usage(args.repo_root).free / (1024 ** 3) < args.pause_below_free_gb:
                     time.sleep(30.0)
+                    logger.heartbeat("disk_paused", global_step, update=update,
+                                     free_gb=round(shutil.disk_usage(args.repo_root).free / (1024 ** 3), 3),
+                                     need_gb=args.pause_below_free_gb,
+                                     paused_seconds=round(time.time() - _paused_since, 1))
                     # A pause that nobody notices is indistinguishable from a
                     # hang: run27's only record of 35 h parked here was ONE
                     # events.jsonl line written at entry, with metrics.jsonl
@@ -817,6 +833,13 @@ def main():
             episode_components_this_update = []  # list of per-episode component dicts, this update only
             outcomes_this_update = {"won": 0, "lost": 0, "timeout": 0}
             emergence = EmergenceAccumulator()  # Sec8.3: fresh each update, same sample size as action_stats
+            # Liveness heartbeat (OGRL-20260926-002). metrics.jsonl is written
+            # once per COMPLETED update, so a loop wedged anywhere inside an
+            # update writes nothing at all and is externally indistinguishable
+            # from a deadlock. This says "still here, and here is what I am
+            # doing", which is what any watchdog needs to act without killing
+            # a run that is merely slow or honestly paused.
+            logger.heartbeat("collecting", global_step, update=update)
             collection_start = time.perf_counter()
             # Tiny policy batches lose more to thread-pool coordination than
             # they gain from intra-op parallelism. Keep collection on one
@@ -1042,6 +1065,7 @@ def main():
             torch.set_num_threads(args.update_torch_threads)
             args._value_only = update < args.value_warmup_updates
             policy.detach_critic_features = bool(args.critic_detach_shared) or args._value_only
+            logger.heartbeat("updating", global_step, update=update)
             stats = ppo_update(policy, optimizer, batch, args, update_forward=update_forward)
             stats["value_warmup"] = int(args._value_only)
 
