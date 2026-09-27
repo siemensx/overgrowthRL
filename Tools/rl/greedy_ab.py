@@ -55,12 +55,20 @@ def _wilson(k, n, z=1.96):
     return max(0.0, c - h), min(1.0, c + h)
 
 
-def run(pol, nrm, fs, level, opponents, episodes, difficulty, seed, shm, greedy):
+def run(pol, nrm, fs, level, opponents, episodes, difficulty, seed, shm, greedy,
+        max_steps=1200):
+    # max_steps is NOT optional in practice. env.step() returns only the
+    # engine's own `done`; it has no step cap of its own, so an episode where
+    # the agent stops closing never ends. run27 times out on ~10% of 1v3
+    # episodes, so without this cap this tool hangs rather than reports. 1200
+    # matches the training config -- a mismatch here would silently penalise
+    # exactly the long fights that outnumbered scenarios produce.
     env = OvergrowthEnv(repo_root=os.getcwd(), level=level, shm_name=shm, seed=seed,
                         act_period=4, frame_stack=fs)
     env.reset(seed=seed, difficulty=difficulty, opponents=opponents)
     obs = env.reset(seed=seed + 1, difficulty=difficulty, opponents=opponents)
-    wins = ep = kos = steps = 0
+    wins = ep = kos = steps = timeouts = duds = 0
+    dealt = 0.0
     lens = []
     while ep < episodes:
         with torch.no_grad():
@@ -71,17 +79,30 @@ def run(pol, nrm, fs, level, opponents, episodes, difficulty, seed, shm, greedy)
         rc = (info or {}).get("reward_components", {}) or {}
         k = rc.get("hostile_kos_this_step")
         kos += int(round(k)) if k is not None else (1 if rc.get("opponent_knockout", 0) > 0 else 0)
-        if done:
-            if kos >= opponents:
+        dealt += float(rc.get("damage_dealt", 0.0) or 0.0)
+        won = kos >= opponents
+        # A win is scored the moment the last hostile drops, exactly as
+        # vec_env.py does it, so hitting the cap cannot turn a win into a loss.
+        timed_out = (not done) and (not won) and steps >= max_steps
+        if done or won or timed_out:
+            if won:
                 wins += 1
+            if timed_out:
+                timeouts += 1
+            # 27% of training 1v3 episodes deal <0.5 reward units of damage and
+            # die in ~360 steps -- a distinct failure mode from losing a fought
+            # match, so count it separately rather than averaging it away.
+            if dealt < 0.5:
+                duds += 1
             lens.append(steps)
             ep += 1
             kos = steps = 0
+            dealt = 0.0
             # SAME seed sequence for both arms -- paired comparison, not two
             # independent samples of a noisy environment.
             obs = env.reset(seed=seed + 100 + ep, difficulty=difficulty, opponents=opponents)
     env.close()
-    return wins, ep, (sum(lens) / max(1, len(lens)))
+    return wins, ep, (sum(lens) / max(1, len(lens))), timeouts, duds
 
 
 def main() -> int:
@@ -94,6 +115,8 @@ def main() -> int:
     ap.add_argument("--difficulty", type=float, default=0.6)
     ap.add_argument("--seed", type=int, default=31337)
     ap.add_argument("--shm-prefix", default="/ogrl_ga")
+    ap.add_argument("--max-episode-steps", type=int, default=1200,
+                    help="must match the training config; env.step() has no cap of its own")
     a = ap.parse_args()
 
     ck = torch.load(a.checkpoint, map_location="cpu", weights_only=False)
@@ -103,14 +126,17 @@ def main() -> int:
 
     print(f"checkpoint step={ck['global_step']:,}  difficulty={a.difficulty}  "
           f"episodes={a.episodes} per arm, paired seeds\n")
-    print(f"{'opp':>3} {'arm':>11} {'win rate':>9} {'95% CI':>16} {'mean len':>9}")
+    print(f"{'opp':>3} {'arm':>11} {'win rate':>9} {'95% CI':>16} {'mean len':>9} "
+          f"{'timeout':>8} {'no-dmg':>7}")
     for opp in a.opponents:
         for greedy in (False, True):
-            w, n, ml = run(pol, nrm, fs, a.level, opp, a.episodes, a.difficulty,
-                           a.seed, f"{a.shm_prefix}{opp}{int(greedy)}_{os.getpid()}", greedy)
+            w, n, ml, to, du = run(pol, nrm, fs, a.level, opp, a.episodes, a.difficulty,
+                                   a.seed, f"{a.shm_prefix}{opp}{int(greedy)}_{os.getpid()}",
+                                   greedy, max_steps=a.max_episode_steps)
             lo, hi = _wilson(w, n)
             print(f"{opp:>3} {'greedy' if greedy else 'stochastic':>11} "
-                  f"{w / n:>9.3f} {f'[{lo:.2f},{hi:.2f}]':>16} {ml:>9.0f}")
+                  f"{w / n:>9.3f} {f'[{lo:.2f},{hi:.2f}]':>16} {ml:>9.0f} "
+                  f"{to / n:>8.3f} {du / n:>7.3f}")
     return 0
 
 
