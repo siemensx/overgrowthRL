@@ -87,7 +87,7 @@ research-artifacts/*.sample.txt
 # Engine --write-dir sandboxes captured inside experiment directories. These
 # hold only derived engine caches (shader/mcache/bytecode/DDS conversions),
 # never research evidence.
-research-artifacts/**/write_dirs/
+research-artifacts/**/write_dirs
 
 # Per-tick determinism digest traces (OGRL-20260815-038 ASLR investigation and
 # friends). Multi-megabyte raw JSONL, regenerable by re-running the equivalence
