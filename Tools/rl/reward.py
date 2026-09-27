@@ -71,6 +71,30 @@ class RewardConfig:
     clear_bonus: float = 0.0             # paid once, by vec_env, on the step the LAST hostile goes down.
                                           # RewardComputer cannot see opponent count, so it is applied where
                                           # the one win definition lives (vec_env.step). See win_reward_config().
+    timeout_penalty: float = 0.0         # paid once, by vec_env, when the episode hits max_episode_steps
+                                          # without every hostile down. 0.0 keeps the historical behaviour
+                                          # (a pure time-limit truncation whose value gets bootstrapped).
+                                          #
+                                          # WHY THIS EXISTS (OGRL-20260926-003). The time limit was treated as
+                                          # a BENIGN one (Pardo et al. 2018: bootstrap V(s') so the agent is
+                                          # not punished for an artificial cutoff). That is right when the cap
+                                          # is an artefact of the harness. It is wrong here, because
+                                          # evaluate.py scores a timeout as a LOSS -- so the cap is part of
+                                          # the task, and bootstrapping it makes the training objective and
+                                          # the reported metric disagree about what a timeout is worth.
+                                          #
+                                          # Measured consequence over 62,557 run27 1v3 episodes: a timeout
+                                          # paid -1.92 while fighting to a decision paid -2.61 in
+                                          # expectation, so NOT FIGHTING was the better move by +0.69 and
+                                          # scored zero wins. The break-even win rate was 0.322 and the
+                                          # policy sat at 0.304 -- just below it -- so gradient descent
+                                          # correctly learned to stall, and stalling further eroded its
+                                          # fighting skill, lowering the win rate, which widened the gap.
+                                          # Timeout share drifted 0.061 -> 0.107 and mean length 565 -> 653
+                                          # while 1v1 regressed 0.840 -> 0.715 on held-out seeds.
+                                          #
+                                          # Set >= self_knockout_penalty so stalling can never be cheaper
+                                          # than being knocked out; see win_reward_config().
 
 
 def run8_reward_config() -> RewardConfig:
@@ -130,9 +154,58 @@ def win_reward_config() -> RewardConfig:
     time_cost is halved (0.01 -> 0.005/decision; a timeout costs -6 not -12)
     because the losses are fast and damage-heavy -- over-commitment, not
     stalling, is the measured failure. Everything else is the default profile.
+
+    2026-09-26 (OGRL-20260926-003): that last paragraph's premise was wrong,
+    and the halving it justified opened the exploit `win_notimeout` closes.
+    Stalling, not over-commitment, became the dominant failure. Do not resume
+    long runs on this profile; see win_notimeout_reward_config().
     """
     return RewardConfig(opponent_knockout_bonus=4.0, clear_bonus=12.0,
                         self_knockout_penalty=12.0, time_cost=0.005)
+
+
+def win_notimeout_reward_config() -> RewardConfig:
+    """OGRL-20260926-003: `win` plus a terminal timeout loss, because under
+    `win` NOT FIGHTING was the reward-maximising move.
+
+    Measured over 62,557 run27 1v3 episodes at d=1.0 (the run's own telemetry):
+
+        outcome    n       share   mean reward   mean length
+        won        17,408  0.278       +24.51    679
+        lost       39,783  0.636       -14.47    479
+        timeout     5,366  0.086        -1.92    1200
+
+        P(win | fought to a decision) = 0.304
+        EV(fight) = 0.304*(+24.51) + 0.696*(-14.47) = -2.61
+        EV(stall) = -1.92                    <-- better by +0.69, and 0 wins
+        break-even win rate = 0.322          <-- policy sat just below it
+
+    So the policy was in a self-reinforcing trap: stalling paid more than
+    fighting, every step spent stalling eroded its fighting skill, the win rate
+    fell further below break-even, and stalling paid relatively more still.
+    Timeout share drifted 0.061 -> 0.107 and mean episode length 565 -> 653
+    over 37M steps, while held-out 1v1 regressed 0.840 -> 0.715 and 1v3
+    0.460 -> 0.315 (evaluate.py, seeds 900000+, n=200, 1200-step cap, disjoint
+    95%% intervals on both). Training made the policy worse at its own task.
+
+    Two changes, both aimed at that arithmetic:
+
+      * timeout_penalty = 14.0, paid as a genuine TERMINAL loss (vec_env stops
+        bootstrapping the cap). Slightly above self_knockout_penalty = 12.0, so
+        running the clock can never be cheaper than being knocked out. This
+        also makes the training objective agree with evaluate.py, which has
+        always scored a timeout as a loss.
+      * time_cost restored to 0.01/decision, undoing the halving whose stated
+        justification ("over-commitment, not stalling, is the measured
+        failure") the data above contradicts.
+
+    New EV(stall) = -1.92 - 6 (the restored time cost) - 14 = about -22, i.e.
+    worse than the -14.47 of losing a fight, which is the intended ordering:
+        clear (+24) > fight and lose (-14) > run the clock (-22).
+    """
+    return RewardConfig(opponent_knockout_bonus=4.0, clear_bonus=12.0,
+                        self_knockout_penalty=12.0, time_cost=0.01,
+                        timeout_penalty=14.0)
 
 
 def _health_scalar(entity_or_self: dict | list) -> float:

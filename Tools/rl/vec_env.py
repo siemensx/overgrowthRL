@@ -561,7 +561,10 @@ class VecOvergrowthEnv:
                 # 2026-09-20: train_vec reads info["won"] on every stopped worker
                 # (Phase 0.3); a recovered worker without it was a KeyError one
                 # ShmWaitTimeout away from killing the run. Flagged by review.
+                # 2026-09-26: and info["timed_out"] (OGRL-20260926-003) for the
+                # same reason -- collectors now label the three outcomes from it.
                 info = {"reward_components": {"opponent_knockout": 0.0}, "won": False,
+                        "timed_out": False,
                         "worker_recovered": True, "recovery_reason": str(exc),
                         "scenario": scenario, "seed": self._episode_seed[i],
                         "level": self.envs[i].level, "native_trace_path": None,
@@ -590,11 +593,45 @@ class VecOvergrowthEnv:
                 need = max(1, int(self._episode_scenario[i].get("opponents", 1) or 1))
                 won = self._episode_kos[i] >= need
             terminal = bool(done or won)
-            truncated = (not terminal) and self._episode_steps[i] >= self.max_episode_steps
+            timed_out = (not terminal) and self._episode_steps[i] >= self.max_episode_steps
+            # Is hitting the cap a BENIGN time limit or a real outcome?
+            #
+            # Historically it was benign: truncated=True, so train_vec bootstraps
+            # V(s') into the reward (Pardo et al. 2018) and the episode pays no
+            # terminal penalty. That is correct when the cap is an artefact of the
+            # harness -- but evaluate.py has always scored a timeout as a LOSS, so
+            # here the cap is part of the task, and bootstrapping it made the
+            # training objective disagree with the reported metric.
+            #
+            # Measured cost of that disagreement over 62,557 run27 1v3 episodes
+            # (OGRL-20260926-003): a timeout paid -1.92 against -2.61 in
+            # expectation for fighting to a decision, so running the clock was
+            # the better move by +0.69 and scored zero wins. The policy stalled
+            # more and more (timeout share 0.061 -> 0.107) and got worse at
+            # fighting as a result (held-out 1v1 0.840 -> 0.715).
+            #
+            # With timeout_penalty > 0 the cap becomes a genuine terminal loss:
+            # penalty applied once, terminal=True so there is no bootstrap. The
+            # `timed_out` flag keeps the three-way outcome telemetry intact --
+            # a timeout is still reported as a timeout, not silently folded into
+            # "lost" -- because distinguishing "died fighting" from "ran the
+            # clock" is exactly how this bug was found.
+            timeout_penalty = float(getattr(self.envs[i].reward_computer.config, "timeout_penalty", 0.0) or 0.0)
+            if timed_out and timeout_penalty > 0.0:
+                reward = reward - timeout_penalty
+                rc["timeout_penalty"] = -timeout_penalty
+                terminal = True
+                truncated = False
+            else:
+                truncated = timed_out
             # The ONE definition of a win. train_vec used to rebuild it from
             # opponent_knockout > 0, which mislabels a timeout whose final step
             # happens to land a KO; every collector now consumes this field.
             info["won"] = bool(won)
+            # Canonical timeout flag. Collectors must label outcomes from this
+            # rather than from `not terminal`, which stops meaning "timed out"
+            # the moment timeout_penalty makes the cap terminal.
+            info["timed_out"] = bool(timed_out)
             _frame_off = len(obs) - self.layout.total_floats
             _blocking = bool(obs[_frame_off + self.layout.ACTIVE_BLOCKING] > 0.5)
             rc["block_start"] = 1.0 if (_blocking and not self._prev_blocking[i]) else 0.0

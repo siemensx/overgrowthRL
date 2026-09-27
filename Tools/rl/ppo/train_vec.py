@@ -37,7 +37,7 @@ from vec_env import VecOvergrowthEnv
 from env import _cleanup_stale_write_dirs  # disk-low recovery reuses the launch-time stale sweep
 from obs_schema import DEFAULT_LAYOUT, SCHEMA_VERSION
 from curriculum import Curriculum, ScenarioSampler
-from reward import run8_reward_config, win_reward_config
+from reward import run8_reward_config, win_reward_config, win_notimeout_reward_config
 from telemetry import RunLogger
 from tape import TapeRecorder, decision_record
 from ogreplay import runtime_fingerprint
@@ -159,11 +159,14 @@ def parse_args():
                          "default is the measured crossover point, not the deepest pool tested. Re-sweep if n_envs "
                          "changes; the optimum is n_envs-relative, not an absolute constant. 0 reproduces the "
                          "original fully-synchronous reset behavior.")
-    p.add_argument("--reward-profile", choices=["default", "run8", "win"], default="default",
+    p.add_argument("--reward-profile", choices=["default", "run8", "win", "win_notimeout"], default="default",
                     help="'default' reproduces runs 1-7's RewardConfig exactly, for comparability. 'run8' "
                          "(OGRL-20260816-023) uses reward.run8_reward_config() -- symmetric +/-10 terminal outcome, "
                          "dense damage at a matched +/-1 scale, a much smaller time_cost, stall tax and ragdoll "
-                         "penalty off, no closing-distance shaping -- see that function's docstring for why.")
+                         "penalty off, no closing-distance shaping -- see that function's docstring for why. "
+                         "'win_notimeout' (OGRL-20260926-003) is 'win' with a terminal timeout loss and the "
+                         "full time_cost restored: under 'win', running the clock out paid MORE than fighting "
+                         "to a decision, so the policy learned not to fight. Prefer it over 'win'.")
     p.add_argument("--device", default="cpu", choices=["cpu", "mps"])
     p.add_argument("--collection-torch-threads", type=int, default=2,
                    help="PyTorch intra-op threads during tiny rollout inference; 1 avoids competing with engine workers")
@@ -496,7 +499,9 @@ def main():
     # runs 1-7's default profile and curriculum are completely unaffected by
     # this flag (base_config=None reproduces the exact old behavior).
     reward_base_config = (run8_reward_config() if args.reward_profile == "run8"
-                          else win_reward_config() if args.reward_profile == "win" else None)
+                          else win_reward_config() if args.reward_profile == "win"
+                          else win_notimeout_reward_config() if args.reward_profile == "win_notimeout"
+                          else None)
     curriculum_kwargs = {"stall_intro_step": initial_global_step, "base_config": reward_base_config}
     if args.reward_profile == "run8":
         curriculum_kwargs["bootstrap_closing_weight"] = 0.0
@@ -938,7 +943,16 @@ def main():
                     # Canonical all-hostiles-down flag from vec_env (0.3). The old
                     # reconstruction from opponent_knockout > 0 is gone.
                     won = bool(infos[i]["won"])
-                    outcome = "won" if won else ("lost" if terminals[i] else "timeout")
+                    # Label from vec_env's canonical timed_out flag, NOT from
+                    # `not terminals[i]`. Under --reward-profile win_notimeout a
+                    # timeout is a genuine terminal loss (so it is not
+                    # bootstrapped), which would make the old expression report
+                    # every timeout as "lost" and erase the one signal that
+                    # exposed the stalling exploit in the first place.
+                    # .get() with the terminal-based fallback keeps checkpoints
+                    # and collectors predating the flag working unchanged.
+                    timed_out = bool(infos[i].get("timed_out", not terminals[i]))
+                    outcome = "won" if won else ("timeout" if timed_out else "lost")
                     outcomes_this_update[outcome] += 1
                     episode_components_this_update.append(dict(episode_components[i]))
                     # OGRL-20260817-028 Sec3.2/Sec8.6: the REAL reset seed
