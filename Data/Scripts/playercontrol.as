@@ -552,6 +552,25 @@ void ChooseAttack(bool front, string &out attack_str) {
 }
 
 WalkDir WantsToWalkBackwards() {
+    // rl_stance_walk (OGRL-20261002-010, opt-in, RL controller only): while "walk" is held the
+    // character keeps its facing -- strafing sideways or backpedalling -- instead of turning toward
+    // its velocity. Without it an agent cannot retreat while facing an enemy (always FORWARDS).
+    if(IsExternalRLController(this_mo.controller_id) && GetConfigValueInt("rl_stance_walk") != 0 &&
+       GetInputDown(this_mo.controller_id, "walk")) {
+        vec3 tv = GetTargetVelocity();
+        tv.y = 0.0f;
+        vec3 facing = this_mo.GetFacing();
+        facing.y = 0.0f;
+        if(length(tv) > 0.1f && length(facing) > 0.001f) {
+            float forward = dot(normalize(tv), normalize(facing));
+            if(forward < -0.3f) {
+                return WALK_BACKWARDS;
+            }
+            if(forward < 0.7f) {
+                return STRAFE;
+            }
+        }
+    }
     return FORWARDS;
 }
 

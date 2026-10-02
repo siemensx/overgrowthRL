@@ -173,7 +173,24 @@ void ResetForEpisode() {
     g_history.clear();
 }
 
+// rl_stick_deadzone (OGRL-20261002-010, opt-in): a tanh-Gaussian stick is never exactly zero, so the
+// "stick near neutral for 0.2 s" condition that re-arms active dodge (aschar.as
+// UpdateActiveDodgeMechanics / playercontrol.as WantsToDodge, |stick| > ~0.316) almost never held.
+// With a dead zone the policy can choose "neutral" by keeping the stick small.
+float g_stick_deadzone = -1.0f;
+float StickDeadzone() {
+    if (g_stick_deadzone < 0.0f) {
+        g_stick_deadzone = config.HasKey("rl_stick_deadzone") ? config["rl_stick_deadzone"].toNumber<float>() : 0.0f;
+    }
+    return g_stick_deadzone;
+}
+
 void SetMoveAxes(float move_x, float move_y) {
+    const float dz = StickDeadzone();
+    if (dz > 0.0f && move_x * move_x + move_y * move_y < dz * dz) {
+        move_x = 0.0f;
+        move_y = 0.0f;
+    }
     g_move_x = move_x;
     g_move_y = move_y;
 }
