@@ -277,6 +277,8 @@ def parse_args():
                         "Lower than the difficulty gate on purpose -- being outnumbered should stay hard.")
     p.add_argument("--opp-gate-window", type=int, default=400)
     p.add_argument("--opp-gate-min-samples", type=int, default=150)
+    p.add_argument("--opp-sampling", choices=["uniform", "learnability"], default="uniform",
+                   help="learnability: draw the opponent count with weight p(1-p) of its recent win rate (OGRL-20261002-012)")
     p.add_argument("--opp-keep-solo", type=float, default=0.0,
                    help="fraction of episodes held at 1v1 once the curriculum advances -- the "
                         "anti-forgetting term. Set to 0.0 on 2026-09-09, which also pins every "
@@ -563,7 +565,7 @@ def main():
         species_mode=args.species_mode, weapons_prob=args.weapons_prob,
         opponents_cap=args.opponents_cap, armed_stage=args.armed_stage, opp_gate_win_rate=args.opp_gate_win_rate,
         opp_gate_window=args.opp_gate_window, opp_gate_min_samples=args.opp_gate_min_samples,
-        opp_keep_solo=args.opp_keep_solo, rng_seed=args.seed,
+        opp_keep_solo=args.opp_keep_solo, opp_sampling=args.opp_sampling, rng_seed=args.seed,
     )
     sampler = ScenarioSampler(
         d_max_start=args.d_max_start, d_max_cap=args.d_max_cap, d_step=args.d_step, d_min=args.d_min,
@@ -572,7 +574,7 @@ def main():
         opponents_cap=args.opponents_cap, armed_stage=args.armed_stage,
         opp_gate_win_rate=args.opp_gate_win_rate,
         opp_gate_window=args.opp_gate_window, opp_gate_min_samples=args.opp_gate_min_samples,
-        opp_keep_solo=args.opp_keep_solo,
+        opp_keep_solo=args.opp_keep_solo, opp_sampling=args.opp_sampling,
         rng_seed=args.seed,
     )
     vec_env = VecOvergrowthEnv(
