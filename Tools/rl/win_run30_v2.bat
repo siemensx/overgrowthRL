@@ -54,7 +54,7 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run30.log
   --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 ^
   --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 20 ^
   --d-max-start 0.15 --d-max-cap 1.0 --d-step 0.1 --d-min 0.0 ^
-  --opponents-cap 3 --opp-keep-solo 0.2 --armed-stage 0 ^
+  --opponents-cap 3 --opp-keep-solo 0.2 --opp-sampling learnability --armed-stage 0 ^
   --collection-torch-threads 2 --update-torch-threads 2 --torch-interop-threads 1 ^
   --engine-config-line "rl_target_select: 2" --engine-config-line "rl_button_edges: 1" --engine-config-line "rl_no_feint: 1" --engine-config-line "rl_obs_omniscient: 1" --engine-config-line "rl_stick_deadzone: 0.3" --engine-config-line "rl_stance_walk: 1" ^
   --periodic-eval-steps 5000000 --periodic-eval-episodes 200 --periodic-eval-sampled 0 --periodic-eval-parallel 2 ^
