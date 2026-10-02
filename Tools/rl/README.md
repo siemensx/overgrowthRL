@@ -42,11 +42,12 @@ vastwatch workers): engines + trainer `OGRL_*_PRIORITY=below`, `OGRL_*_AFFINITY=
 10–13 stay free), ≤12 engines, `--max-wall-hours 6` (engines leak ~190 MB/h committed memory), kill
 engines only by your shm prefix. Stop: `{"command":"stop"}` → `runs/<run>/control.json`.
 
-Learner settings (OGRL-20261002-001b, -015): from scratch, use minibatch 128, 1 epoch, lr 3e-4,
-`--kl-mode stop --critic-full-batch` — the mb1024/2-epoch/adaptive learner stalled in a same-seed A/B.
-Late in training (sharp, low-entropy policy) the KL stop fires early and the actor learns from only a
-fraction of the batch (run28: 12 of 80 minibatches); `--critic-full-batch` keeps the critic on the whole
-batch, and a lower lr or `--kl-mode adaptive` is the next thing to test for the actor there.
+Learner settings (OGRL-20261002-018): minibatch 1024, 2 epochs, `--kl-mode adaptive --critic-full-batch`,
+lr cap 3e-4, entropy 0.003. Same-seed from-scratch A/B judged GREEDILY at equal steps (4.1M, 1v1, d=1.0):
+mb128/1-epoch 26/150 train + 10/50 held; mb1024/2-epoch 39/150 + 14/50. The mb1024 arm's *training*
+(sampled) win rate looked worse because it kept more exploration noise — never pick a learner from
+training curves. The exploration bonus uses the unsquashed Gaussian entropy, so a high coefficient
+inflates the stick's sigma (OGRL-20261002-017); keep it at 0.003 or fix the estimate.
 
 ## Tool map
 
