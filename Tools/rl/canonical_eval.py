@@ -46,6 +46,10 @@ SEED0 = 7_000_000
 CONTROLS = {
     "corrected": ["rl_target_select: 2", "rl_button_edges: 1"],
     "corrected-nofeint": ["rl_target_select: 2", "rl_button_edges: 1", "rl_no_feint: 1"],
+    # v6 branch (obs schema v6): the v2-agent profile -- sees every character + AI state, no feint,
+    # stick dead zone (dodge/frontkick), stance walk (backpedal). Requires a v6 engine + v6 checkpoint.
+    "v6-omni": ["rl_target_select: 2", "rl_button_edges: 1", "rl_no_feint: 1", "rl_obs_omniscient: 1",
+                "rl_stick_deadzone: 0.3", "rl_stance_walk: 1"],
     "old": [],  # auto-repeating buttons + frozen-camera targeting: everything trained before 2026-09-24
 }
 
