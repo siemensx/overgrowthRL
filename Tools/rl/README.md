@@ -42,8 +42,11 @@ vastwatch workers): engines + trainer `OGRL_*_PRIORITY=below`, `OGRL_*_AFFINITY=
 10–13 stay free), ≤12 engines, `--max-wall-hours 6` (engines leak ~190 MB/h committed memory), kill
 engines only by your shm prefix. Stop: `{"command":"stop"}` → `runs/<run>/control.json`.
 
-Learner settings that matter (OGRL-20261002-001b): with 1 epoch / minibatch 128 the KL guard discarded
-~85% of every batch. Use `--kl-mode adaptive --critic-full-batch` with minibatch ≥1024.
+Learner settings (OGRL-20261002-001b, -015): from scratch, use minibatch 128, 1 epoch, lr 3e-4,
+`--kl-mode stop --critic-full-batch` — the mb1024/2-epoch/adaptive learner stalled in a same-seed A/B.
+Late in training (sharp, low-entropy policy) the KL stop fires early and the actor learns from only a
+fraction of the batch (run28: 12 of 80 minibatches); `--critic-full-batch` keeps the critic on the whole
+batch, and a lower lr or `--kl-mode adaptive` is the next thing to test for the actor there.
 
 ## Tool map
 
