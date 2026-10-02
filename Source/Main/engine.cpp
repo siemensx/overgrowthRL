@@ -5757,6 +5757,17 @@ bool Engine::ResetRLTrainingScenario(unsigned int seed) {
     LoadLevel(scenario_path);
     rl_training_reset_in_progress_ = false;
 
+    // OGRL-20261002-014 (determinism experiment): LoadLevel runs work on a loader thread, and the
+    // C rand()/rand_ts streams are process-global, so the number of draws consumed while loading can
+    // depend on thread timing. Reseed once more from the episode seed after the level is in place so
+    // simulation-time draws start from a known state regardless of how loading interleaved.
+    // Measured before this change: fresh-process repeat 24/30 identical (OGRL-20261002-007d).
+    if (getenv("OGRL_NO_POSTLOAD_RESEED") == nullptr) {
+        const unsigned int post_seed = seed * 2654435761u + 0x9e3779b9u;
+        rand_ts_seed(post_seed);
+        srand(post_seed);
+    }
+
     return level_loaded_ && scenegraph_ != NULL &&
            latest_level_path_.GetOriginalPathStr() == scenario_path.GetOriginalPathStr();
 }
