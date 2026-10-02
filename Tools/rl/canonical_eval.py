@@ -94,6 +94,8 @@ def main() -> int:
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--parallel", type=int, default=6)
     ap.add_argument("--episodes", type=int, default=EPISODES, help="ONLY lower this for smoke tests; results are then not suite-v2")
+    ap.add_argument("--only-opp", type=int, default=0,
+                    help="diagnostic: run only the cells with this opponent count (result is NOT suite v2)")
     ap.add_argument("--repeat-check", action="store_true", help="run cell 0 (t_train_101 1v1) twice and report per-seed agreement")
     a = ap.parse_args()
     out_dir = Path(a.out_dir)
@@ -102,6 +104,8 @@ def main() -> int:
     tag = Path(a.checkpoint).stem
     t0 = time.time()
     todo = cells()
+    if a.only_opp:
+        todo = [c for c in todo if c["opp"] == a.only_opp]
     if a.repeat_check:
         c = todo[2]  # t_train_101 1v3
         r1 = run_cell(a.checkpoint, c, flags, out_dir, a.episodes, tag + "_rep1")
@@ -116,15 +120,19 @@ def main() -> int:
         return 0
     with ThreadPoolExecutor(a.parallel) as ex:
         res = list(ex.map(lambda c: run_cell(a.checkpoint, c, flags, out_dir, a.episodes, tag), todo))
-    summary = {"suite": SUITE_VERSION, "checkpoint": a.checkpoint, "controls": a.controls, "config_lines": flags,
+    summary = {"suite": SUITE_VERSION + (f"-only{a.only_opp}v-DIAGNOSTIC" if a.only_opp else ""), "checkpoint": a.checkpoint, "controls": a.controls, "config_lines": flags,
                "episodes_per_cell": a.episodes, "seconds": round(time.time() - t0), "cells": []}
     print(f"\n{tag}  suite {SUITE_VERSION}  controls={a.controls}  ({a.episodes}/cell, d=1.0, greedy)")
     print(f"{'map':14} " + " ".join(f"{o}v{'':>9}" for o in OPPONENTS))
     for m in TRAIN_MAPS + HELD_MAPS:
         row = [r for r in res if r["map"] == m]
         print(f"{m:14} " + " ".join(f"{r['won']:>3}/{r['n']:<3}     " for r in sorted(row, key=lambda r: r["opp"])))
+    if a.only_opp:
+        OPPS = [a.only_opp]
+    else:
+        OPPS = OPPONENTS
     for split in ("train", "held"):
-        for o in OPPONENTS:
+        for o in OPPS:
             rr = [r for r in res if r["split"] == split and r["opp"] == o]
             k, n = sum(r["won"] for r in rr), sum(r["n"] for r in rr)
             lo, hi = wilson(k, n)
