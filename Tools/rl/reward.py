@@ -208,6 +208,25 @@ def win_notimeout_reward_config() -> RewardConfig:
                         timeout_penalty=14.0)
 
 
+def win_v2_reward_config() -> RewardConfig:
+    """OGRL-20261002-003: `win_notimeout` without the per-step costs.
+
+    Under win_notimeout every running per-decision cost (time 0.01, the curriculum's
+    stall tax 0.02 after 250 contact-free decisions, ragdoll 0.05) accrues while
+    staying alive, but a knockout is a flat -12 -- so once a fight looks lost, being
+    knocked out SOONER is worth more than surviving longer (run28 losses: -19.35, of
+    which time -5.90, stall -2.17, ragdoll -0.89). The terminal timeout loss (-14)
+    already makes stalling strictly worse than fighting, so the per-step costs have no
+    remaining job. Pair with --stall-target-weight 0: Curriculum otherwise re-imposes
+    its own stall ramp for every profile except run8.
+
+        clear: 4 per KO + 12  >  fight and lose: -12  >  run the clock: -14
+    """
+    return RewardConfig(opponent_knockout_bonus=4.0, clear_bonus=12.0,
+                        self_knockout_penalty=12.0, time_cost=0.0, ragdoll_penalty=0.0,
+                        stall_penalty_weight=0.0, timeout_penalty=14.0)
+
+
 def _health_scalar(entity_or_self: dict | list) -> float:
     """(temp_health + blood_health) / 2, the two regenerating/bleed pools
     that respond to ordinary combat damage -- see rl_observation.cpp's own

@@ -37,7 +37,7 @@ from vec_env import VecOvergrowthEnv
 from env import _cleanup_stale_write_dirs  # disk-low recovery reuses the launch-time stale sweep
 from obs_schema import DEFAULT_LAYOUT, SCHEMA_VERSION
 from curriculum import Curriculum, ScenarioSampler
-from reward import run8_reward_config, win_reward_config, win_notimeout_reward_config
+from reward import run8_reward_config, win_reward_config, win_notimeout_reward_config, win_v2_reward_config
 from telemetry import RunLogger
 from tape import TapeRecorder, decision_record
 from ogreplay import runtime_fingerprint
@@ -170,7 +170,7 @@ def parse_args():
                          "default is the measured crossover point, not the deepest pool tested. Re-sweep if n_envs "
                          "changes; the optimum is n_envs-relative, not an absolute constant. 0 reproduces the "
                          "original fully-synchronous reset behavior.")
-    p.add_argument("--reward-profile", choices=["default", "run8", "win", "win_notimeout"], default="default",
+    p.add_argument("--reward-profile", choices=["default", "run8", "win", "win_notimeout", "win_v2"], default="default",
                     help="'default' reproduces runs 1-7's RewardConfig exactly, for comparability. 'run8' "
                          "(OGRL-20260816-023) uses reward.run8_reward_config() -- symmetric +/-10 terminal outcome, "
                          "dense damage at a matched +/-1 scale, a much smaller time_cost, stall tax and ragdoll "
@@ -512,11 +512,14 @@ def main():
     reward_base_config = (run8_reward_config() if args.reward_profile == "run8"
                           else win_reward_config() if args.reward_profile == "win"
                           else win_notimeout_reward_config() if args.reward_profile == "win_notimeout"
+                          else win_v2_reward_config() if args.reward_profile == "win_v2"
                           else None)
     curriculum_kwargs = {"stall_intro_step": initial_global_step, "base_config": reward_base_config}
     if args.reward_profile == "run8":
         curriculum_kwargs["bootstrap_closing_weight"] = 0.0
         curriculum_kwargs["stall_target_weight"] = 0.0
+    if args.reward_profile == "win_v2":
+        curriculum_kwargs["stall_target_weight"] = 0.0  # the profile's whole point is no per-step costs
     # OGRL-20260904-058: the run8 profile pinned stall_target_weight to 0.0 on
     # the reasoning that "a well-defined 1v1 needs no engagement bootstrap".
     # That holds against an opponent that closes on its own and fails against
