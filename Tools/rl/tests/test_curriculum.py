@@ -5,6 +5,10 @@ clear that an abruptly-introduced reward term needs the same gradual on-ramp
 an abruptly-removed one does)."""
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))  # Tools/rl (moved into tests/ 2026-10-02)
+
 from curriculum import Curriculum
 from reward import RewardConfig, run8_reward_config
 

@@ -1,3 +1,7 @@
+> **Note 2026-10-02:** the bench definition in this header (t_train_101 only, 400 greedy + 200 sampled,
+> engine flags unstated) is superseded by `canonical_eval.py` (suite v2). The levers ledger below remains
+> valid as a record of what was measured.
+
 # Optimization contract — every lever, tested, in order
 
 Written 2026-09-19 after the final run21_win bench: 829M steps scored 70/200 on

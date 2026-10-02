@@ -11,8 +11,8 @@
 #   sync_artifacts.sh <RUN_ID> --tapes  # also pull .ogreplay containers (large)
 set -euo pipefail
 
-HOST="${OGRL_TRAINER_HOST:-trainer}"
-REMOTE_ROOT="${OGRL_TRAINER_ROOT:-C:/ogrl/overgrowthRL}"
+HOST="${OGRL_TRAINER_HOST:-trainer-lan}"
+REMOTE_ROOT="${OGRL_TRAINER_ROOT:-C:/ogrl/overgrowthRL_clean}"  # runs since run27 live in the _clean checkout
 LOCAL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 RUN_ID="${1:-}"
 WANT_TAPES=0

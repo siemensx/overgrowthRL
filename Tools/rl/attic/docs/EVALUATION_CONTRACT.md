@@ -1,3 +1,7 @@
+> **SUPERSEDED 2026-10-02 (OGRL-20261002-008). Historical record only.** Describes the run21-era
+> setup. The current entry point is `Tools/rl/README.md`; the only benchmark is
+> `Tools/rl/canonical_eval.py`. Kept unedited below so the chronology can cite it.
+
 # Evaluation contract
 
 How to measure whether this policy got better. Written 2026-09-07 after a run

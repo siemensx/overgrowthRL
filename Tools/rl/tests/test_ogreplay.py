@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))  # Tools/rl (moved into tests/ 2026-10-02)
+
 import tempfile
 import unittest
 from pathlib import Path

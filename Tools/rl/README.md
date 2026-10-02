@@ -1,139 +1,72 @@
-# Overgrowth RL training pipeline
+# Tools/rl — the Overgrowth RL pipeline (current as of 2026-10-02)
 
-A from-scratch RL environment and PPO trainer built on top of the real
-Overgrowth engine (`Source/Main/rl_*`), following the 8-stage plan in
-`research-artifacts/implementation_plan_m4_gym.md` through Stage 5, then
-extending past it (reward/curriculum/learner — a real gap in that plan, not
-covered by any of its stages; see `research-log/`'s `ogrl-plan-scope`
-discussion). Everything here is documented in detail, with the reasoning and
-the bugs found along the way, in `research-log/2026-08-15.md` and
-`research-log/2026-08-16.md` (entries `OGRL-20260816-005` through `-012`
-cover this pipeline specifically).
+This is the single entry point. Older docs live in `attic/docs/` with SUPERSEDED banners; the
+research chronology lives in the outer repo's `research-log/`, traps in `DEAD_ENDS.md`.
 
-## Architecture
+## The loop in one paragraph
 
-```
- Engine process (Source/Main/*)                    Python process
- ─────────────────────────────                     ──────────────
- RLObservation::Extract()   ──┐
-   (schema v2, egocentric,    │  shm segment + two named
-    K-capped entities, LOS)   │  POSIX semaphores (obs/action),
-                               │  lock-step request/response
- RLAction::Apply()          ◄─┘  (Source/Main/rl_shm_transport.{h,cpp})
-   (writes into Input::
-    PlayerInput -- the        shm_env.ShmEnv         (raw transport client)
-    ONLY injection point,          │
-    zero script changes)      env.OvergrowthEnv       (Gym-shaped: reset/step,
-                                    │                   owns the engine subprocess,
-                               vec_env.VecOvergrowthEnv  computes reward)
-                                    │                  (N parallel workers,
-                               ppo/train.py               thread-based)
-                               ppo/train_vec.py        (PPO: policy.py, buffer.py /
-                                                         vec_buffer.py, normalize.py)
-```
+The engine (C++ + AngelScript, `Source/Main/rl_*.cpp`) runs headless and talks to Python over shared
+memory (`shm_env.py`). Every 4 physics ticks (120 Hz → 30 Hz decisions) it publishes a 339-float
+observation (schema v5, `obs_schema.py`) and waits for an 8-float action (2 stick axes + jump, crouch,
+attack, grab, drop, walk). `env.py` wraps one engine; `vec_env.py` runs N active + K standby engines
+synchronously; `ppo/train_vec.py` is the trainer (`ppo/policy.py` actor-critic, `ppo/train.py`
+`ppo_update`), `reward.py` + `curriculum.py` define the objective and the scenario sampler.
 
-The engine never computes reward or owns episode-outcome judgment — only
-`episode_done` (self-knockout) is native. Reward, curriculum, and the win
-condition (opponent knockout) all live in Python, specifically so they can be
-iterated without an engine rebuild.
+## Controls: name them, every time
 
-## Files
+Engine control flags change what the same weights score by 5× (OGRL-20261002-001):
 
-**C++ (engine side)** — `Source/Main/`:
-- `rl_observation.{h,cpp}` — observation extraction. `ObservationConfig` is
-  runtime-configurable (entity cap, ray count, FOV profile). Schema version
-  and LOS rule version are both explicit constants, bumped whenever the
-  buffer layout or visibility rule changes.
-- `rl_action.{h,cpp}` — action injection via `Input::PlayerInput::key_down`,
-  plus a scripted-action test harness (`--rl-action-script`) used to validate
-  timing-sensitive combos before the transport existed.
-- `rl_shm_transport.{h,cpp}` — the shm transport itself: header layout,
-  lock-step protocol, episode reset (`Engine::ResetRLTrainingScenario`, Stage
-  4, extended to work under a live shm-driven run, not just the benchmark
-  harness).
-- `rl_obs_test.{h,cpp}` — diagnostic-only dump/cost-measurement harness, not
-  part of the training path.
+| profile | flags | meaning |
+|---|---|---|
+| `corrected` | `rl_target_select: 2`, `rl_button_edges: 1` | a held button is one press, attack targets the nearest enemy. Every run since run27. |
+| `corrected-nofeint` | + `rl_no_feint: 1` | also stops a held grab from cancelling the agent's own ground attacks (run29+) |
+| `old` | none | auto-repeating buttons + frozen-camera targeting: everything trained before 2026-09-24 |
 
-**Python (training side)** — `Tools/rl/`:
-- `obs_schema.py` — named field layout mirroring `RLObservation`'s buffer
-  exactly. Never hardcode a float offset; import from here.
-- `reward.py` — reward function (dense damage-based + sparse
-  knockout/terminal), entities matched by id across frames (slot order is
-  nearest-first and reorders every step).
-- `curriculum.py` — reward-shaping curriculum (phased weight changes over
-  training). **Not** an environment-composition curriculum (progressively
-  harder scenarios) — that would need new training levels or an engine hook,
-  neither of which exists yet.
-- `shm_env.py` — raw transport client (ctypes bindings to the same libc
-  calls the C++ side uses; zero third-party dependencies).
-- `env.py` — `OvergrowthEnv`: Gym-shaped single-environment wrapper. Owns the
-  engine subprocess's lifecycle. Supports frame-stacking (`frame_stack=N`) so
-  the (non-recurrent) policy can perceive trends, not just instantaneous
-  state.
-- `vec_env.py` — `VecOvergrowthEnv`: N parallel `OvergrowthEnv` workers,
-  thread-based (verified: `ctypes` releases the GIL during blocking calls, so
-  N threads blocked in `sem_wait()` genuinely overlap).
-- `ppo/policy.py` — hybrid actor-critic: tanh-squashed Gaussian for the 2
-  continuous move dims (SAC-style bounded-action treatment) + 6 independent
-  Bernoulli heads for the discrete buttons, one joint PPO objective.
-- `ppo/buffer.py` / `ppo/vec_buffer.py` — rollout storage + GAE, with correct
-  truncation-vs-termination handling (Pardo et al. 2018).
-- `ppo/normalize.py` — running observation/return normalization (Welford's
-  algorithm, matching OpenAI's VecNormalize).
-- `ppo/train.py` — single-environment PPO training loop + CLI.
-- `ppo/train_vec.py` — N-worker vectorized PPO training loop + CLI (reuses
-  `train.py`'s `ppo_update`/`_explained_variance`/`_save_checkpoint`, not a
-  duplicate implementation).
-- `shm_smoketest.py` — minimal reference client for the raw transport,
-  useful for debugging the transport in isolation from the RL stack.
+## Measure: `canonical_eval.py` (suite v2) and nothing else
 
-## Running a training job
-
-Single environment (simpler, useful for debugging):
 ```bash
-python3 Tools/rl/ppo/train.py \
-  --repo-root /path/to/overgrowthRL \
-  --shm-name /ogrl_train0 \
-  --total-timesteps 300000 \
-  --log-path Tools/rl/ppo/runs/my_run.csv \
-  --checkpoint-path Tools/rl/ppo/checkpoints/my_run.pt
+python3 Tools/rl/canonical_eval.py --checkpoint <ckpt> --controls corrected-nofeint --out-dir <dir>
+python3 Tools/rl/canonical_eval.py --checkpoint <ckpt> --controls corrected --out-dir <dir> --repeat-check
 ```
 
-Vectorized (N parallel engine workers, near-linear throughput scaling —
-measured ~2785 steps/sec at N=4 vs. ~750-830 steps/sec single-environment):
-```bash
-python3 Tools/rl/ppo/train_vec.py \
-  --repo-root /path/to/overgrowthRL \
-  --shm-prefix /ogrl_v \
-  --n-envs 4 \
-  --total-timesteps 2000000 \
-  --log-path Tools/rl/ppo/runs/my_vec_run.csv \
-  --checkpoint-path Tools/rl/ppo/checkpoints/my_vec_run.pt
-```
+Training maps t_train_101/102/104 + held-out t_held_203; 1v1/1v2/1v3 at d=1.0; 100 greedy episodes per
+cell; seeds 7,000,000+ (never used elsewhere); cap 1200; hard reset. Report TRAIN and HELD-OUT per
+opponent count. The in-training periodic bench (`bench.py`, t_train_101 only, seeds 900000+) is a
+health signal, not a result. See the script docstring for the determinism caveat.
 
-`--shm-prefix`/`--shm-name` must stay short — Darwin's POSIX shm/semaphore
-name limit is ~31 bytes, and both the transport and (for the vectorized
-trainer) a per-worker index get appended.
+## Train
 
-Each run's engine write-dirs live under `.rl_write_dirs/` (repo-relative,
-gitignored) and are cleaned up automatically on `env.close()` — never leave
-one behind (see `research-log/2026-08-15.md`'s disk-full incident for why
-this matters).
+Windows trainer (the grinder): one tracked launcher per run, e.g. `win_run29.bat`, registered as a
+non-elevated scheduled task. Binding co-tenant rules (the box also runs the user's fbm / Aura /
+vastwatch workers): engines + trainer `OGRL_*_PRIORITY=below`, `OGRL_*_AFFINITY=0x3FF` (CPUs 0–9;
+10–13 stay free), ≤12 engines, `--max-wall-hours 6` (engines leak ~190 MB/h committed memory), kill
+engines only by your shm prefix. Stop: `{"command":"stop"}` → `runs/<run>/control.json`.
 
-## Known limitations (honestly, not silently)
+Learner settings that matter (OGRL-20261002-001b): with 1 epoch / minibatch 128 the KL guard discarded
+~85% of every batch. Use `--kl-mode adaptive --critic-full-batch` with minibatch ≥1024.
 
-- **No environment-composition curriculum.** Only reward-shaping. Progressive
-  opponent/scenario difficulty would need new training levels or an engine
-  hook.
-- **No temporal signal in the raw observation.** The policy is a plain MLP;
-  `frame_stack > 1` is the mitigation, not yet the default in either training
-  script.
-- **No CPU-vs-MPS benchmark for the training loop specifically.** PyTorch
-  with MPS is available and confirmed working on this machine; `--device`
-  exists in both training scripts but real numbers haven't been collected.
-- **No watchdog on the shm transport.** Darwin has no `sem_timedwait`; a
-  stalled Python side blocks the engine indefinitely. Fine for an attended
-  run, a real gap for unattended long-running training.
-- **Reward weights are not tuned.** They're a defensible literature-typical
-  starting point (see `reward.py`'s docstring), not a result of any
-  experiment.
+## Tool map
+
+| purpose | files |
+|---|---|
+| core library | `env.py shm_env.py vec_env.py obs_schema.py reward.py curriculum.py paths.py telemetry.py run_config.py tape.py ogreplay.py emergence.py noaslr.py` |
+| trainer | `ppo/train_vec.py ppo/train.py ppo/policy.py ppo/normalize.py ppo/vec_buffer.py ppo/watch.py`, `remote_rollout.py` (only with `--remote-workers`) |
+| evaluation | `canonical_eval.py` (THE benchmark), `evaluate.py` (one cell), `bench.py` (periodic), `benchmark_compare.py` (paired per-seed stats) |
+| maps | `gen_arena_map.py` (no overwrite guard — never reuse a live map name), `gen_1v1_scenario.py`, `gen_human_duel_scenario.py`, `validate_maps.py`, `fork_workshop_level.py` |
+| behaviour probes | `probe_feint.py probe_button_edges.py probe_self_motion.py probe_self_identity.py probe_damage_context.py probe_ko_accounting.py probe_throws.py action_profile.py move_stats.py kill_attribution.py measure_visibility.py visibility_outcome.py greedy_ab.py action_mode_probe.py diagnose_checkpoint.py` |
+| scripted baselines | `engine_ai_baseline.py` (privileged), `observation_oracle_bot.py` (**left/right mirrored, results invalid until fixed**) |
+| watch / play | `play_match.py play_1v3_human.py play_match_forever.sh record_watch.py render_smoke.sh replay_*.py dashboard/` |
+| throughput | `throughput_sweep.py concurrency_sweep.py bench_levels.py bench_opts.py compare_engine_builds.py validate_soft_reset.py shm_smoketest.py` |
+| ops | `build_engine.sh winps.sh remote/` (`sync_artifacts.sh <run>` defaults to `trainer-lan:C:/ogrl/overgrowthRL_clean`) |
+| tests | `tests/` — run each file directly (`cd tests && python3 test_x.py`); no pytest on the Mac |
+
+## Known open defects (not yet fixed; see research-log 2026-10-02)
+
+- `on_ground` read as int from a 1-byte bool (`rl_observation.cpp:353`) — partially informative.
+- Observation "right" is mirrored relative to action "right".
+- Policy's entity mask is taken from the normalised valid flag (`policy.py:247`) — works by rounding luck.
+- Self position / velocity / facing are world-frame; ids are raw floats; obs normaliser is frozen at
+  1.5e9 samples.
+- Active dodge cannot re-arm (needs ≥0.2 s of neutral stick); the agent cannot walk backwards while
+  facing an enemy (`WantsToWalkBackwards` always FORWARDS).
+- Seeds do not reset every AngelScript RNG stream: same seed ≠ same episode.
