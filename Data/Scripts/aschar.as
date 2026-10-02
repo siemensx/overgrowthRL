@@ -9669,6 +9669,11 @@ void UpdateAttacking(const Timestep &in ts) {
             if(WantsToFeint() && can_feint) {
                 SwitchToBlockedAnim();
                 feinting = true;
+                if(g_rl_log_attacks) {
+                    // OGRL-20261002-006: a held grab at game_difficulty > 0.5 cancels the
+                    // player's own ground attack into its blocked animation.
+                    Log(info, "RLFEINT id=" + this_mo.GetID());
+                }
             }
         } else {
             if(target_id != -1) {

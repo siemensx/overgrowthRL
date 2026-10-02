@@ -414,6 +414,10 @@ bool WantsToStartActiveBlock(const Timestep &in ts) {
 bool WantsToFeint() {
     if(!this_mo.controlled || game_difficulty <= 0.5) {
         return false;
+    } else if(IsExternalRLController(this_mo.controller_id) && GetConfigValueInt("rl_no_feint") != 0) {
+        // OGRL-20261002-006 diagnostic: opt-in. Feint is "grab held" here, and the RL
+        // policy holds grab on most decisions, so its ground attacks get cancelled.
+        return false;
     } else {
         return GetInputDown(this_mo.controller_id, "grab");
     }

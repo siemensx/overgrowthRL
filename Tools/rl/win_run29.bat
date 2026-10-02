@@ -16,6 +16,12 @@ REM     E-cores). CPUs 10-13 (second P-core + both LP-E) stay free for the fbm C
 REM     workers. 12 engines instead of 24. Not elevated. --max-wall-hours 6 restarts the engine
 REM     processes before their ~190 MB/h committed-memory leak can exhaust the pagefile
 REM     (run28 crashed fbm Chrome and dwm twice that way, 09-27 and 09-28).
+REM   * Base = run27_win (305.36M), the best checkpoint trained on the CORRECTED controls
+REM     (rl_button_edges 1). OGRL-20261002-001: the "46%%" 260M policy scores 46/100 under the
+REM     old auto-repeat controls but 9/100 under the corrected ones; run27 scores 32/100.
+REM   * rl_no_feint 1 (OGRL-20261002-006): at game_difficulty 1.0 a held grab cancels the
+REM     player's own ground attacks, and an independent grab head is held ~50-90%% of the
+REM     time; the policy throws 100%% leg cannons, the one attack a feint cannot cancel.
 REM Critic reset + 20 critic-only warm-up updates on the FIRST launch only (reward changed).
 REM
 REM Stop cleanly: write {"command":"stop"} to Tools\rl\runs\run29_repair\control.json.
@@ -35,7 +41,7 @@ set PY=C:\Users\pavlov\AppData\Local\Programs\Python\Python312\python.exe
 set REPO=C:\ogrl\overgrowthRL_clean
 set RUN=run29_repair
 if "%OGRL_RUN29_BASE%"=="" (
-  set BASE=C:\ogrl\overgrowthRL\Tools\rl\ppo\checkpoints\run21_baseline_260m.pt
+  set BASE=C:\ogrl\overgrowthRL_clean\Tools\rl\ppo\checkpoints\run27_win.pt
 ) else (
   set BASE=%OGRL_RUN29_BASE%
 )
@@ -71,7 +77,7 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run29.log
   --d-max-start 1.0 --d-max-cap 1.0 --d-step 0.1 --d-min 1.0 ^
   --opponents-cap 3 --opp-keep-solo 0.2 --armed-stage 0 ^
   --collection-torch-threads 2 --update-torch-threads 2 --torch-interop-threads 1 ^
-  --engine-config-line "rl_target_select: 2" --engine-config-line "rl_button_edges: 1" ^
+  --engine-config-line "rl_target_select: 2" --engine-config-line "rl_button_edges: 1" --engine-config-line "rl_no_feint: 1" ^
   --periodic-eval-steps 5000000 --periodic-eval-episodes 200 --periodic-eval-sampled 0 --periodic-eval-parallel 2 ^
   --max-wall-hours 6 ^
   --no-tapes --no-native-capture --device cpu ^
