@@ -143,6 +143,17 @@ def parse_args():
     p.add_argument("--max-grad-norm", type=float, default=0.5)
     p.add_argument("--learning-rate", type=float, default=3e-4)
     p.add_argument("--target-kl", type=float, default=0.02)
+    p.add_argument("--max-wall-hours", type=float, default=0.0,
+                   help="exit with code 75 after this many hours (checkpoint saved) so a supervisor relaunches fresh "
+                        "engine processes; 0 = never. Guards the per-engine committed-memory leak on Windows.")
+    p.add_argument("--kl-mode", choices=["stop", "adaptive"], default="stop",
+                   help="stop: end the update at the first minibatch past target_kl (historical). "
+                        "adaptive: target_kl steers the learning rate, hard stop only at kl_hard_factor x target")
+    p.add_argument("--kl-hard-factor", type=float, default=4.0)
+    p.add_argument("--lr-min", type=float, default=1e-5)
+    p.add_argument("--lr-max", type=float, default=1e-3)
+    p.add_argument("--critic-full-batch", action="store_true",
+                   help="after an actor KL stop, keep training the critic (detached features) on the rest of the batch")
     p.add_argument("--max-episode-steps", type=int, default=1200)
     p.add_argument("--frame-stack", type=int, default=1)
     p.add_argument("--act-period", type=int, default=1,
@@ -361,7 +372,7 @@ def _apply_windows_process_scheduling(priority: str, affinity: str | None, kerne
     k32.GetProcessAffinityMask.restype = ctypes.c_int
 
     handle = k32.GetCurrentProcess()
-    priority_classes = {"normal": 0x20, "above": 0x8000, "high": 0x80}
+    priority_classes = {"idle": 0x40, "below": 0x4000, "normal": 0x20, "above": 0x8000, "high": 0x80}
     priority_class = priority_classes.get(priority.lower())
     if priority_class is not None:
         if not k32.SetPriorityClass(handle, priority_class):
@@ -406,7 +417,7 @@ def main():
     if sys.platform == "win32":
         # The trainer itself also inherits BelowNormal from the scheduled task;
         # its single-threaded rollout inference sits on the collector's critical
-        # path. OGRL_TRAINER_PRIORITY: normal (default) | above | high | inherit
+        # path. OGRL_TRAINER_PRIORITY: idle | below | normal (default) | above | high | inherit
         # OGRL_TRAINER_AFFINITY: optional hexadecimal process mask, e.g. 0xFFF
         # to keep the learner off the two LP-E logical CPUs. This is a hard,
         # feature-gated process-affinity/priority experiment; it does not
@@ -706,6 +717,8 @@ def main():
     previous_cycle_end = time.perf_counter()  # for perf.cycle_seconds -- the full update-to-update wall time,
                                             # not just collection_seconds (OGRL-20260816-020's sps blind spot)
     run_status = "interrupted"  # pessimistic default -- only overwritten to "completed" right after a clean loop
+    _wall_start = time.time()
+    recycle_exit = False
                                  # exit (natural completion or an explicit dashboard stop), so a real exception
                                  # (crash, Ctrl+C, SIGTERM) leaves this as-is and the dashboard shows it honestly
 
@@ -749,6 +762,16 @@ def main():
                 # terminal marker itself.
                 logger.log_event("stop_requested", f"{run_id} stopped via dashboard control", body=f"at global_step={global_step}")
                 logger.clear_control()
+                break
+            # 2026-10-02 (OGRL-20261002-002): engine processes leak ~190 MB/h of committed
+            # memory on Windows; 24 engines exhausted 97.6 GB commit after ~20 h and took the
+            # co-tenant workloads' Chrome and dwm down with them (run28, 09-27 and 09-28).
+            # A level reload does not release it -- only a process restart does. Exit cleanly
+            # (final checkpoint in `finally`) with code 75 so the supervisor relaunches.
+            if args.max_wall_hours and (time.time() - _wall_start) > args.max_wall_hours * 3600.0:
+                logger.log_event("note", f"{run_id} recycling engines after {args.max_wall_hours:g} h (memory-leak guard)",
+                                 body=f"at global_step={global_step}")
+                recycle_exit = True
                 break
 
             # Disk-space safety net (2026-08-17): this machine has hit a
@@ -1280,6 +1303,8 @@ def main():
                     "max_sample_kl_head": stats.get("max_sample_kl_head", ""),
                     "mb0_max_abs_logratio": stats.get("mb0_max_abs_logratio", 0.0),
                     "early_stop_minibatch": stats.get("early_stop_minibatch", -1),
+                    "minibatches_used": stats.get("minibatches_used", -1),
+                    "critic_only_minibatches": stats.get("critic_only_minibatches", 0),
                     "exact_kl_mb_max": stats.get("exact_kl_mb_max", 0.0),
                     "shared_grad_actor_norm": stats.get("shared_grad_actor_norm", 0.0),
                     "shared_grad_value_norm": stats.get("shared_grad_value_norm", 0.0),
@@ -1325,6 +1350,8 @@ def main():
                 _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer, reward_normalizer, global_step,
                                  curriculum=sampler.curriculum_state())
         run_status = "completed"  # reached either by the while condition going false, or the dashboard-stop break above
+        if recycle_exit:
+            run_status = "recycling"
         # Wait for in-flight benches at natural completion (the +10M bench IS
         # the arm's result); log them the same way the harvest loop does.
         for _b in list(_pending_benches):
@@ -1367,6 +1394,8 @@ def main():
         vec_env.close()
         log_file.close()
         logger.finish(run_status, global_step)
+    if recycle_exit and global_step < args.total_timesteps:
+        sys.exit(75)
 
 
 if __name__ == "__main__":

@@ -67,6 +67,14 @@ def parse_args():
     p.add_argument("--max-grad-norm", type=float, default=0.5)
     p.add_argument("--learning-rate", type=float, default=3e-4)
     p.add_argument("--target-kl", type=float, default=0.02, help="stop an update's remaining epochs early past this approx_kl")
+    p.add_argument("--kl-mode", choices=["stop", "adaptive"], default="stop",
+                   help="stop: end the update at the first minibatch past target_kl (historical). "
+                        "adaptive: target_kl steers the learning rate, hard stop only at kl_hard_factor x target")
+    p.add_argument("--kl-hard-factor", type=float, default=4.0)
+    p.add_argument("--lr-min", type=float, default=1e-5)
+    p.add_argument("--lr-max", type=float, default=1e-3)
+    p.add_argument("--critic-full-batch", action="store_true",
+                   help="after an actor KL stop, keep training the critic (detached features) on the rest of the batch")
     p.add_argument("--max-episode-steps", type=int, default=1200, help="~10s at 120Hz; forces a truncation reset")
     p.add_argument("--frame-stack", type=int, default=1, help="concatenate the last N raw observations so the (non-recurrent) policy can perceive trends, not just instantaneous state; 1 = off")
     p.add_argument("--device", default="cpu", choices=["cpu", "mps"])
@@ -359,10 +367,23 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
             # -- single-sample outliers in the continuous head -- while the exact
             # KL never exceeded 0.015. Two thirds of every update was thrown away
             # on noise. The sampled value is still logged as approx_kl.
-            if (args.target_kl is not None and mb_index > 1 and mb_exact_kl > args.target_kl
+            #
+            # 2026-10-02 (OGRL-20261002-001): with 1 epoch / minibatch 128 this guard fired on
+            # 99.7% of run28's updates at a median of minibatch 12 of 80, so 85% of every
+            # rollout never reached the actor OR the critic. --kl-mode adaptive keeps the
+            # target as a learning-rate controller instead (see _adapt_lr) and only stops at
+            # kl_hard_factor x target as a safety net. --critic-full-batch keeps training the
+            # critic on the rest of the batch after an actor stop.
+            kl_limit = args.target_kl
+            if kl_limit is not None and getattr(args, "kl_mode", "stop") == "adaptive":
+                kl_limit = kl_limit * getattr(args, "kl_hard_factor", 4.0)
+            stats["last_mb_exact_kl"] = mb_exact_kl
+            if (kl_limit is not None and mb_index > 1 and mb_exact_kl > kl_limit
                     and not getattr(args, "_value_only", False)):
                 stats["early_stop_minibatch"] = mb_index - 1
                 stop_early = True
+                if getattr(args, "critic_full_batch", False):
+                    _critic_only_pass(policy, optimizer, batch, indices[start:], args, stats)
                 break
 
             surrogate1 = mb_advantages * ratio
@@ -459,7 +480,52 @@ def ppo_update(policy: ActorCritic, optimizer: torch.optim.Optimizer, batch: dic
         per_head = (exact_sum / exact_n)
         stats["exact_kl_heads"] = [float(x) for x in per_head]
         stats["exact_kl"] = float(per_head.sum())
+    stats["minibatches_used"] = n_minibatch_updates
+    if getattr(args, "kl_mode", "stop") == "adaptive" and not getattr(args, "_value_only", False):
+        _adapt_lr(optimizer, stats.get("last_mb_exact_kl", 0.0), args)
     return stats
+
+
+def _adapt_lr(optimizer: torch.optim.Optimizer, final_kl: float, args) -> None:
+    """KL-adaptive learning rate (Schulman et al. 2017 Sec 4 adaptive-KL idea applied to the
+    step size, as in rl_games/Brax PPO): the KL target steers lr instead of discarding data."""
+    target = args.target_kl
+    if target is None:
+        return
+    lr_min = getattr(args, "lr_min", 1e-5)
+    lr_max = getattr(args, "lr_max", 1e-3)
+    for g in optimizer.param_groups:
+        lr = g["lr"]
+        if final_kl > 2.0 * target:
+            lr = lr / 1.5
+        elif final_kl < 0.5 * target:
+            lr = lr * 1.5
+        g["lr"] = float(min(lr_max, max(lr_min, lr)))
+
+
+def _critic_only_pass(policy, optimizer, batch, remaining: np.ndarray, args, stats) -> None:
+    """Finish the batch for the critic alone after the actor's KL stop. Shared features are
+    detached, so neither the actor heads nor the shared encoder move."""
+    n_steps = 0
+    for start in range(0, len(remaining), args.minibatch_size):
+        mb_idx = remaining[start:start + args.minibatch_size]
+        mb_obs = batch["obs"][mb_idx]
+        mb_old_values = batch["values"][mb_idx]
+        mb_returns = batch["returns"][mb_idx]
+        with torch.no_grad():
+            feats = policy._features(mb_obs)
+        new_values = policy.critic_out(policy.critic_trunk(feats)).squeeze(-1)
+        value_clipped = mb_old_values + torch.clamp(new_values - mb_old_values, -args.value_clip_coef, args.value_clip_coef)
+        value_loss = 0.5 * torch.max((new_values - mb_returns).pow(2), (value_clipped - mb_returns).pow(2)).mean()
+        optimizer.zero_grad(set_to_none=True)  # None grads => Adam skips actor params (no stale-momentum drift)
+        (args.value_coef * value_loss).backward()
+        nn.utils.clip_grad_norm_(policy.parameters(), args.max_grad_norm)
+        if not torch.isfinite(value_loss):
+            optimizer.zero_grad()
+            continue
+        optimizer.step()
+        n_steps += 1
+    stats["critic_only_minibatches"] = n_steps
 
 
 def _explained_variance(values: np.ndarray, returns: np.ndarray) -> float:

@@ -1,6 +1,7 @@
 #include "rng_streams.h"
 
 #include <cmath>
+#include <cstddef>
 
 namespace RngStreams {
 namespace {

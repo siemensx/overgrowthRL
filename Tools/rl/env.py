@@ -386,11 +386,12 @@ class OvergrowthEnv:
             # trainer at BelowNormal while Chrome/Defender/Update run Normal).
             # The sync collector waits on the slowest of N engines every step,
             # so any preempted engine is the straggler for all of them.
-            #   OGRL_ENGINE_PRIORITY: normal (default) | above | high | inherit
+            #   OGRL_ENGINE_PRIORITY: idle | below | normal (default) | above | high | inherit
+            #       "below"/"idle" (2026-10-02): yield to co-tenant workloads (fbm/scraper tasks)
             #   OGRL_ENGINE_AFFINITY: hex mask, e.g. 0xFFF to keep 12C/14T
             #       Core Ultra engines off the two LP E-cores (CPUs 12-13)
             pri = (self.engine_priority or os.environ.get("OGRL_ENGINE_PRIORITY", "normal")).lower()
-            flags = {"normal": 0x00000020, "above": 0x00008000, "high": 0x00000080}.get(pri, 0)
+            flags = {"idle": 0x00000040, "below": 0x00004000, "normal": 0x00000020, "above": 0x00008000, "high": 0x00000080}.get(pri, 0)
             if flags:
                 popen_kwargs["creationflags"] = flags
         self._process = subprocess.Popen(command, cwd=self.repo_root, stdout=self._log_file, stderr=subprocess.STDOUT, **popen_kwargs)
@@ -445,7 +446,7 @@ class OvergrowthEnv:
         if not h:
             raise ctypes.WinError()
         try:
-            priority_classes = {"normal": 0x00000020, "above": 0x00008000, "high": 0x00000080}
+            priority_classes = {"idle": 0x00000040, "below": 0x00004000, "normal": 0x00000020, "above": 0x00008000, "high": 0x00000080}
             cls = priority_classes.get((priority or "").lower())
             if cls is not None and not k32.SetPriorityClass(h, cls):
                 raise ctypes.WinError()
