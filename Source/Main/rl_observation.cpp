@@ -18,6 +18,7 @@
 #include <Math/vec3math.h>
 #include <Math/mat4.h>
 #include <Math/rng_streams.h>
+#include <Internal/config.h>
 
 #include <algorithm>
 #include <cmath>
@@ -38,12 +39,27 @@ const int kWeaponTypeClasses = 5;                 // none / knife / sword / big_
 // (the active-block parry) it cannot observe being up or available, and
 // cannot distinguish a spear's reach from a knife's with only a boolean
 // has_weapon.
+// Schema v6 (OGRL-20261002-009): privileged extension, appended at the END of the self block and of each
+// entity slot so every v5 offset inside a block is unchanged. The user lifted the observation-fairness
+// contract on 2026-10-02 ("the agent can see anything"), so the enemies' own AI state is exposed.
+//   self  +11: body-frame velocity(3), feinting, can_feint, block_stunned, in_animation, ragdoll_time,
+//              recovery_time, roll_recovery_time, hostiles_awake (ALL hostiles, visible or not)
+//   entity+21: targets_me, ai_attacking, group_fighting_wait, will_throw_counter, goal_is_attack,
+//              sub_goal one-hot(8: provoke, avoid_jump_kick, knock_off_ledge, wait_and_attack,
+//              rush_and_attack, defend, surround, escape_surround), active_blocking, block_stunned,
+//              in_animation, feinting, ragdoll_time, recovery_time, attacked_by_me, line_of_sight
+// Also fixed in v6: `grounded` reads the AngelScript bool as a bool (v5 read 4 bytes of a 1-byte bool),
+// and "right" follows the game's own convention (-fz, 0, fx) -- v5's was mirrored.
+const int kSelfV6Floats = 11;
+const int kEntityV6Floats = 21;
+const int kSubGoalClasses = 8;
 const int kProprioceptionFixedFloats = 1 /*id*/ + 3 /*pos*/ + 3 /*vel*/ + 3 /*ang_vel*/ + 3 /*facing*/ +
                                         1 /*grounded*/ + 1 /*anim_phase*/ +
                                         4 /*temp/perm/blood/block health*/ +
                                         kProprioceptionKnockedOutClasses + kProprioceptionStateClasses +
                                         1 /*has_weapon*/ +
-                                        1 /*active_blocking*/ + 1 /*active_block_recharge*/ + kWeaponTypeClasses /*weapon_type*/;
+                                        1 /*active_blocking*/ + 1 /*active_block_recharge*/ + kWeaponTypeClasses /*weapon_type*/ +
+                                        kSelfV6Floats;
 // Recent action history: move_x, move_y, jump, crouch, attack, grab (6 floats/step).
 const int kActionHistoryFloatsPerStep = 6;
 
@@ -92,7 +108,18 @@ const int kEntityFixedFloats = 1 /*valid*/ + 1 /*entity_id*/ + 3 /*rel_pos*/ + 3
                                 1 /*distance*/ + 1 /*species*/ + kProprioceptionKnockedOutClasses +
                                 kProprioceptionStateClasses + 1 /*is_controlled*/ + 1 /*has_weapon*/ +
                                 1 /*temp_health*/ + 1 /*blood_health*/ + 1 /*attacked_by_id*/ + 1 /*is_ally*/ +
-                                2 /*fwd.x,fwd.z*/ + 1 /*anim_phase*/ + 1 /*block_health*/ + kWeaponTypeClasses /*weapon_type*/;
+                                2 /*fwd.x,fwd.z*/ + 1 /*anim_phase*/ + 1 /*block_health*/ + kWeaponTypeClasses /*weapon_type*/ +
+                                kEntityV6Floats;
+
+// rl_obs_omniscient: 1 -> every other character is listed regardless of line of sight (v6 privileged
+// profile). Read lazily: the engine Config is loaded after the transport is configured.
+int g_omniscient = -1;
+bool OmniscientEnabled() {
+    if (g_omniscient < 0) {
+        g_omniscient = config.HasKey("rl_obs_omniscient") && config["rl_obs_omniscient"].toNumber<int>() != 0 ? 1 : 0;
+    }
+    return g_omniscient == 1;
+}
 
 // Reads a script global through ASModule::GetVarPtrCache -- the same
 // pointer-identity cache MovementObject::NativeNeedsAnimFrames (Stage 3a)
@@ -167,7 +194,7 @@ SelfFrame MakeSelfFrame(MovementObject* mo) {
     facing = vec3(facing.x(), 0.0f, facing.z());
     float len = std::sqrt(facing.x() * facing.x() + facing.z() * facing.z());
     frame.forward = len > 1e-5f ? facing / len : vec3(0.0f, 0.0f, 1.0f);
-    frame.right = vec3(frame.forward.z(), 0.0f, -frame.forward.x());
+    frame.right = vec3(-frame.forward.z(), 0.0f, frame.forward.x());  // v6: game convention (playercontrol.as)
     return frame;
 }
 
@@ -350,7 +377,7 @@ int Extract(Engine* engine, MovementObject* character, const ObservationConfig& 
     offset = WriteVec3(out, offset, self_ang_vel);
     offset = WriteVec3(out, offset, frame.forward);
 
-    const bool on_ground = ReadIntGlobal(character, "on_ground") != 0;
+    const bool on_ground = ReadBoolGlobal(character, "on_ground");  // v6: was ReadIntGlobal on a 1-byte bool
     (*out)[offset++] = on_ground ? 1.0f : 0.0f;
     (*out)[offset++] = self_rigged != nullptr ? self_rigged->GetAnimClient().GetNormalizedAnimTime() : 0.0f;
 
@@ -373,6 +400,26 @@ int Extract(Engine* engine, MovementObject* character, const ObservationConfig& 
     (*out)[offset++] = ReadFloatGlobal(character, "active_block_recharge");
     offset = WriteOneHot(out, offset, kWeaponTypeClasses, WeaponTypeIndex(scenegraph, primary_weapon_item_id));
 
+    // --- Schema v6 self extension ---
+    offset = WriteVec3(out, offset, ToEgocentric(frame, character->velocity));
+    (*out)[offset++] = ReadBoolGlobal(character, "feinting") ? 1.0f : 0.0f;
+    (*out)[offset++] = ReadBoolGlobal(character, "can_feint") ? 1.0f : 0.0f;
+    (*out)[offset++] = ReadFloatGlobal(character, "block_stunned");
+    (*out)[offset++] = ReadBoolGlobal(character, "in_animation") ? 1.0f : 0.0f;
+    (*out)[offset++] = std::min(ReadFloatGlobal(character, "ragdoll_time"), 10.0f);
+    (*out)[offset++] = std::min(ReadFloatGlobal(character, "recovery_time"), 10.0f);
+    (*out)[offset++] = std::min(ReadFloatGlobal(character, "roll_recovery_time"), 10.0f);
+    {
+        int hostiles_awake = 0;
+        for (Object* object : scenegraph->movement_objects_) {
+            MovementObject* other = static_cast<MovementObject*>(object);
+            if (other != character && !character->ASOnSameTeam(other) && ReadIntGlobal(other, "knocked_out") == 0) {
+                ++hostiles_awake;
+            }
+        }
+        (*out)[offset++] = static_cast<float>(hostiles_awake);
+    }
+
     // Recent legal action history: pulled from RLAction, which owns the
     // actual applied action state, rather than duplicated/re-tracked here --
     // one source of truth. Only populated for the character RLAction is
@@ -393,6 +440,7 @@ int Extract(Engine* engine, MovementObject* character, const ObservationConfig& 
     struct Candidate {
         MovementObject* mo;
         float distance;
+        bool line_of_sight;
     };
     std::vector<Candidate> candidates;
 
@@ -430,10 +478,10 @@ int Extract(Engine* engine, MovementObject* character, const ObservationConfig& 
         const bool visible = npc_matched
                                   ? HasLineOfSightNpcMatched(scenegraph->bullet_world_, character, other, head_pos, head_right, head_up, head_forward)
                                   : HasLineOfSight(scenegraph->bullet_world_, character->position, other->position);
-        if (!visible) {
+        if (!visible && !OmniscientEnabled()) {
             continue;
         }
-        candidates.push_back({other, distance});
+        candidates.push_back({other, distance, visible});
     }
     std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) { return a.distance < b.distance; });
     if (out_truncated != nullptr && static_cast<int>(candidates.size()) > config.max_visible_entities) {
@@ -480,6 +528,27 @@ int Extract(Engine* engine, MovementObject* character, const ObservationConfig& 
         (*out)[eo++] = ReadFloatGlobal(other, "block_health");
         const int other_weapon_item_id = other->ASGetArrayIntVar("weapon_slots", other_primary_slot);
         eo = WriteOneHot(out, eo, kWeaponTypeClasses, WeaponTypeIndex(scenegraph, other_weapon_item_id));
+
+        // --- Schema v6 entity extension (privileged: the opponent's own AI state) ---
+        // enemycontrol.as globals; a player-controlled entity has none of them and reads 0.
+        (*out)[eo++] = ReadIntGlobal(other, "target_id") == character->GetID() ? 1.0f : 0.0f;
+        (*out)[eo++] = ReadBoolGlobal(other, "ai_attacking") ? 1.0f : 0.0f;
+        (*out)[eo++] = ReadBoolGlobal(other, "group_fighting_wait") ? 1.0f : 0.0f;
+        (*out)[eo++] = ReadBoolGlobal(other, "will_throw_counter") ? 1.0f : 0.0f;
+        const bool has_ai = other->as_context->module.GetVarPtrCache("goal") != nullptr;
+        (*out)[eo++] = (has_ai && ReadIntGlobal(other, "goal") == 1 /*_attack*/) ? 1.0f : 0.0f;
+        const int sub_goal = has_ai ? ReadIntGlobal(other, "sub_goal") : -1;
+        for (int k = 0; k < kSubGoalClasses; ++k) {
+            (*out)[eo++] = (sub_goal == k) ? 1.0f : 0.0f;
+        }
+        (*out)[eo++] = ReadBoolGlobal(other, "active_blocking") ? 1.0f : 0.0f;
+        (*out)[eo++] = ReadFloatGlobal(other, "block_stunned");
+        (*out)[eo++] = ReadBoolGlobal(other, "in_animation") ? 1.0f : 0.0f;
+        (*out)[eo++] = ReadBoolGlobal(other, "feinting") ? 1.0f : 0.0f;
+        (*out)[eo++] = std::min(ReadFloatGlobal(other, "ragdoll_time"), 10.0f);
+        (*out)[eo++] = std::min(ReadFloatGlobal(other, "recovery_time"), 10.0f);
+        (*out)[eo++] = ReadIntGlobal(other, "attacked_by_id") == character->GetID() ? 1.0f : 0.0f;
+        (*out)[eo++] = candidates[slot].line_of_sight ? 1.0f : 0.0f;
     }
     offset += config.max_visible_entities * kEntityFixedFloats;
 
@@ -537,6 +606,9 @@ std::vector<const char*> FieldNames(const ObservationConfig& config) {
         "self.has_weapon",
         "self.active_blocking", "self.active_block_recharge",
         "self.weapon_type.none", "self.weapon_type.knife", "self.weapon_type.sword", "self.weapon_type.big_sword", "self.weapon_type.spear",
+        "self.v6.vel_body.x", "self.v6.vel_body.y", "self.v6.vel_body.z", "self.v6.feinting", "self.v6.can_feint",
+        "self.v6.block_stunned", "self.v6.in_animation", "self.v6.ragdoll_time", "self.v6.recovery_time",
+        "self.v6.roll_recovery_time", "self.v6.hostiles_awake",
     };
     for (int i = 0; i < config.action_history_steps; ++i) {
         names.push_back("self.action_history[i].move_x");
@@ -580,6 +652,16 @@ std::vector<const char*> FieldNames(const ObservationConfig& config) {
         names.push_back("entity[i].weapon_type.sword");
         names.push_back("entity[i].weapon_type.big_sword");
         names.push_back("entity[i].weapon_type.spear");
+        for (const char* n : {"entity[i].v6.targets_me", "entity[i].v6.ai_attacking", "entity[i].v6.group_fighting_wait",
+                              "entity[i].v6.will_throw_counter", "entity[i].v6.goal_is_attack",
+                              "entity[i].v6.sub.provoke", "entity[i].v6.sub.avoid_jump_kick", "entity[i].v6.sub.knock_off_ledge",
+                              "entity[i].v6.sub.wait_and_attack", "entity[i].v6.sub.rush_and_attack", "entity[i].v6.sub.defend",
+                              "entity[i].v6.sub.surround", "entity[i].v6.sub.escape_surround", "entity[i].v6.active_blocking",
+                              "entity[i].v6.block_stunned", "entity[i].v6.in_animation", "entity[i].v6.feinting",
+                              "entity[i].v6.ragdoll_time", "entity[i].v6.recovery_time", "entity[i].v6.attacked_by_me",
+                              "entity[i].v6.line_of_sight"}) {
+            names.push_back(n);
+        }
     }
     for (int i = 0; i < config.local_geometry_rays; ++i) {
         names.push_back("local_geometry.ray[i]");

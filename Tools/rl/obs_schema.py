@@ -20,11 +20,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6  # v6 (OGRL-20261002-009): privileged self+11 / entity+21, appended per block
 LOS_RULE_VERSION = 1
 
 # --- Proprioception (fixed, 35 floats) ---
-_PROPRIOCEPTION_FLOATS = 35
+SELF_V6_FLOATS = 11
+ENTITY_V6_FLOATS = 21
+_PROPRIOCEPTION_FLOATS = 35 + SELF_V6_FLOATS
 KNOCKED_OUT_CLASSES = 3   # awake, unconscious, dead (MovementObject::_awake/_unconscious/_dead)
 STATE_CLASSES = 5         # movement, ground, attack, hit_reaction, ragdoll
 ACTION_HISTORY_FIELDS = 6  # move_x, move_y, jump, crouch, attack, grab
@@ -60,6 +62,7 @@ ENTITY_FLOATS = (
     + 1  # anim_phase          (v5) -- GetNormalizedAnimTime(); what a parry/punish is timed against.
     + 1  # block_health        (v5) -- a failing guard, pressureable.
     + WEAPON_TYPE_CLASSES  # weapon_type one-hot (v5) -- distinguishes a spear's reach from a knife's.
+    + ENTITY_V6_FLOATS     # v6 privileged AI state, see ENTITY_V6 below
 )
 
 
@@ -99,6 +102,31 @@ class ObsLayout:
     ACTIVE_BLOCKING = 28          # v5
     ACTIVE_BLOCK_RECHARGE = 29    # v5
     WEAPON_TYPE = slice(30, 35)   # v5, one-hot: [none, knife, sword, big_sword, spear]
+    # v6 self extension (rl_observation.cpp "Schema v6 self extension")
+    VEL_BODY = slice(35, 38)
+    FEINTING = 38
+    CAN_FEINT = 39
+    BLOCK_STUNNED = 40
+    IN_ANIMATION = 41
+    RAGDOLL_TIME = 42
+    RECOVERY_TIME = 43
+    ROLL_RECOVERY_TIME = 44
+    HOSTILES_AWAKE = 45
+    # v6 entity extension: offsets INSIDE an entity slot
+    E_TARGETS_ME = 33
+    E_AI_ATTACKING = 34
+    E_GROUP_WAIT = 35
+    E_WILL_THROW_COUNTER = 36
+    E_GOAL_ATTACK = 37
+    E_SUB_GOAL = slice(38, 46)
+    E_ACTIVE_BLOCKING = 46
+    E_BLOCK_STUNNED = 47
+    E_IN_ANIMATION = 48
+    E_FEINTING = 49
+    E_RAGDOLL_TIME = 50
+    E_RECOVERY_TIME = 51
+    E_ATTACKED_BY_ME = 52
+    E_LINE_OF_SIGHT = 53
 
     @property
     def action_history_start(self) -> int:
@@ -186,4 +214,4 @@ class ObsLayout:
 
 
 DEFAULT_LAYOUT = ObsLayout()
-assert DEFAULT_LAYOUT.total_floats == 339, DEFAULT_LAYOUT.total_floats
+assert DEFAULT_LAYOUT.total_floats == 518, DEFAULT_LAYOUT.total_floats  # v5 was 339

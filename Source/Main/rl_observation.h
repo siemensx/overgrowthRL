@@ -28,7 +28,8 @@ namespace RLObservation {
 // Schema version: bump whenever the buffer layout changes, so recorded
 // observations and any Python-side reader can detect a mismatch instead of
 // silently misinterpreting floats. Logged with every run that uses this.
-constexpr int kSchemaVersion = 5;  // v3 (OGRL-20260816-014): self.id + per-entity attacked_by_id, for
+constexpr int kSchemaVersion = 6;  // v6 (OGRL-20261002-009): privileged self(+11)/entity(+21) extension, bool grounded, game-convention right. Total 518.
+// v5 history:  // v3 (OGRL-20260816-014): self.id + per-entity attacked_by_id, for
                                     // reward-causation attribution. v4 (OGRL-20260816-015): per-entity
                                     // is_ally (MovementObject::ASOnSameTeam), so reward code can also
                                     // require a target be hostile, not just agent-caused -- see rl_observation.cpp

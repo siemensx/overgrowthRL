@@ -113,6 +113,10 @@ class ObservationNormalizer:
         # also masks by the raw `valid` field, so this is redundant-but-safe
         # belt-and-suspenders, not load-bearing on its own.
         entity_norm = entity_norm * valid[..., None]
+        # v6 (OGRL-20261002-009): the `valid` field is a mask, not a feature. Normalised, it was
+        # (1 - 0.99999999998)/1e-4 ~= 1.8e-7 for a real entity and the policy's mask only worked
+        # because that is not exactly zero. Write the raw 0/1 back.
+        entity_norm[..., 0] = valid
 
         frames_norm = np.empty((batch, self.frame_stack, self.frame_floats), dtype=np.float32)
         frames_norm[:, :, :self.entities_start] = non_entity_norm[:, :, :self.entities_start]
