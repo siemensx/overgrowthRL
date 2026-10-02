@@ -29,7 +29,7 @@ What these tests pin:
 Run:  python3 Tools/rl/tests/test_write_dir_reaping.py
 """
 from __future__ import annotations
-import sys, tempfile, unittest
+import os, sys, tempfile, time, unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -43,6 +43,8 @@ def _make(parent: Path, name: str, *, with_log: bool = True, size: int = 1024) -
     (d / "payload.bin").write_bytes(b"\0" * size)
     if with_log:
         (parent / f"{name}.log").write_text("engine log\n")
+    old = time.time() - 3600  # a genuinely stale dir is old; fresh ones are protected (2026-10-02)
+    os.utime(d, (old, old))
     return d
 
 
@@ -188,6 +190,22 @@ class TestTrainerRecoveryWiring(unittest.TestCase):
         src = (HERE.parent / "ppo" / "train_vec.py").read_text()
         self.assertIn("disk_low_waiting", src)
 
+
+
+
+class TestFreshDirProtected(unittest.TestCase):
+    def test_fresh_unowned_dir_is_kept(self) -> None:
+        """A sibling launch creates its write-dir before its engine exists; a just-created
+        dir must survive a concurrent sweep (2026-10-02 race)."""
+        import tempfile as _tf
+        with _tf.TemporaryDirectory() as tmp:
+            parent = Path(tmp) / "wd"
+            parent.mkdir()
+            d = parent / "env-ogrl_fresh-zzzz"
+            d.mkdir()
+            removed = env_mod._cleanup_stale_write_dirs(parent, force=True)
+            self.assertEqual(removed, 0)
+            self.assertTrue(d.exists())
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

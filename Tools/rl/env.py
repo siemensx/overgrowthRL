@@ -80,6 +80,9 @@ def _live_process_command_lines() -> str | None:
         return None
 
 
+_REAP_MIN_AGE_SECONDS = 600.0  # see the age check inside _cleanup_stale_write_dirs
+
+
 def _cleanup_stale_write_dirs(write_dir_parent: Path, force: bool = False) -> int:
     """Startup sweep for write-dirs (and their sibling .log files) orphaned
     by a prior engine process that never reached its own close() -- a hard
@@ -144,6 +147,14 @@ def _cleanup_stale_write_dirs(write_dir_parent: Path, force: bool = False) -> in
                 continue
             if entry.name.casefold() in ps_output:
                 continue  # a live process still owns this one
+            try:
+                # 2026-10-02: a sibling launch creates its write-dir BEFORE its engine process
+                # exists, so the liveness test alone can reap a directory that is about to be
+                # used (concurrent evaluate.py launches). Leave anything younger than 10 min.
+                if time.time() - entry.stat().st_mtime < _REAP_MIN_AGE_SECONDS:
+                    continue
+            except OSError:
+                continue
             shutil.rmtree(entry, ignore_errors=True)
             log_path = write_dir_parent / f"{entry.name}.log"
             log_path.unlink(missing_ok=True)
