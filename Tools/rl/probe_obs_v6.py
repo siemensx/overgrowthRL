@@ -24,7 +24,7 @@ try:
             e=f[L.entity_slice(s)]
             if e[0]<0.5: continue
             nv+=1
-            stats["targets_me"].append(e[L.E_TARGETS_ME]); stats["ai_attacking"].append(e[L.E_AI_ATTACKING]); stats["follower"].append(e[L.E_GROUP_WAIT])
+            stats["targets_me"].append(e[L.E_TARGETS_ME]); stats["ai_attacking"].append(e[L.E_AI_ATTACKING]); stats["follower"].append(e[L.E_IS_FOLLOWER])
             stats["will_counter"].append(e[L.E_WILL_THROW_COUNTER]); stats["goal_attack"].append(e[L.E_GOAL_ATTACK]); stats["subgoal_sum"].append(e[L.E_SUB_GOAL].sum()); stats["los"].append(e[L.E_LINE_OF_SIGHT])
         stats["n_valid"].append(nv)
         if done:
