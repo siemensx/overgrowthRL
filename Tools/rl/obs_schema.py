@@ -168,6 +168,7 @@ class ObsLayout:
             if values[o] <= 0.5:
                 continue
             out[int(values[o + 1])] = {
+                "distance": values[o + 8],  # closing-distance shaping reads it (cold starts only; dropped 09-20, restored 10-02)
                 "knocked_out_awake": values[o + 10] > 0.5,
                 "state_ground": values[o + 14] > 0.5,
                 "state_ragdoll": values[o + 17] > 0.5,
