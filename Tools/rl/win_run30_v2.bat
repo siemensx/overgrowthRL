@@ -4,7 +4,13 @@ REM FROM SCRATCH (the 260M-400M policies are specialists of the old turbo contro
 REM   * obs schema v6 (branch feat/obs-v6-privileged): sees every enemy (rl_obs_omniscient) plus each
 REM     enemy's AI state (targets_me, ai_attacking, group wait, sub-goal, will_throw_counter, ...).
 REM   * controls: corrected + no feint + stick dead zone (dodge/frontkick) + stance walk (backpedal).
-REM   * learner: adaptive-KL lr, minibatch 1024, 2 epochs, critic full batch.
+REM   * learner: mb1024, 2 epochs, adaptive KL lr (cap 3e-4), critic full batch. History: switched to
+REM     mb128/1-epoch at 6.25M on the A/B's TRAINING (sampled) win rate, then back at ~10.3M when the
+REM     greedy equal-step evaluation showed the opposite (OGRL-20261002-018): at 4.1M, 1v1 d=1.0,
+REM     A (mb128) 26/150 train + 10/50 held, B (mb1024) 39/150 + 14/50, C (B + v6) 58/150 + 20/50.
+REM   * entropy 0.003 constant from ~10M (OGRL-20261002-017): the bonus uses the UNsquashed Gaussian's
+REM     entropy, which grows without bound in log_std, so at 0.0066 the stick sigma climbed 1.4 -> 2.15
+REM     (bang-bang stick; the dead zone that dodge/frontkick need is rarely reached).
 REM   * reward win_v2; curriculum from d_max 0.15 and 1 opponent, gates up to d=1.0 and 3 opponents,
 REM     20%% 1v1 kept once advanced.
 REM   * co-tenant fence identical to run29 (BelowNormal, 0x3FF, 12 engines, 6 h recycle).
@@ -50,7 +56,7 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run30.log
   --total-timesteps 2000000000 --n-steps 1024 --n-epochs 2 --minibatch-size 1024 ^
   --kl-mode adaptive --kl-hard-factor 4 --critic-full-batch --lr-min 0.00001 --lr-max 0.0003 ^
   --gamma 0.997 --gae-lambda 0.975 --reward-profile win_v2 --stall-target-weight 0 ^
-  --entropy-coef 0.01 --entropy-coef-final 0.003 --entropy-anneal-steps 20000000 ^
+  --entropy-coef 0.003 --entropy-coef-final 0.003 --entropy-anneal-steps 1000000 ^
   --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 ^
   --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 20 ^
   --d-max-start 0.15 --d-max-cap 1.0 --d-step 0.1 --d-min 0.0 ^
