@@ -44,7 +44,7 @@ const int kWeaponTypeClasses = 5;                 // none / knife / sword / big_
 // contract on 2026-10-02 ("the agent can see anything"), so the enemies' own AI state is exposed.
 //   self  +11: body-frame velocity(3), feinting, can_feint, block_stunned, in_animation, ragdoll_time,
 //              recovery_time, roll_recovery_time, hostiles_awake (ALL hostiles, visible or not)
-//   entity+21: targets_me, ai_attacking, group_fighting_wait, will_throw_counter, goal_is_attack,
+//   entity+21: targets_me, ai_attacking, is_follower (group_leader != -1), will_throw_counter, goal_is_attack,
 //              sub_goal one-hot(8: provoke, avoid_jump_kick, knock_off_ledge, wait_and_attack,
 //              rush_and_attack, defend, surround, escape_surround), active_blocking, block_stunned,
 //              in_animation, feinting, ragdoll_time, recovery_time, attacked_by_me, line_of_sight
@@ -533,9 +533,12 @@ int Extract(Engine* engine, MovementObject* character, const ObservationConfig& 
         // enemycontrol.as globals; a player-controlled entity has none of them and reads 0.
         (*out)[eo++] = ReadIntGlobal(other, "target_id") == character->GetID() ? 1.0f : 0.0f;
         (*out)[eo++] = ReadBoolGlobal(other, "ai_attacking") ? 1.0f : 0.0f;
-        (*out)[eo++] = ReadBoolGlobal(other, "group_fighting_wait") ? 1.0f : 0.0f;
-        (*out)[eo++] = ReadBoolGlobal(other, "will_throw_counter") ? 1.0f : 0.0f;
         const bool has_ai = other->as_context->module.GetVarPtrCache("goal") != nullptr;
+        // Stock enemycontrol.as group logic: an AI with group_leader != -1 is a FOLLOWER, which does
+        // not start attacks while its leader is engaging (enemycontrol.as:1595). (v6 first read the
+        // DAA-mod-only `group_fighting_wait`, which the stock AI never sets -- always 0 in the smoke.)
+        (*out)[eo++] = (has_ai && ReadIntGlobal(other, "group_leader") != -1) ? 1.0f : 0.0f;
+        (*out)[eo++] = ReadBoolGlobal(other, "will_throw_counter") ? 1.0f : 0.0f;
         (*out)[eo++] = (has_ai && ReadIntGlobal(other, "goal") == 1 /*_attack*/) ? 1.0f : 0.0f;
         const int sub_goal = has_ai ? ReadIntGlobal(other, "sub_goal") : -1;
         for (int k = 0; k < kSubGoalClasses; ++k) {
@@ -652,7 +655,7 @@ std::vector<const char*> FieldNames(const ObservationConfig& config) {
         names.push_back("entity[i].weapon_type.sword");
         names.push_back("entity[i].weapon_type.big_sword");
         names.push_back("entity[i].weapon_type.spear");
-        for (const char* n : {"entity[i].v6.targets_me", "entity[i].v6.ai_attacking", "entity[i].v6.group_fighting_wait",
+        for (const char* n : {"entity[i].v6.targets_me", "entity[i].v6.ai_attacking", "entity[i].v6.is_follower",
                               "entity[i].v6.will_throw_counter", "entity[i].v6.goal_is_attack",
                               "entity[i].v6.sub.provoke", "entity[i].v6.sub.avoid_jump_kick", "entity[i].v6.sub.knock_off_ledge",
                               "entity[i].v6.sub.wait_and_attack", "entity[i].v6.sub.rush_and_attack", "entity[i].v6.sub.defend",

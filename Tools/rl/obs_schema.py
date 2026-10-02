@@ -115,7 +115,7 @@ class ObsLayout:
     # v6 entity extension: offsets INSIDE an entity slot
     E_TARGETS_ME = 33
     E_AI_ATTACKING = 34
-    E_GROUP_WAIT = 35
+    E_IS_FOLLOWER = 35  # stock AI: group_leader != -1 -> holds back while its leader attacks
     E_WILL_THROW_COUNTER = 36
     E_GOAL_ATTACK = 37
     E_SUB_GOAL = slice(38, 46)

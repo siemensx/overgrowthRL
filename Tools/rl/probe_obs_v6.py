@@ -10,7 +10,7 @@ omni = len(sys.argv)>1 and sys.argv[1]=="omni"
 flags=["rl_target_select: 2","rl_button_edges: 1","rl_no_feint: 1","rl_stick_deadzone: 0.3","rl_stance_walk: 1"]+(["rl_obs_omniscient: 1"] if omni else [])
 env=OvergrowthEnv(repo_root=W, level="arenas/t_train_101.xml", shm_name=f"/ogrl_v6s{os.getpid()%10000}", seed=11, act_period=4, frame_stack=1, extra_config_lines=flags)
 rng=np.random.default_rng(0)
-stats={k:[] for k in ["n_valid","targets_me","ai_attacking","group_wait","will_counter","goal_attack","subgoal_sum","los","hostiles_awake","grounded","feinting","vel_body_mag","vel_world_mag"]}
+stats={k:[] for k in ["n_valid","targets_me","ai_attacking","follower","will_counter","goal_attack","subgoal_sum","los","hostiles_awake","grounded","feinting","vel_body_mag","vel_world_mag"]}
 try:
     obs=env.reset(seed=11, soft=False, difficulty=1.0, opponents=3)
     for t in range(600):
@@ -24,7 +24,7 @@ try:
             e=f[L.entity_slice(s)]
             if e[0]<0.5: continue
             nv+=1
-            stats["targets_me"].append(e[L.E_TARGETS_ME]); stats["ai_attacking"].append(e[L.E_AI_ATTACKING]); stats["group_wait"].append(e[L.E_GROUP_WAIT])
+            stats["targets_me"].append(e[L.E_TARGETS_ME]); stats["ai_attacking"].append(e[L.E_AI_ATTACKING]); stats["follower"].append(e[L.E_GROUP_WAIT])
             stats["will_counter"].append(e[L.E_WILL_THROW_COUNTER]); stats["goal_attack"].append(e[L.E_GOAL_ATTACK]); stats["subgoal_sum"].append(e[L.E_SUB_GOAL].sum()); stats["los"].append(e[L.E_LINE_OF_SIGHT])
         stats["n_valid"].append(nv)
         if done:
