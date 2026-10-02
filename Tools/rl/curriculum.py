@@ -248,6 +248,10 @@ class ScenarioSampler:
     opp_gate_win_rate: float = 0.60 # lower than the difficulty gate: outnumbered fights are meant to be hard
     opp_gate_window: int = 400
     opp_gate_min_samples: int = 150
+    opp_sampling: str = "uniform"   # "learnability" (OGRL-20261002-012): once opponents_max > 1, draw the
+                                    # opponent count k in 1..opponents_max with weight p_k(1-p_k) + floor,
+                                    # p_k = recent win rate at k (Rutherford et al. 2024, "SFL": sampling
+                                    # by learnability beat PLR/ACCEL/DR). Overrides opp_keep_solo.
     opp_keep_solo: float = 0.0      # fraction of episodes held at 1v1 once the curriculum has advanced;
                                     # 0.0 pins every episode to _opp_max (see the note above)
     # --- Stage B/C: armed opponents (2026-09-07) ---
@@ -325,6 +329,8 @@ class ScenarioSampler:
             d = self._rng.uniform(lo, self._d_max)
             if self._opp_max <= 1:
                 opponents = 1
+            elif self.opp_sampling == "learnability":
+                opponents = self._learnability_draw()
             elif self.opp_keep_solo <= 0.0:
                 # No anti-forgetting term means no mixture at all: train the
                 # exact configuration the gate certifies, nothing adjacent.
@@ -505,6 +511,17 @@ class ScenarioSampler:
             if st is not None:
                 self._armed_stage = max(0, min(int(st), len(ARMED_STAGES) - 1))
 
+
+    def _learnability_draw(self) -> int:
+        """Caller holds self._lock. Weight each opponent count by p(1-p) over its own last 600
+        outcomes (0.5 prior below 30 samples) plus a 0.05 floor so nothing is ever starved."""
+        ks = list(range(1, self._opp_max + 1))
+        weights = []
+        for k in ks:
+            outcomes = [won for o, won in list(self._opp_recent)[-6000:] if o == k][-600:]
+            p = (sum(outcomes) / len(outcomes)) if len(outcomes) >= 30 else 0.5
+            weights.append(p * (1.0 - p) + 0.05)
+        return self._rng.choices(ks, weights=weights, k=1)[0]
 
     def opponent_win_rates(self, window: int | None = None) -> dict:
         """Win rate per opponent count over the last `window` episodes -- the

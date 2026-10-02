@@ -29,7 +29,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from env import ACTION_DIM, OvergrowthEnv
-from obs_schema import DEFAULT_LAYOUT, ObsLayout
+from obs_schema import SCHEMA_VERSION, DEFAULT_LAYOUT, ObsLayout
 from shm_env import ShmWaitTimeout
 
 
@@ -55,6 +55,16 @@ def decode_frame(values: np.ndarray, layout: ObsLayout) -> dict:
     self_values = values[:layout.entities_start]
     entities = [layout.entity_field(values.tolist(), slot)
                 for slot in range(layout.max_visible_entities)]
+    rays = values[layout.rays_start:layout.rays_start + layout.local_geometry_rays]
+    if SCHEMA_VERSION < 6:
+        # OGRL-20261002-006: schema <= v5 defines body-right as (fz, 0, -fx), the mirror of the
+        # game's (-fz, 0, fx) that the action's move_x uses. Flip into ACTION convention so this
+        # bot steers where it means to (its 2026-09-12 1v3 results were steered mirrored).
+        for e in entities:
+            e["rel_pos"] = (-e["rel_pos"][0],) + tuple(e["rel_pos"][1:])
+            e["rel_vel"] = (-e["rel_vel"][0],) + tuple(e["rel_vel"][1:])
+            e["fwd"] = (-e["fwd"][0], e["fwd"][1])
+        rays = np.concatenate([rays[:1], rays[1:][::-1]])  # ray i at +angle <-> -angle
     return {
         "raw": values,
         "self": self_values,
@@ -64,7 +74,7 @@ def decode_frame(values: np.ndarray, layout: ObsLayout) -> dict:
         "history": values[layout.action_history_start:layout.entities_start].reshape(
             layout.action_history_steps, -1),
         "entities": entities,
-        "rays": values[layout.rays_start:layout.rays_start + layout.local_geometry_rays],
+        "rays": rays,
     }
 
 
