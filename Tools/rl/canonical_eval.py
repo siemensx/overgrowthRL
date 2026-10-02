@@ -13,16 +13,20 @@ Fixed definition (do not edit; make a v3 instead):
   * cells   1v1, 1v2, 1v3, all at difficulty 1.0, unarmed
   * n       100 episodes per cell (1,200 per suite), greedy policy, 1200-decision cap
   * seeds   7,000,000 + 1000*cell_index + episode  -- never used by training or older benches
-  * resets  hard reset every episode, one engine process per cell, fixed episode order
+  * resets  hard reset every episode, fresh engine process every 20 episodes, fixed episode order
   * controls must be named explicitly (--controls); the profile's engine flags are recorded
 
 Output: one JSON with per-cell wins + Wilson CI + per-episode outcomes, plus a printed
 table with TRAIN and HELD-OUT aggregates per opponent count.
 
-Determinism: --repeat-check runs one cell twice and reports per-seed agreement. Bit-exact
-reproduction is NOT established on this engine (AngelScript RNG streams are not all reseeded,
-OGRL-20260912-012); until it is, compare checkpoints with paired per-seed differences and
-treat two runs of the same checkpoint as differing by noise of the size the check reports.
+Determinism (measured 2026-10-02, OGRL-20261002-007b/c): NOT bit-exact.
+  * v5 engine: two passes over the same 100 seeds in one process each -> 34 vs 39 wins, identical
+    episode length on 72/100, divergence from episode 0 (v5's garbage `grounded` read).
+  * v6 engine: identical for episodes 0-20 of a process, then drifts (process-history effect).
+  * v6, one fresh process per episode: identical on 24/30 seeds -- a residual source remains
+    (suspected wall-clock/load dependence; the 2026-08-15 test under light load was 100%).
+So each cell runs as CHUNK=20-episode processes (removes the history effect), and a difference of
+<= 5/100 between two numbers is noise. Compare checkpoints by paired per-seed outcomes.
 """
 from __future__ import annotations
 
@@ -68,23 +72,40 @@ def cells():
     return out
 
 
+CHUNK = 20  # episodes per engine process; see the determinism note in the module docstring
+
+
+def _run_chunk(ckpt, cell, flags, out, seed_base, episodes):
+    if out.exists():
+        return
+    cmd = [sys.executable, str(HERE / "evaluate.py"), "--checkpoint", ckpt,
+           "--level", f"arenas/{cell['map']}.xml", "--opponents", str(cell["opp"]),
+           "--difficulty-bands", "1.0", "--episodes", str(episodes), "--max-episode-steps", "1200",
+           "--frame-stack", "4", "--act-period", "4", "--no-control", "--emit-episodes",
+           # unique per launch (a reused shm name hangs, DEAD_ENDS) and short (macOS caps POSIX names ~31 chars)
+           "--seed-base", str(seed_base), "--shm-name", f"/ogc{cell['idx']}_{os.getpid() % 1000}_{int(time.time() * 1000) % 100000}",
+           "--out", str(out)]
+    for f in flags:
+        cmd += ["--config-line", f]
+    with open(out.with_suffix(".log"), "w") as lf:
+        subprocess.call(cmd, cwd=str(HERE), stdout=lf, stderr=subprocess.STDOUT)
+
+
 def run_cell(ckpt: str, cell: dict, flags: list[str], out_dir: Path, episodes: int, tag: str) -> dict:
-    out = out_dir / f"{tag}_{cell['map']}_{cell['opp']}v.json"
-    if not out.exists():
-        cmd = [sys.executable, str(HERE / "evaluate.py"), "--checkpoint", ckpt,
-               "--level", f"arenas/{cell['map']}.xml", "--opponents", str(cell["opp"]),
-               "--difficulty-bands", "1.0", "--episodes", str(episodes), "--max-episode-steps", "1200",
-               "--frame-stack", "4", "--act-period", "4", "--no-control", "--emit-episodes",
-               "--seed-base", str(cell["seed_base"]), "--shm-name", f"/ogrlc{cell['idx']}_{os.getpid() % 10000}_{int(time.time() * 1000) % 1000000}",  # unique per launch: a reused shm name hangs (DEAD_ENDS)
-               "--out", str(out)]
-        for f in flags:
-            cmd += ["--config-line", f]
-        with open(out.with_suffix(".log"), "w") as lf:
-            subprocess.call(cmd, cwd=str(HERE), stdout=lf, stderr=subprocess.STDOUT)
-    j = json.loads(out.read_text())
-    pol = j["bands"][0]["policy"]
-    return {**cell, "won": pol["outcomes"]["won"], "n": pol["episodes"], "outcomes": pol["outcomes"],
-            "episodes": pol.get("episode_results", [])}
+    """One cell = ceil(episodes / CHUNK) fresh engine processes on consecutive seed slices.
+    OGRL-20261002-007c: within one process, runs stay identical only for the first ~20 episodes."""
+    won, n, outcomes, eps = 0, 0, {"won": 0, "lost": 0, "timeout": 0}, []
+    for k in range(0, episodes, CHUNK):
+        m = min(CHUNK, episodes - k)
+        out = out_dir / f"{tag}_{cell['map']}_{cell['opp']}v_s{k:03d}.json"
+        _run_chunk(ckpt, cell, flags, out, cell["seed_base"] + k, m)
+        pol = json.loads(out.read_text())["bands"][0]["policy"]
+        for key in outcomes:
+            outcomes[key] += pol["outcomes"].get(key, 0)
+        n += pol["episodes"]
+        eps += pol.get("episode_results", [])
+    won = outcomes["won"]
+    return {**cell, "won": won, "n": n, "outcomes": outcomes, "episodes": eps}
 
 
 def main() -> int:
