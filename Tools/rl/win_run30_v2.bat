@@ -4,7 +4,10 @@ REM FROM SCRATCH (the 260M-400M policies are specialists of the old turbo contro
 REM   * obs schema v6 (branch feat/obs-v6-privileged): sees every enemy (rl_obs_omniscient) plus each
 REM     enemy's AI state (targets_me, ai_attacking, group wait, sub-goal, will_throw_counter, ...).
 REM   * controls: corrected + no feint + stick dead zone (dodge/frontkick) + stance walk (backpedal).
-REM   * learner: adaptive-KL lr, minibatch 1024, 2 epochs, critic full batch.
+REM   * learner (changed at ~6M, OGRL-20261002-015): minibatch 128, 1 epoch, lr 3e-4, KL stop at 0.02,
+REM     critic full batch. The Mac from-scratch A/B (same seed and init) showed the mb1024/2-epoch/
+REM     adaptive learner stalling (0.49, d_max 0.15 at 3.5M) while the old small-batch learner climbed
+REM     (0.77, d_max 0.65). critic-full-batch keeps the critic learning when the KL stop fires later.
 REM   * reward win_v2; curriculum from d_max 0.15 and 1 opponent, gates up to d=1.0 and 3 opponents,
 REM     20%% 1v1 kept once advanced.
 REM   * co-tenant fence identical to run29 (BelowNormal, 0x3FF, 12 engines, 6 h recycle).
@@ -47,8 +50,8 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run30.log
   --levels arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_104.xml ^
   --shm-prefix /ogrl_r30_%RANDOM%%TRIES% --n-envs 10 --k-standby 2 --seed 30 --allow-n-envs-change ^
   --checkpoint-path %CKPT% %START% --run-id %RUN% ^
-  --total-timesteps 2000000000 --n-steps 1024 --n-epochs 2 --minibatch-size 1024 ^
-  --kl-mode adaptive --kl-hard-factor 4 --critic-full-batch --lr-min 0.00001 --lr-max 0.0003 ^
+  --total-timesteps 2000000000 --n-steps 1024 --n-epochs 1 --minibatch-size 128 ^
+  --kl-mode stop --critic-full-batch ^
   --gamma 0.997 --gae-lambda 0.975 --reward-profile win_v2 --stall-target-weight 0 ^
   --entropy-coef 0.01 --entropy-coef-final 0.003 --entropy-anneal-steps 20000000 ^
   --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 ^
