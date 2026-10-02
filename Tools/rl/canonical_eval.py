@@ -75,7 +75,7 @@ def run_cell(ckpt: str, cell: dict, flags: list[str], out_dir: Path, episodes: i
                "--level", f"arenas/{cell['map']}.xml", "--opponents", str(cell["opp"]),
                "--difficulty-bands", "1.0", "--episodes", str(episodes), "--max-episode-steps", "1200",
                "--frame-stack", "4", "--act-period", "4", "--no-control", "--emit-episodes",
-               "--seed-base", str(cell["seed_base"]), "--shm-name", f"/ogrlc_{tag[:8]}_{cell['idx']}_{os.getpid() % 10000}",
+               "--seed-base", str(cell["seed_base"]), "--shm-name", f"/ogrlc{cell['idx']}_{os.getpid() % 10000}_{int(time.time() * 1000) % 1000000}",  # unique per launch: a reused shm name hangs (DEAD_ENDS)
                "--out", str(out)]
         for f in flags:
             cmd += ["--config-line", f]
