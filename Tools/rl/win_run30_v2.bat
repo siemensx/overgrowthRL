@@ -8,6 +8,9 @@ REM   * learner (changed at ~6M, OGRL-20261002-015): minibatch 128, 1 epoch, lr 
 REM     critic full batch. The Mac from-scratch A/B (same seed and init) showed the mb1024/2-epoch/
 REM     adaptive learner stalling (0.49, d_max 0.15 at 3.5M) while the old small-batch learner climbed
 REM     (0.77, d_max 0.65). critic-full-batch keeps the critic learning when the KL stop fires later.
+REM   * entropy 0.003 constant from ~10M (OGRL-20261002-017): the bonus uses the UNsquashed Gaussian's
+REM     entropy, which grows without bound in log_std, so at 0.0066 the stick sigma climbed 1.4 -> 2.15
+REM     (bang-bang stick; the dead zone that dodge/frontkick need is rarely reached).
 REM   * reward win_v2; curriculum from d_max 0.15 and 1 opponent, gates up to d=1.0 and 3 opponents,
 REM     20%% 1v1 kept once advanced.
 REM   * co-tenant fence identical to run29 (BelowNormal, 0x3FF, 12 engines, 6 h recycle).
@@ -53,7 +56,7 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run30.log
   --total-timesteps 2000000000 --n-steps 1024 --n-epochs 1 --minibatch-size 128 ^
   --kl-mode stop --critic-full-batch ^
   --gamma 0.997 --gae-lambda 0.975 --reward-profile win_v2 --stall-target-weight 0 ^
-  --entropy-coef 0.01 --entropy-coef-final 0.003 --entropy-anneal-steps 20000000 ^
+  --entropy-coef 0.003 --entropy-coef-final 0.003 --entropy-anneal-steps 1000000 ^
   --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 ^
   --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 20 ^
   --d-max-start 0.15 --d-max-cap 1.0 --d-step 0.1 --d-min 0.0 ^
