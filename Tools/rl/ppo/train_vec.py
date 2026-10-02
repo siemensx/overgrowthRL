@@ -46,7 +46,7 @@ from emergence import EmergenceAccumulator
 from policy import ActorCritic, CONTINUOUS_DIM, DISCRETE_DIM
 from vec_buffer import VecRolloutBuffer
 from normalize import ObservationNormalizer, RewardNormalizer
-from train import ppo_update, _explained_variance, _save_checkpoint  # reuse, not reimplement
+from train import ppo_update, ppo_update_recurrent, _explained_variance, _save_checkpoint  # reuse, not reimplement
 
 
 def _entropy_random_reference() -> float:
@@ -146,6 +146,10 @@ def parse_args():
     p.add_argument("--max-wall-hours", type=float, default=0.0,
                    help="exit with code 75 after this many hours (checkpoint saved) so a supervisor relaunches fresh "
                         "engine processes; 0 = never. Guards the per-engine committed-memory leak on Windows.")
+    p.add_argument("--recurrent-hidden", type=int, default=0,
+                   help="GRU memory size between the shared encoder and the heads; 0 = feed-forward (OGRL-20261002-013)")
+    p.add_argument("--recurrent-seq-len", type=int, default=32,
+                   help="decisions per training sequence for the recurrent update; must divide --n-steps")
     p.add_argument("--kl-mode", choices=["stop", "adaptive"], default="stop",
                    help="stop: end the update at the first minibatch past target_kl (historical). "
                         "adaptive: target_kl steers the learning rate, hard stop only at kl_hard_factor x target")
@@ -597,7 +601,10 @@ def main():
     # OGRL-20260817-028 Sec5: ActorCritic/ObservationNormalizer now take the
     # layout + frame_stack directly (they need to know where the entity
     # region lives within each stacked frame), not just a flat obs_dim.
-    policy = ActorCritic(layout, frame_stack=args.frame_stack).to(device)
+    policy = ActorCritic(layout, frame_stack=args.frame_stack, recurrent_hidden=args.recurrent_hidden).to(device)
+    recurrent = args.recurrent_hidden > 0
+    if recurrent and (args.remote_workers > 0 or args.compile_update):
+        raise SystemExit("--recurrent-hidden is not supported with --remote-workers or --compile-update")
     policy.detach_critic_features = bool(args.critic_detach_shared)
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.learning_rate, eps=1e-5)
     update_forward = policy.get_action_and_value
@@ -640,7 +647,10 @@ def main():
         print(f"distributed: {args.n_envs} local + {sum(remote_env_counts)} remote = {total_envs} envs "
               f"({args.n_steps * total_envs} transitions per update)", flush=True)
 
-    buffer = VecRolloutBuffer(args.n_steps, args.n_envs, obs_dim, 8, device)
+    buffer = VecRolloutBuffer(args.n_steps, args.n_envs, obs_dim, 8, device,
+                              hidden_dim=args.recurrent_hidden)
+    rnn_h = policy.initial_state(args.n_envs, device) if recurrent else None
+    rnn_starts = torch.ones(args.n_envs, device=device)
 
     if resumed_checkpoint:
         # Explicit-metadata schema-mismatch guard (Sec5) -- see
@@ -897,7 +907,11 @@ def main():
                 _t0 = time.perf_counter()
                 obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device)
                 with torch.inference_mode():   # 2026-09-20: 0.96 -> 0.61 ms per forward on the trainer (no autograd bookkeeping)
-                    actions, log_probs, _entropy, values, raw_cont = policy.get_action_and_value(obs_tensor, return_raw=True)
+                    if recurrent:
+                        h_before, starts_before = rnn_h, rnn_starts
+                        actions, log_probs, _entropy, values, raw_cont, rnn_h = policy.act_recurrent(obs_tensor, rnn_h, rnn_starts)
+                    else:
+                        actions, log_probs, _entropy, values, raw_cont = policy.get_action_and_value(obs_tensor, return_raw=True)
                 actions_np = actions.cpu().numpy()
                 _t1 = time.perf_counter()
 
@@ -947,11 +961,20 @@ def main():
                     trunc_raw = np.stack([infos[i]["terminal_observation"] for i in trunc_idx])
                     trunc_normed = obs_normalizer.normalize(trunc_raw, update=False)
                     with torch.no_grad():
-                        bootstrap_values = policy.get_value(torch.as_tensor(trunc_normed, dtype=torch.float32, device=device)).cpu().numpy()
+                        _tn = torch.as_tensor(trunc_normed, dtype=torch.float32, device=device)
+                        if recurrent:
+                            bootstrap_values = policy.value_recurrent(_tn, rnn_h[trunc_idx], torch.zeros(len(trunc_idx), device=device)).cpu().numpy()
+                        else:
+                            bootstrap_values = policy.get_value(_tn).cpu().numpy()
                     normalized_rewards[trunc_idx] = normalized_rewards[trunc_idx] + args.gamma * bootstrap_values
                 _valid = np.array([0.0 if infos[i].get("worker_recovered") else 1.0 for i in range(len(infos))], dtype=np.float32)
                 buffer.add(obs, actions_np, log_probs.cpu().numpy(), values.cpu().numpy(), normalized_rewards, stop_flags.astype(np.float32),
-                           raw_cont=raw_cont.cpu().numpy(), valid=_valid)
+                           raw_cont=raw_cont.cpu().numpy(), valid=_valid,
+                           hidden=h_before.cpu().numpy() if recurrent else None,
+                           starts=starts_before.cpu().numpy() if recurrent else None)
+                if recurrent:
+                    # The next observation of a finished (or recovered) worker starts a new episode.
+                    rnn_starts = torch.as_tensor(np.maximum(stop_flags.astype(np.float32), 1.0 - _valid), device=device)
 
                 for i, info in enumerate(infos):
                     if info.get("worker_recovered"):
@@ -1058,7 +1081,10 @@ def main():
             emergence_snapshot = emergence.snapshot()
 
             with torch.no_grad():
-                last_values = policy.get_value(torch.as_tensor(obs, dtype=torch.float32, device=device)).cpu().numpy()
+                if recurrent:
+                    last_values = policy.value_recurrent(torch.as_tensor(obs, dtype=torch.float32, device=device), rnn_h, rnn_starts).cpu().numpy()
+                else:
+                    last_values = policy.get_value(torch.as_tensor(obs, dtype=torch.float32, device=device)).cpu().numpy()
 
             # Collect the remote rollouts. The learner blocks here until every
             # worker has returned a full n_steps rollout collected with THIS
@@ -1091,6 +1117,8 @@ def main():
                 merged = buffer.merged_with(remote_rollouts, device)
                 all_last = np.concatenate([last_values] + [r["last_values"] for r in remote_rollouts])
                 batch = merged.to_tensors(all_last, args.gamma, args.gae_lambda)
+            elif recurrent:
+                batch = buffer.to_sequence_tensors(last_values, args.gamma, args.gae_lambda)
             else:
                 batch = buffer.to_tensors(last_values, args.gamma, args.gae_lambda)
             buffer.reset()
@@ -1108,7 +1136,10 @@ def main():
             args._value_only = update < args.value_warmup_updates
             policy.detach_critic_features = bool(args.critic_detach_shared) or args._value_only
             logger.heartbeat("updating", global_step, update=update)
-            stats = ppo_update(policy, optimizer, batch, args, update_forward=update_forward)
+            if recurrent:
+                stats = ppo_update_recurrent(policy, optimizer, batch, args)
+            else:
+                stats = ppo_update(policy, optimizer, batch, args, update_forward=update_forward)
             stats["value_warmup"] = int(args._value_only)
 
             update += 1

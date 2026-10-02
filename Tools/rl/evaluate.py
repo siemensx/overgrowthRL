@@ -91,6 +91,8 @@ def run_episodes(
     episode_records = []
     for ep in range(episodes):
         seed = seed_base + ep
+        if hasattr(act_fn, "reset"):
+            act_fn.reset()
         raw_obs = env.reset(seed=seed, soft=False, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
                             armed_count=_ARMED[0], weapon_type=_ARMED[1], throw_aggression=_ARMED[2])
         obs = obs_normalizer.normalize(raw_obs, update=False) if obs_normalizer is not None else None
@@ -205,7 +207,9 @@ def main():
 
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
     global_step = checkpoint.get("global_step", -1)
-    policy = ActorCritic(layout, frame_stack=args.frame_stack).to(device)
+    from policy import recurrent_hidden_of
+    policy = ActorCritic(layout, frame_stack=args.frame_stack,
+                         recurrent_hidden=recurrent_hidden_of(checkpoint["policy"])).to(device)
     ckpt_total_floats = checkpoint.get("layout_total_floats")
     if ckpt_total_floats != layout.total_floats or checkpoint.get("frame_stack") != args.frame_stack:
         raise ValueError(
@@ -220,13 +224,31 @@ def main():
     print(f"loaded checkpoint global_step={global_step}, evaluating {args.episodes} episodes/band, "
           f"level={args.level} frame_stack={args.frame_stack} act_period={args.act_period}")
 
+    # Recurrent checkpoints (OGRL-20261002-013): carry memory across decisions; run_episodes calls
+    # policy_act.reset() at every episode start, which marks the next observation as a start.
+    _rnn = {"h": policy.initial_state(1, device) if policy.recurrent_hidden else None, "start": 1.0}
+
+    def _reset_memory():
+        _rnn["start"] = 1.0
+
     def policy_act(obs, _frame):
         obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
+        if policy.recurrent_hidden:
+            starts = torch.tensor([_rnn["start"]], device=device)
+            _rnn["start"] = 0.0
+            with torch.no_grad():
+                if args.stochastic:
+                    action, _lp, _e, _v, _raw, _rnn["h"] = policy.act_recurrent(obs_tensor, _rnn["h"], starts)
+                else:
+                    action, _rnn["h"] = policy.deterministic_recurrent(obs_tensor, _rnn["h"], starts)
+            return action.squeeze(0).cpu().numpy()
         if args.stochastic:
             with torch.no_grad():
                 action, *_ = policy.get_action_and_value(obs_tensor)
             return action.squeeze(0).cpu().numpy()
         return deterministic_action(policy, obs_tensor)
+
+    policy_act.reset = _reset_memory
 
     rng = np.random.default_rng(1234)
 

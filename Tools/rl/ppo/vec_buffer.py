@@ -17,7 +17,8 @@ import torch
 
 
 class VecRolloutBuffer:
-    def __init__(self, n_steps: int, n_envs: int, obs_dim: int, action_dim: int, device: torch.device):
+    def __init__(self, n_steps: int, n_envs: int, obs_dim: int, action_dim: int, device: torch.device,
+                 hidden_dim: int = 0):
         self.n_steps = n_steps
         self.n_envs = n_envs
         self.device = device
@@ -35,9 +36,15 @@ class VecRolloutBuffer:
         self.values = np.zeros((n_steps, n_envs), dtype=np.float32)
         self.rewards = np.zeros((n_steps, n_envs), dtype=np.float32)
         self.terminals = np.zeros((n_steps, n_envs), dtype=np.float32)
+        # Recurrent policies (OGRL-20261002-013): memory BEFORE each step, and whether the step's
+        # observation starts an episode (memory cleared before reading it).
+        self.hidden_dim = hidden_dim
+        self.hiddens = np.zeros((n_steps, n_envs, hidden_dim), dtype=np.float32) if hidden_dim else None
+        self.starts = np.zeros((n_steps, n_envs), dtype=np.float32)
         self.ptr = 0
 
-    def add(self, obs, action, log_prob, value, reward, terminal, raw_cont=None, valid=None) -> None:
+    def add(self, obs, action, log_prob, value, reward, terminal, raw_cont=None, valid=None,
+            hidden=None, starts=None) -> None:
         """All arguments except obs/action are (n_envs,)-shaped; obs is
         (n_envs, obs_dim), action is (n_envs, action_dim), raw_cont is
         (n_envs, 2) or None (remote collectors that do not carry it)."""
@@ -54,6 +61,9 @@ class VecRolloutBuffer:
         self.values[i] = value
         self.rewards[i] = reward
         self.terminals[i] = terminal
+        if self.hiddens is not None:
+            self.hiddens[i] = hidden
+            self.starts[i] = starts
         self.ptr += 1
 
     def full(self) -> bool:
@@ -130,4 +140,17 @@ class VecRolloutBuffer:
             "values": torch.as_tensor(flatten(self.values), device=self.device),
             "advantages": torch.as_tensor(flatten(advantages), device=self.device),
             "returns": torch.as_tensor(flatten(returns), device=self.device),
+        }
+
+    def to_sequence_tensors(self, last_values: np.ndarray, gamma: float, gae_lambda: float) -> dict:
+        """Like to_tensors but keeps the (n_steps, n_envs, ...) layout so a recurrent update can cut
+        time-contiguous sequences per env. Includes hiddens/starts."""
+        assert self.hiddens is not None, "to_sequence_tensors needs a buffer built with hidden_dim > 0"
+        advantages, returns = self.compute_gae(last_values, gamma, gae_lambda)
+        t = lambda x: torch.as_tensor(x, device=self.device)
+        return {
+            "obs": t(self.obs), "actions": t(self.actions), "raw_cont": t(self.raw_cont),
+            "valid": t(self.valid), "log_probs": t(self.log_probs), "values": t(self.values),
+            "advantages": t(advantages), "returns": t(returns),
+            "hiddens": t(self.hiddens), "starts": t(self.starts),
         }

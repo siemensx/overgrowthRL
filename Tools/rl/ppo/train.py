@@ -628,3 +628,95 @@ def _save_checkpoint(path: str, policy, optimizer, obs_normalizer, reward_normal
 
 if __name__ == "__main__":
     main()
+
+
+def ppo_update_recurrent(policy: ActorCritic, optimizer: torch.optim.Optimizer, seq: dict, args) -> dict:
+    """PPO over time-contiguous sequences for a recurrent policy (OGRL-20261002-013).
+
+    seq tensors are (T=n_steps, E=n_envs, ...). Each env's rollout is cut into chunks of
+    args.recurrent_seq_len decisions; a chunk starts from the memory stored at rollout time
+    (`hiddens[s, e]`, "stored state" as in R2D2) and resets memory wherever `starts` is set, so
+    re-evaluation reproduces the rollout exactly on the first minibatch (mb0_max_abs_logratio ~ 0
+    is the correctness check, as in the feed-forward path). Minibatches are sets of chunks.
+    KL control uses the sampled estimator; raw continuous samples are stored, so it is unbiased.
+    """
+    T, E = seq["obs"].shape[0], seq["obs"].shape[1]
+    L = int(getattr(args, "recurrent_seq_len", 32))
+    if T % L != 0:
+        raise ValueError(f"n_steps={T} must be a multiple of --recurrent-seq-len {L}")
+    chunks = [(s, e) for s in range(0, T, L) for e in range(E)]
+    per_mb = max(1, args.minibatch_size // L)
+    stats = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0, "clip_fraction": 0.0,
+             "nan_skips": 0, "mb0_max_abs_logratio": 0.0, "exact_kl": 0.0, "exact_kl_heads": [0.0] * 8,
+             "max_sample_kl": 0.0, "max_sample_kl_head": "", "early_stop_minibatch": -1, "exact_kl_mb_max": 0.0,
+             "shared_grad_actor_norm": 0.0, "shared_grad_value_norm": 0.0, "shared_grad_cos": 0.0,
+             "shared_grad_policy_norm": 0.0, "shared_grad_entropy_norm": 0.0}
+    n_updates = 0
+    mb_index = 0
+    stop = False
+    kl_limit = args.target_kl
+    if kl_limit is not None and getattr(args, "kl_mode", "stop") == "adaptive":
+        kl_limit = kl_limit * getattr(args, "kl_hard_factor", 4.0)
+    last_kl = 0.0
+    value_only = getattr(args, "_value_only", False)
+    for _epoch in range(args.n_epochs):
+        if stop:
+            break
+        order = np.random.permutation(len(chunks))
+        for b in range(0, len(order), per_mb):
+            ids = [chunks[i] for i in order[b:b + per_mb]]
+            ss = torch.as_tensor([c[0] for c in ids])
+            ee = torch.as_tensor([c[1] for c in ids])
+            tt = ss.unsqueeze(0) + torch.arange(L).unsqueeze(1)          # (L, nb) time index
+            eb = ee.unsqueeze(0).expand(L, -1)                              # (L, nb) env index
+            g = lambda name: seq[name][tt, eb]
+            obs, act, raw = g("obs"), g("actions"), g("raw_cont")
+            old_lp, old_v = g("log_probs").reshape(-1), g("values").reshape(-1)
+            adv, ret = g("advantages").reshape(-1), g("returns").reshape(-1)
+            valid = g("valid").reshape(-1) > 0.5
+            starts = g("starts")
+            h0 = seq["hiddens"][ss, ee]
+            new_lp, ent, new_v = policy.evaluate_sequences(obs, act, raw, h0, starts)
+            new_lp, ent, new_v = new_lp[valid], ent[valid], new_v[valid]
+            old_lp, old_v, adv, ret = old_lp[valid], old_v[valid], adv[valid], ret[valid]
+            if adv.numel() < 2:
+                continue
+            adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+            log_ratio = new_lp - old_lp
+            ratio = log_ratio.exp()
+            with torch.no_grad():
+                kl = ((ratio - 1.0) - log_ratio).mean().item()
+                if mb_index == 0:
+                    stats["mb0_max_abs_logratio"] = log_ratio.abs().max().item()
+                stats["exact_kl_mb_max"] = max(stats["exact_kl_mb_max"], kl)
+            mb_index += 1
+            last_kl = kl
+            if kl_limit is not None and mb_index > 1 and kl > kl_limit and not value_only:
+                stats["early_stop_minibatch"] = mb_index - 1
+                stop = True
+                break
+            pg = -torch.min(adv * ratio, adv * torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef)).mean()
+            v_clip = old_v + torch.clamp(new_v - old_v, -args.value_clip_coef, args.value_clip_coef)
+            vl = 0.5 * torch.max((new_v - ret).pow(2), (v_clip - ret).pow(2)).mean()
+            el = ent.mean()
+            loss = (args.value_coef * vl) if value_only else (pg + args.value_coef * vl - args.entropy_coef * el)
+            optimizer.zero_grad()
+            loss.backward()
+            gn = nn.utils.clip_grad_norm_(policy.parameters(), args.max_grad_norm)
+            if not torch.isfinite(loss) or not torch.isfinite(gn):
+                stats["nan_skips"] += 1
+                optimizer.zero_grad()
+                continue
+            optimizer.step()
+            stats["policy_loss"] += pg.item(); stats["value_loss"] += vl.item(); stats["entropy"] += el.item()
+            stats["approx_kl"] += kl
+            stats["clip_fraction"] += ((ratio - 1.0).abs() > args.clip_coef).float().mean().item()
+            n_updates += 1
+    for k in ("policy_loss", "value_loss", "entropy", "approx_kl", "clip_fraction"):
+        stats[k] /= max(1, n_updates)
+    stats["exact_kl"] = stats["approx_kl"]
+    stats["last_mb_exact_kl"] = last_kl
+    stats["minibatches_used"] = n_updates
+    if getattr(args, "kl_mode", "stop") == "adaptive" and not value_only:
+        _adapt_lr(optimizer, last_kl, args)
+    return stats

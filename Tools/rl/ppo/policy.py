@@ -175,7 +175,8 @@ class EntityEncoder(nn.Module):
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, layout, frame_stack: int = 1, hidden_dim: int = 256, entity_embed_dim: int = 64):
+    def __init__(self, layout, frame_stack: int = 1, hidden_dim: int = 256, entity_embed_dim: int = 64,
+                 recurrent_hidden: int = 0):
         """layout: obs_schema.ObsLayout (or any object exposing the same
         entities_start/max_visible_entities/total_floats contract). Replaces
         the old flat obs_dim constructor arg (Sec5's checkpoint-invalidating
@@ -199,6 +200,14 @@ class ActorCritic(nn.Module):
             nn.Tanh(),
         )
         trunk_input_dim = hidden_dim + entity_embed_dim * self.frame_stack
+        # Optional recurrent core (OGRL-20261002-013). A GRUCell over the shared features; the trunks
+        # read [features, h] (skip connection), so the core only has to add memory, not relay the
+        # present. recurrent_hidden=0 keeps the exact feed-forward model every checkpoint so far uses.
+        self.recurrent_hidden = int(recurrent_hidden)
+        self.feature_dim = trunk_input_dim
+        if self.recurrent_hidden:
+            self.core = nn.GRUCell(trunk_input_dim, self.recurrent_hidden)
+            trunk_input_dim = trunk_input_dim + self.recurrent_hidden
 
         # Separate actor/critic trunks (not shared) -- the more common choice
         # in continuous-control PPO baselines (the original PPO paper's
@@ -307,8 +316,55 @@ class ActorCritic(nn.Module):
         return cont_lp, disc_lp
 
     def get_value(self, obs: torch.Tensor) -> torch.Tensor:
+        assert not self.recurrent_hidden, "recurrent policy: use value_recurrent(obs, h, starts)"
         features = self.critic_trunk(self._features(obs))
         return self.critic_out(features).squeeze(-1)
+
+    # --- recurrent path (OGRL-20261002-013) ----------------------------------------------
+    def initial_state(self, batch: int, device=None) -> torch.Tensor:
+        return torch.zeros(batch, self.recurrent_hidden, device=device)
+
+    def _core(self, features: torch.Tensor, h: torch.Tensor, starts: torch.Tensor):
+        """starts[b] = 1 when this observation is the FIRST of an episode: the memory is cleared
+        before it is read, so nothing leaks across episode boundaries."""
+        h = h * (1.0 - starts).unsqueeze(-1)
+        h = self.core(features, h)
+        return torch.cat([features, h], dim=-1), h
+
+    def act_recurrent(self, obs, h, starts, action=None, raw_continuous=None):
+        """One decision for a batch of envs. Returns (action, log_prob, entropy, value, raw, h_new)."""
+        x, h_new = self._core(self._features(obs), h, starts)
+        a, lp, ent, v, raw = self._heads(x, action, raw_continuous)
+        return a, lp, ent, v, raw, h_new
+
+    def value_recurrent(self, obs, h, starts) -> torch.Tensor:
+        x, _ = self._core(self._features(obs), h, starts)
+        _cf = x.detach() if self.detach_critic_features else x
+        return self.critic_out(self.critic_trunk(_cf)).squeeze(-1)
+
+    def deterministic_recurrent(self, obs, h, starts):
+        """Mode action (tanh(mean), logits > 0) and the new memory -- the recurrent analogue of
+        watch.deterministic_action."""
+        x, h_new = self._core(self._features(obs), h, starts)
+        f = self.actor_trunk(x)
+        cont = torch.tanh(self.continuous_mean(f))
+        disc = (self.discrete_logits(f) > 0.0).float()
+        return torch.cat([cont, disc], dim=-1), h_new
+
+    def evaluate_sequences(self, obs, actions, raw_continuous, h0, starts):
+        """Re-evaluate stored rollout sequences. obs (T,B,D), actions (T,B,8), raw (T,B,2),
+        h0 (B,H) = memory BEFORE step 0 of each sequence as stored at rollout time, starts (T,B).
+        Returns flattened (T*B,) log_prob, entropy, value and the actor params for KL."""
+        T, B = obs.shape[0], obs.shape[1]
+        feats = self._features(obs.reshape(T * B, -1)).reshape(T, B, -1)
+        h = h0
+        xs = []
+        for t in range(T):
+            x, h = self._core(feats[t], h, starts[t])
+            xs.append(x)
+        x = torch.stack(xs).reshape(T * B, -1)
+        _a, lp, ent, v, _raw = self._heads(x, actions.reshape(T * B, -1), raw_continuous.reshape(T * B, -1))
+        return lp, ent, v
 
     def get_action_and_value(self, obs: torch.Tensor, action: torch.Tensor | None = None,
                              raw_continuous: torch.Tensor | None = None, return_raw: bool = False):
@@ -323,7 +379,17 @@ class ActorCritic(nn.Module):
         # once through the actor and again through get_value(), duplicating
         # the largest part of this model's forward pass. Compute it once and
         # let the two independent trunks specialize from the same features.
+        assert not self.recurrent_hidden, "recurrent policy: use act_recurrent / evaluate_sequences"
         shared_features = self._features(obs)
+        joint_action, log_prob, entropy, value, raw_continuous = self._heads(shared_features, action, raw_continuous)
+        if return_raw:
+            return joint_action, log_prob, entropy, value, raw_continuous
+        return joint_action, log_prob, entropy, value
+
+    def _heads(self, shared_features, action=None, raw_continuous=None):
+        """Actor + critic heads on the trunk input (shared features, or [features, h] when recurrent).
+        Returns (action, log_prob, entropy, value, raw_continuous). Body moved verbatim from
+        get_action_and_value (2026-10-02) so both paths share one implementation."""
         mean, log_std, discrete_logits = self._actor_params(shared_features)
 
         if action is None:
@@ -369,6 +435,19 @@ class ActorCritic(nn.Module):
         joint_action = torch.cat([continuous_action, discrete_action], dim=-1)
         _cf = shared_features.detach() if self.detach_critic_features else shared_features
         value = self.critic_out(self.critic_trunk(_cf)).squeeze(-1)
-        if return_raw:
-            return joint_action, log_prob, entropy, value, raw_continuous
-        return joint_action, log_prob, entropy, value
+        return joint_action, log_prob, entropy, value, raw_continuous
+
+
+def recurrent_hidden_of(state_dict: dict) -> int:
+    """Infer the recurrent core size from a checkpoint's policy state dict (0 = feed-forward)."""
+    w = state_dict.get("core.weight_hh")
+    return int(w.shape[1]) if w is not None else 0
+
+
+def policy_from_checkpoint(checkpoint: dict, layout, frame_stack: int, device=None) -> "ActorCritic":
+    """Build the right architecture for a checkpoint (feed-forward or recurrent) and load it."""
+    pol = ActorCritic(layout, frame_stack=frame_stack, recurrent_hidden=recurrent_hidden_of(checkpoint["policy"]))
+    if device is not None:
+        pol = pol.to(device)
+    pol.load_state_dict(checkpoint["policy"])
+    return pol
