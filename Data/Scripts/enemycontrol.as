@@ -716,7 +716,9 @@ void ResetMind() {
     // survive. Avoidance is a sideways roll plus a disengage to range 3-4, not
     // a guaranteed miss, so the axis degrades smoothly -- the jump kick becomes
     // a timed, aimed move rather than a free one.
-    got_hit_by_leg_cannon_count = 8;  // TEMP HARDCODE -- mechanism test
+    // (A "TEMP HARDCODE" seeding the counter to 8 sat here from 2026-09-07 to 2026-10-04. It never ran:
+    //  ResetMind() is not called on spawn and training re-creates characters every episode -- verified
+    //  2026-10-04 by logging, counters read 0/1 in live fights. Removed, OGRL-20261004-009.)
     path_find_type = _pft_nav_mesh;
     float awake_time = 0.0f;
 }

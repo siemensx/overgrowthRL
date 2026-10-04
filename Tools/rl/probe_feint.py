@@ -53,6 +53,8 @@ def main() -> int:
     ap.add_argument("--config-line", action="append", default=[])
     ap.add_argument("--shm-name", default=None)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--ground-only", action="store_true",
+                    help="OGRL-20261004-010: run every episode under the move-school ground-only rule")
     a = ap.parse_args()
     if os.path.exists(a.out):
         print(f"refusing to overwrite {a.out}")
@@ -70,6 +72,9 @@ def main() -> int:
     env = OvergrowthEnv(repo_root=str(HERE.parents[1]), level=a.level, shm_name=shm, seed=a.seed_base,
                         act_period=4, frame_stack=fs, log_attacks=True, extra_config_lines=a.config_line)
     log_path = env._write_dir.parent / (env._write_dir.name + ".log")
+    if a.ground_only:
+        _reset = env.reset
+        env.reset = lambda *args, **kw: _reset(*args, ground_only=True, **kw)
     self_ids: set[int] = set()
 
     def act_fn(obs, frame):
@@ -108,6 +113,7 @@ def main() -> int:
         "agent_attacks": n_att, "agent_feints": feints,
         "feint_share_of_attacks": (feints / n_att) if n_att else None,
         "agent_moves": dict(attacks), "opponent_attacks": opp_attacks,
+        "ground_only": bool(a.ground_only), "blocked_air_attacks": int(getattr(env, "blocked_air_attacks", 0)),
         "self_ids": sorted(self_ids), "seconds": round(time.time() - t0, 1),
     }
     Path(a.out).write_text(json.dumps(payload, indent=1))

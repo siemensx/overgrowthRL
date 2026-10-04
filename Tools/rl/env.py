@@ -282,6 +282,9 @@ class OvergrowthEnv:
         # lives on the physical engine process, not on whatever vector slot
         # currently happens to be playing it (a standby moves between slots).
         self.episode_count = 0
+        self.ground_only = False          # move school (OGRL-20261004-010); see reset()
+        self._rule_episode = False
+        self.blocked_air_attacks = 0      # cumulative attack presses dropped by the ground-only rule
         # last_reset_seed: the REAL seed most recently used to reset this
         # env, for episodes.jsonl (OGRL-20260817-028 Sec8.6 -- ghost replay
         # needs the actual seed, and train_vec.py was logging the worker
@@ -597,8 +600,14 @@ class OvergrowthEnv:
         armed_count: int = 0,
         weapon_type: int = 0,
         throw_aggression: float = 1.0,
+        ground_only: bool | None = None,
     ) -> np.ndarray:
         """Reset the requested scenario, including on a fresh engine.
+
+        ground_only (OGRL-20261004-010, "move school"): None (default) leaves actions and observations
+        exactly as before. True/False makes this episode a rule episode: when True, the attack button
+        is dropped while the agent is airborne or presses jump in the same decision (no jump kick);
+        either way the rule is written into the RULE_GROUND_ONLY observation slot of every frame.
 
         The first call drains the engine's natural post-load observation before
         sending the reset request. The returned observation therefore always
@@ -614,6 +623,9 @@ class OvergrowthEnv:
         self.last_reset_seconds = time.perf_counter() - reset_start  # OGRL-20260817-028 Sec8.2: perf.reset_seconds source
         self.episode_count += 1
         self.last_reset_seed = reset_seed
+        self._rule_episode = ground_only is not None
+        self.ground_only = bool(ground_only)
+        self._mark_rule(obs.values)
         self._prev_values = obs.values
         self._episode_steps = 0
         if self._prealloc_frame_stack:
@@ -623,6 +635,12 @@ class OvergrowthEnv:
         self.reward_computer.reset_episode()  # clears the stall-tax streak (OGRL-20260816-018) -- otherwise a
                                                 # stall run from the tail of one episode taxes the start of the next
         return self._stacked(obs.values)
+
+    def _mark_rule(self, values) -> None:
+        """Write this episode's move-school rule into the RULE_GROUND_ONLY slot (the v6 self
+        FEINTING field, constant 0 whenever rl_no_feint is set -- which move school requires)."""
+        if self._rule_episode:
+            values[self.layout.RULE_GROUND_ONLY] = 1.0 if self.ground_only else 0.0
 
     def write_action(self, action: np.ndarray) -> None:
         """Publish an action without waiting for its observation.
@@ -634,6 +652,14 @@ class OvergrowthEnv:
         action = np.asarray(action, dtype=np.float32).reshape(ACTION_DIM)
         move_x, move_y = float(action[0]), float(action[1])
         buttons = [bool(v > 0.5) for v in action[2:8]]
+        if self.ground_only and buttons[2]:
+            # Move school: no air attacks. GROUNDED is the engine's own on_ground, the variable
+            # playercontrol.as uses to label an attack "air"; a jump pressed in the same decision
+            # would take off inside the act_period hold, so it vetoes the attack too.
+            airborne = self._prev_values is not None and float(self._prev_values[self.layout.GROUNDED]) <= 0.5
+            if airborne or buttons[0]:
+                buttons[2] = False
+                self.blocked_air_attacks += 1
         self._shm.write_action(move_x, move_y, buttons[0], buttons[1], buttons[2], buttons[3], buttons[4], buttons[5])
 
     def step(self, action: np.ndarray, action_already_written: bool = False) -> tuple[np.ndarray, float, bool, dict]:
@@ -646,6 +672,7 @@ class OvergrowthEnv:
         self._episode_steps += 1
 
         reward, reward_info = self.reward_computer.compute(self._prev_values, obs.values)
+        self._mark_rule(obs.values)
         self._prev_values = obs.values
 
         info = {"reward_components": reward_info, "episode_steps": self._episode_steps, "engine_step": obs.step}

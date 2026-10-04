@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Tools/rl
 from vec_env import VecOvergrowthEnv
 from env import _cleanup_stale_write_dirs  # disk-low recovery reuses the launch-time stale sweep
 from obs_schema import DEFAULT_LAYOUT, SCHEMA_VERSION
-from curriculum import Curriculum, ScenarioSampler
+from curriculum import MOVE_SCHOOL_STAGES, Curriculum, ScenarioSampler
 from reward import run8_reward_config, win_reward_config, win_notimeout_reward_config, win_v2_reward_config
 from telemetry import RunLogger
 from tape import TapeRecorder, decision_record
@@ -147,6 +147,10 @@ def parse_args():
                          "Overrides the linear anneal when set.")
     p.add_argument("--entropy-coef-min", type=float, default=1e-4)
     p.add_argument("--entropy-coef-max", type=float, default=0.05)
+    p.add_argument("--move-school", action="store_true",
+                    help="OGRL-20261004-010: staged ground-only episodes (no air attacks; rule visible in the "
+                         "observation) per curriculum.MOVE_SCHOOL_STAGES, advancing automatically. "
+                         "Requires the 'rl_no_feint: 1' engine config line.")
     p.add_argument("--value-coef", type=float, default=0.5)
     p.add_argument("--max-grad-norm", type=float, default=0.5)
     p.add_argument("--learning-rate", type=float, default=3e-4)
@@ -584,7 +588,11 @@ def main():
         opp_gate_window=args.opp_gate_window, opp_gate_min_samples=args.opp_gate_min_samples,
         opp_keep_solo=args.opp_keep_solo, opp_sampling=args.opp_sampling,
         rng_seed=args.seed,
+        move_school_stages=MOVE_SCHOOL_STAGES if args.move_school else (),
     )
+    if args.move_school and "rl_no_feint: 1" not in args.engine_config_line:
+        raise SystemExit("--move-school needs --engine-config-line 'rl_no_feint: 1': the rule flag lives in the "
+                         "self FEINTING slot, which is only guaranteed constant 0 with feinting disabled")
     vec_env = VecOvergrowthEnv(
         n_envs=args.n_envs, repo_root=args.repo_root,
         level=levels_list,
@@ -615,6 +623,16 @@ def main():
         update_forward = torch.compile(policy.get_action_and_value, backend="inductor")
         print("[learner] TorchInductor enabled for PPO update forward; eager remains reference for diagnostics", flush=True)
     obs_normalizer = ObservationNormalizer(layout, frame_stack=args.frame_stack)
+
+    def _rule_slot_passthrough() -> None:
+        # The rule flag sits in a slot whose running variance is ~0 (it was constant). Normalised, a 1
+        # would read as (1-0)/1e-4 -> clipped to 10, and with a checkpoint's count in the hundreds of
+        # millions the stats would take forever to move. Pin mean 0 / var 1 so the network sees 0/1.
+        rms = obs_normalizer.non_entity_rms
+        for f in range(obs_normalizer.frame_stack):
+            j = f * obs_normalizer.non_entity_per_frame + layout.RULE_GROUND_ONLY
+            rms.mean[j] = 0.0
+            rms.var[j] = 1.0
     reward_normalizer = RewardNormalizer(args.gamma, n_envs=args.n_envs)
     # Remote rollout workers (optional). Accepted BEFORE the first update so the
     # buffer width and the reward normaliser are sized to the real total.
@@ -684,6 +702,8 @@ def main():
         for _g in optimizer.param_groups:
             _g["lr"] = args.learning_rate
         obs_normalizer.load_state_dict(resumed_checkpoint["obs_normalizer"])
+        if args.move_school:
+            _rule_slot_passthrough()
         reward_normalizer.load_state_dict(resumed_checkpoint["reward_normalizer"])
         # The per-worker running discounted return belongs to episodes that no
         # longer exist after a resume (workers start fresh); keep the RMS
@@ -695,6 +715,9 @@ def main():
         # unattended run that restarts a few times re-climbs difficulty from
         # scratch each time and never approaches the cap.
         sampler.load_curriculum_state(resumed_checkpoint.get("curriculum"))
+        if args.move_school:
+            ms = sampler.move_school_snapshot()
+            print(f"restored move school: stage {ms['stage']} ({ms['label']}) since step {ms['stage_start']}")
         print(f"restored curriculum: d_max={sampler.d_max:.2f} opponents_max={sampler.opponents_max}")
         print(f"resumed from {args.resume_from} at global_step={initial_global_step}")
         if args.reset_critic:
@@ -873,6 +896,7 @@ def main():
             episode_lengths_this_update = []
             episode_components_this_update = []  # list of per-episode component dicts, this update only
             outcomes_this_update = {"won": 0, "lost": 0, "timeout": 0}
+            ground_outcomes_this_update = {"won": 0, "lost": 0, "timeout": 0}  # move school; subset of the above
             emergence = EmergenceAccumulator()  # Sec8.3: fresh each update, same sample size as action_stats
             # Liveness heartbeat (OGRL-20260926-002). metrics.jsonl is written
             # once per COMPLETED update, so a loop wedged anywhere inside an
@@ -999,14 +1023,21 @@ def main():
                     ended_scenario = infos[i].get("scenario") or {}
                     ended_seed = infos[i].get("seed")
                     ended_difficulty = ended_scenario.get("difficulty")
-                    if ended_difficulty is not None:
-                        sampler.record_episode_outcome(ended_difficulty, won, ended_scenario.get("opponents", 1) or 1)
-                    # Opponent-count curriculum advances on its own gate, kept
-                    # separate from difficulty so neither can advance the other.
-                    sampler.record_opponent_outcome(ended_scenario.get("opponents", 1) or 1, won)
-                    sampler.record_armed_outcome(won, ended_scenario.get("armed_count", 0) or 0,
-                                                 opponents=ended_scenario.get("opponents", 1) or 1,
-                                                 difficulty=ended_scenario.get("difficulty"))
+                    ended_ground = bool(ended_scenario.get("ground_only"))
+                    if ended_ground:
+                        # Move school: a ground-only fight is not evidence for any gate that certifies
+                        # normal fights (difficulty, opponent count, armed ladder) -- its own window only.
+                        sampler.record_ground_outcome(ended_scenario.get("opponents", 1) or 1, won)
+                        ground_outcomes_this_update[outcome] += 1
+                    else:
+                        if ended_difficulty is not None:
+                            sampler.record_episode_outcome(ended_difficulty, won, ended_scenario.get("opponents", 1) or 1)
+                        # Opponent-count curriculum advances on its own gate, kept
+                        # separate from difficulty so neither can advance the other.
+                        sampler.record_opponent_outcome(ended_scenario.get("opponents", 1) or 1, won)
+                        sampler.record_armed_outcome(won, ended_scenario.get("armed_count", 0) or 0,
+                                                     opponents=ended_scenario.get("opponents", 1) or 1,
+                                                     difficulty=ended_scenario.get("difficulty"))
                     logger.log_episode({
                         "t": time.time(), "global_step": global_step, "worker": int(i),
                         "seed": ended_seed if ended_seed is not None else episode_seed_used[i],
@@ -1019,6 +1050,7 @@ def main():
                         "species": ended_scenario.get("species"), "armed": (ended_scenario.get("weapons") or 0) > 0,
                         "soft_reset": ended_scenario.get("soft_reset"),
                         "level": infos[i].get("level"),
+                        **({"ground_only": ended_ground} if "ground_only" in ended_scenario else {}),
                     })
                     if tape_recorder is not None:
                         sampled_worker0 = (i == 0 and args.tape_every > 0 and update % args.tape_every == 0)
@@ -1123,6 +1155,22 @@ def main():
             if args.entropy_target is not None and not args._value_only:
                 step = 1.05 if stats["entropy"] < args.entropy_target else 1 / 1.05
                 args.entropy_coef = float(min(args.entropy_coef_max, max(args.entropy_coef_min, args.entropy_coef * step)))
+            if args.move_school:
+                _rule_slot_passthrough()
+                _ms_event = sampler.move_school_step(global_step)
+                if _ms_event is not None:
+                    _save_checkpoint(args.checkpoint_path, policy, optimizer, obs_normalizer,
+                                     reward_normalizer, global_step, curriculum=sampler.curriculum_state())
+                    _snapdir = Path(args.checkpoint_path).parent / "snapshots"
+                    _snapdir.mkdir(parents=True, exist_ok=True)
+                    try:
+                        shutil.copyfile(args.checkpoint_path,
+                                        _snapdir / f"{run_id}_{global_step}_end_of_stage{sampler.move_school_snapshot()['stage'] - 1}.pt")
+                    except Exception as _e:
+                        print(f"[move-school] stage snapshot failed: {_e}", flush=True)
+                    logger.log_event("move_school_stage", f"{run_id} move school: {_ms_event['from']} -> {_ms_event['to']}",
+                                     body=json.dumps({**_ms_event, "global_step": global_step}))
+                    print(f"[move-school] {_ms_event} at global_step={global_step}", flush=True)
 
             update += 1
             explained_var = _explained_variance(batch["values"].cpu().numpy(), batch["returns"].cpu().numpy())
@@ -1341,6 +1389,13 @@ def main():
                 # it is, so without this the ladder would advance invisibly.
                 "armed_stage": sampler.armed_stage_index,
                 "armed_stage_label": sampler.armed_stage_label,
+                "move_school": None if not args.move_school else {
+                    **sampler.move_school_snapshot(),
+                    "ground_outcomes": dict(ground_outcomes_this_update),
+                    "ground_win_rates": {str(k): v for k, v in sampler.ground_win_rates().items()},
+                    "blocked_air_attacks_total": int(sum(getattr(e, "blocked_air_attacks", 0)
+                                                         for e in getattr(vec_env, "envs", []))),
+                },
                 "curriculum_live": {
                         "opponents_max": sampler.opponents_max,
                         "opponent_win_rates": {str(k): v for k, v in sampler.opponent_win_rates().items()},

@@ -160,6 +160,27 @@ ARMED_STAGES = [
 ]
 
 
+# Move school (OGRL-20261004-010). Every agent this project trained converged on the jump kick
+# (legcannon, 75/75 and 94/94 attacks), and 1v3 sat at ~0.3 for 80M+ steps. In a "ground-only"
+# episode env.py drops air attacks, so the only ways to win are ground attacks, sweeps, throws,
+# reversals and positioning. The rule is visible to the policy (RULE_GROUND_ONLY). Stages advance
+# on their own: after min_steps once the GROUND-ONLY win rate at gate_opponents clears
+# gate_win_rate (last 600 such episodes, >= 300 required), or unconditionally at max_steps. The
+# last stage is permanent: a standing fraction of ground-only refresher episodes so the skill does
+# not decay once jump kicks are back. Reward is NOT changed in any stage.
+#
+# ground_max_opponents caps the enemy count of GROUND-ONLY fights per stage. Measured before launch
+# (OGRL-20261004-010 probe, run31 @380.4M, greedy, ground-only): 1v1 0/20 won, 1v3 0/20 won with not a
+# single ground attack thrown. Hopeless fights carry no learning signal, so ground school starts at 1v1.
+MOVE_SCHOOL_STAGES = (
+    {"label": "S1 ground school", "ground_prob": 0.70, "ground_max_opponents": 1,
+     "min_steps": 6_000_000, "max_steps": 20_000_000, "gate_opponents": 1, "gate_win_rate": 0.60},
+    {"label": "S2 mixed", "ground_prob": 0.40, "ground_max_opponents": 2,
+     "min_steps": 10_000_000, "max_steps": 30_000_000, "gate_opponents": 2, "gate_win_rate": 0.40},
+    {"label": "S3 free + refresher", "ground_prob": 0.15, "ground_max_opponents": 3},
+)
+
+
 @dataclass
 class ScenarioSampler:
     # d_max schedule (Sec3.2, Sec10 "tonight's run"): start LOW. Run9 trained
@@ -305,6 +326,10 @@ class ScenarioSampler:
     _opp_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (opponents, won)
     _opp_advance_log: list = field(default_factory=list, repr=False)
     _advance_log: list = field(default_factory=list, repr=False)  # (episode_index, old_d_max, new_d_max) for the research log / events.jsonl
+    move_school_stages: tuple = ()  # () = off; MOVE_SCHOOL_STAGES to enable (OGRL-20261004-010)
+    _ms_stage: int = field(default=0, repr=False)
+    _ms_stage_start: object = field(default=None, repr=False)   # global_step the current stage began
+    _ms_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (opponents, won), ground-only
 
     def __post_init__(self):
         self._rng = random.Random(self.rng_seed)
@@ -327,8 +352,15 @@ class ScenarioSampler:
             # an empty or inverted range.
             lo = min(self.d_min, self._d_max)
             d = self._rng.uniform(lo, self._d_max)
+            ground_only = None
+            if self.move_school_stages:
+                stage = self.move_school_stages[min(self._ms_stage, len(self.move_school_stages) - 1)]
+                ground_only = self._rng.random() < stage["ground_prob"]
             if self._opp_max <= 1:
                 opponents = 1
+            elif ground_only:
+                # ground-only fights get their own learnability mix, from their own outcomes, capped per stage
+                opponents = self._learnability_draw(self._ms_recent, cap=stage.get("ground_max_opponents"))
             elif self.opp_sampling == "learnability":
                 opponents = self._learnability_draw()
             elif self.opp_keep_solo <= 0.0:
@@ -354,6 +386,7 @@ class ScenarioSampler:
             "armed_count": armed,
             "weapon_type": weap,
             "throw_aggression": throw_aggr if armed > 0 else 1.0,
+            **({"ground_only": ground_only} if ground_only is not None else {}),
         }
 
     @property
@@ -492,7 +525,8 @@ class ScenarioSampler:
         Only the position is restored; the gates re-earn their next step."""
         with self._lock:
             return {"d_max": self._d_max, "opponents_max": self._opp_max,
-                    "armed_stage": self._armed_stage}
+                    "armed_stage": self._armed_stage,
+                    "move_school_stage": self._ms_stage, "move_school_stage_start": self._ms_stage_start}
 
     def load_curriculum_state(self, state: dict | None) -> None:
         """Restore a checkpointed position. Clamped to this run's own caps, so
@@ -510,15 +544,71 @@ class ScenarioSampler:
             st = state.get("armed_stage")
             if st is not None:
                 self._armed_stage = max(0, min(int(st), len(ARMED_STAGES) - 1))
+            ms = state.get("move_school_stage")
+            if ms is not None and self.move_school_stages:
+                self._ms_stage = max(0, min(int(ms), len(self.move_school_stages) - 1))
+                start = state.get("move_school_stage_start")
+                self._ms_stage_start = int(start) if start is not None else None
+
+    # --- move school (OGRL-20261004-010) ---
+
+    def record_ground_outcome(self, opponents: int, won: bool) -> None:
+        """Ground-only episodes feed ONLY this window -- never the opponent-count, difficulty or
+        armed gates, which certify normal fights."""
+        with self._lock:
+            self._ms_recent.append((int(opponents), bool(won)))
+
+    def ground_win_rates(self) -> dict:
+        with self._lock:
+            recent = list(self._ms_recent)[-6000:]
+        out = {}
+        for k in range(1, self.opponents_cap + 1):
+            sub = [w for o, w in recent if o == k][-600:]
+            out[k] = (sum(sub) / len(sub)) if sub else None
+        return out
+
+    def move_school_step(self, global_step: int):
+        """Call once per update. Returns a transition dict when the stage advances, else None."""
+        if not self.move_school_stages:
+            return None
+        with self._lock:
+            if self._ms_stage_start is None:
+                self._ms_stage_start = int(global_step)
+            if self._ms_stage >= len(self.move_school_stages) - 1:
+                return None
+            st = self.move_school_stages[self._ms_stage]
+            in_stage = int(global_step) - int(self._ms_stage_start)
+            k = st["gate_opponents"]
+            sub = [w for o, w in list(self._ms_recent)[-6000:] if o == k][-600:]
+            wr = (sum(sub) / len(sub)) if len(sub) >= 300 else None
+            gate = wr is not None and wr >= st["gate_win_rate"]
+            if in_stage < st["min_steps"] or not (gate or in_stage >= st["max_steps"]):
+                return None
+            old = self._ms_stage
+            self._ms_stage += 1
+            self._ms_stage_start = int(global_step)
+            return {"from": self.move_school_stages[old]["label"],
+                    "to": self.move_school_stages[self._ms_stage]["label"],
+                    "reason": "gate" if gate else "max_steps", "steps_in_stage": in_stage,
+                    "gate_opponents": k, "ground_win_rate": wr, "n": len(sub)}
+
+    def move_school_snapshot(self) -> dict | None:
+        if not self.move_school_stages:
+            return None
+        with self._lock:
+            st = self.move_school_stages[min(self._ms_stage, len(self.move_school_stages) - 1)]
+            return {"stage": self._ms_stage, "label": st["label"], "ground_prob": st["ground_prob"],
+                    "stage_start": self._ms_stage_start}
 
 
-    def _learnability_draw(self) -> int:
+    def _learnability_draw(self, source: deque | None = None, cap: int | None = None) -> int:
         """Caller holds self._lock. Weight each opponent count by p(1-p) over its own last 600
         outcomes (0.5 prior below 30 samples) plus a 0.05 floor so nothing is ever starved."""
-        ks = list(range(1, self._opp_max + 1))
+        src = self._opp_recent if source is None else source
+        ks = list(range(1, (min(self._opp_max, cap) if cap else self._opp_max) + 1))
         weights = []
         for k in ks:
-            outcomes = [won for o, won in list(self._opp_recent)[-6000:] if o == k][-600:]
+            outcomes = [won for o, won in list(src)[-6000:] if o == k][-600:]
             p = (sum(outcomes) / len(outcomes)) if len(outcomes) >= 30 else 0.5
             weights.append(p * (1.0 - p) + 0.05)
         return self._rng.choices(ks, weights=weights, k=1)[0]

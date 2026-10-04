@@ -113,6 +113,10 @@ class ObsLayout:
     ROLL_RECOVERY_TIME = 44
     HOSTILES_AWAKE = 45
     # v6 entity extension: offsets INSIDE an entity slot
+    # Move school (OGRL-20261004-010): the rule of the current episode, 1.0 = ground-only (no air
+    # attacks). Written by env.py into the self FEINTING slot, which is constant 0 under rl_no_feint
+    # (run30 normaliser: mean 0, var 0) -- so no network shape change. Only rule episodes overwrite it.
+    RULE_GROUND_ONLY = 38
     E_TARGETS_ME = 33
     E_AI_ATTACKING = 34
     E_IS_FOLLOWER = 35  # stock AI: group_leader != -1 -> holds back while its leader attacks
