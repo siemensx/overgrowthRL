@@ -76,9 +76,22 @@ def main() -> int:
         _reset = env.reset
         env.reset = lambda *args, **kw: _reset(*args, ground_only=True, **kw)
     self_ids: set[int] = set()
+    # OGRL-20261004-014: the agent's character id is NOT fixed across episodes (1v1 picks the player
+    # spawn at random, so it alternates 0/1). Attributing by "any id the agent ever had" counted the
+    # enemy's attacks as the agent's. Record (log byte offset, self id) whenever the id changes and
+    # attribute each RLATK line by the segment it falls in.
+    segments: list[tuple[int, int]] = []
 
     def act_fn(obs, frame):
-        self_ids.add(int(round(float(frame[L.SELF_ID]))))
+        sid = int(round(float(frame[L.SELF_ID])))
+        self_ids.add(sid)
+        if not segments or segments[-1][1] != sid:
+            try:
+                env._log_file.flush()
+                off = os.path.getsize(log_path)
+            except OSError:
+                off = 0
+            segments.append((off, sid))
         return deterministic_action(pol, torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0))
 
     t0 = time.time()
@@ -91,16 +104,29 @@ def main() -> int:
         env.close()
 
     attacks, feints, opp_attacks = Counter(), 0, 0
-    for line in open(keep, errors="replace"):
+    opp_moves = Counter()
+    import bisect
+    seg_offsets = [o for o, _ in segments]
+
+    def self_at(offset: int) -> int:
+        i = bisect.bisect_right(seg_offsets, offset) - 1
+        return segments[max(0, i)][1] if segments else -1
+
+    offset = 0
+    for raw in open(keep, "rb"):
+        line = raw.decode("utf-8", errors="replace")
+        here, offset = offset, offset + len(raw)
         m = RLATK.search(line)
         if m:
-            if int(m.group(1)) in self_ids:
-                attacks[os.path.basename(m.group(3)).replace(".xml", "")] += 1
+            mv = os.path.basename(m.group(3)).replace(".xml", "")
+            if int(m.group(1)) == self_at(here):
+                attacks[mv] += 1
             else:
                 opp_attacks += 1
+                opp_moves[mv] += 1
             continue
         m = RLFEINT.search(line)
-        if m and int(m.group(1)) in self_ids:
+        if m and int(m.group(1)) == self_at(here):
             feints += 1
     n_att = sum(attacks.values())
     won = res["outcomes"]["won"]
@@ -112,7 +138,8 @@ def main() -> int:
         "outcomes": res["outcomes"], "win_rate": res["win_rate"], "win_rate_ci95": res["win_rate_ci95"],
         "agent_attacks": n_att, "agent_feints": feints,
         "feint_share_of_attacks": (feints / n_att) if n_att else None,
-        "agent_moves": dict(attacks), "opponent_attacks": opp_attacks,
+        "agent_moves": dict(attacks), "opponent_attacks": opp_attacks, "opponent_moves": dict(opp_moves),
+        "attribution": "per-segment self id (OGRL-20261004-014)",
         "ground_only": bool(a.ground_only), "blocked_air_attacks": int(getattr(env, "blocked_air_attacks", 0)),
         "self_ids": sorted(self_ids), "seconds": round(time.time() - t0, 1),
     }

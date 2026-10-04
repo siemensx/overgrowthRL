@@ -43,7 +43,7 @@ from tape import TapeRecorder, decision_record
 from ogreplay import runtime_fingerprint
 from emergence import EmergenceAccumulator
 
-from policy import ActorCritic, CONTINUOUS_DIM, DISCRETE_DIM
+from policy import ActorCritic, CONTINUOUS_DIM, DISCRETE_DIM, set_button_floor
 from vec_buffer import VecRolloutBuffer
 from normalize import ObservationNormalizer, RewardNormalizer
 from train import ppo_update, _explained_variance, _save_checkpoint  # reuse, not reimplement
@@ -147,6 +147,10 @@ def parse_args():
                          "Overrides the linear anneal when set.")
     p.add_argument("--entropy-coef-min", type=float, default=1e-4)
     p.add_argument("--entropy-coef-max", type=float, default=0.05)
+    p.add_argument("--button-floor", default=None,
+                    help="OGRL-20261004-015: minimum press probability per button during training, e.g. "
+                         "'attack=0.1' -> attack is pressed with p >= 0.05 in every state. Not saved in the "
+                         "checkpoint; greedy play (mode) is unchanged.")
     p.add_argument("--move-school", action="store_true",
                     help="OGRL-20261004-010: staged ground-only episodes (no air attacks; rule visible in the "
                          "observation) per curriculum.MOVE_SCHOOL_STAGES, advancing automatically. "
@@ -614,6 +618,8 @@ def main():
     # layout + frame_stack directly (they need to know where the entity
     # region lives within each stacked frame), not just a flat obs_dim.
     policy = ActorCritic(layout, frame_stack=args.frame_stack).to(device)
+    if args.button_floor:
+        print(f"button floor: {set_button_floor(policy, args.button_floor)}")
     policy.detach_critic_features = bool(args.critic_detach_shared)
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.learning_rate, eps=1e-5)
     update_forward = policy.get_action_and_value

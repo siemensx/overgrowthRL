@@ -141,6 +141,27 @@ def _mlp(input_dim: int, hidden_dim: int, output_dim: int, output_gain: float) -
     )
 
 
+class FlooredLogits(nn.Linear):
+    """The discrete-head Linear, optionally with a per-button minimum press probability
+    (OGRL-20261004-015). With floor eps_k on head k the policy's Bernoulli is
+        p'_k = eps_k / 2 + (1 - eps_k) * sigmoid(z_k)
+    and this module returns logit(p'_k), so sampling, log-probs, entropy and the closed-form KL all
+    see the same distribution. The mode is unchanged (p' > 0.5 iff z > 0). The floor is a training-time
+    attribute, not a parameter or buffer: checkpoints are byte-compatible and evaluation, which builds
+    the policy without a floor, is unaffected. Why: the run31 lineage presses ATTACK with p = 1e-4 when
+    grounded within 2 m of an enemy, so ground attacks are never sampled and can never be learned."""
+
+    floor: torch.Tensor | None = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        z = super().forward(x)
+        if self.floor is None:
+            return z
+        f = self.floor.to(dtype=z.dtype, device=z.device)
+        p = 0.5 * f + (1.0 - f) * torch.sigmoid(z)
+        return torch.where(f > 0, torch.log(p) - torch.log1p(-p), z)  # unfloored heads pass through exactly
+
+
 class EntityEncoder(nn.Module):
     """Shared per-entity MLP + masked max-pool. See module docstring."""
 
@@ -172,6 +193,26 @@ class EntityEncoder(nn.Module):
         any_valid = mask.any(dim=-2)
         pooled = torch.where(any_valid, pooled, torch.zeros_like(pooled))
         return pooled
+
+
+BUTTON_NAMES = ("jump", "crouch", "attack", "grab", "drop", "walk")
+
+
+def set_button_floor(policy: "ActorCritic", spec: str | None) -> dict:
+    """spec like 'attack=0.1,grab=0.05' -> per-head floor on policy.discrete_logits; '' or None clears."""
+    floors = {}
+    if spec:
+        for part in spec.split(","):
+            name, val = part.split("=")
+            floors[name.strip()] = float(val)
+    unknown = set(floors) - set(BUTTON_NAMES)
+    if unknown:
+        raise ValueError(f"unknown buttons in --button-floor: {sorted(unknown)}")
+    if not floors:
+        policy.discrete_logits.floor = None
+    else:
+        policy.discrete_logits.floor = torch.tensor([floors.get(b, 0.0) for b in BUTTON_NAMES])
+    return floors
 
 
 class ActorCritic(nn.Module):
@@ -217,7 +258,7 @@ class ActorCritic(nn.Module):
         )
         self.continuous_mean = _layer_init(nn.Linear(hidden_dim, CONTINUOUS_DIM), gain=0.01)
         self.continuous_log_std = nn.Parameter(torch.zeros(CONTINUOUS_DIM))  # state-independent, standard PPO practice
-        self.discrete_logits = _layer_init(nn.Linear(hidden_dim, DISCRETE_DIM), gain=0.01)
+        self.discrete_logits = _layer_init(FlooredLogits(hidden_dim, DISCRETE_DIM), gain=0.01)
 
         self.critic_trunk = nn.Sequential(
             _layer_init(nn.Linear(trunk_input_dim, hidden_dim)),

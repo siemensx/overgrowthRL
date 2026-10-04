@@ -12,6 +12,9 @@ REM A snapshot is written to checkpoints\snapshots at every stage change.
 REM 04:40 throughput change (OGRL-20261004-013): CPUs 0-9 measured only ~55%% busy with 10+2 engines (lockstep
 REM waits), so 20 active + 4 standby (= 2 per map) with n_steps 512 keeps the 10,240-decision batch; 4-h recycle
 REM bounds the engine commit leak (~0.4 GB fresh + 0.19 GB/h each -> ~27 GB peak; commit was 26/91 GB).
+REM 05:30 (OGRL-20261004-015): --button-floor attack=0.1. After 3.5M steps of S1 the policy still threw ZERO
+REM ground attacks: p(attack | grounded, enemy < 2 m) = 1e-4, so ground attacks were never sampled. The floor
+REM keeps attack at p >= 0.05 everywhere (training only; greedy play unchanged). S1's clock was restarted.
 call :acquire %*
 exit /b %ERRORLEVEL%
 
@@ -52,7 +55,7 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run35.log
   --total-timesteps 2000000000 --n-steps 512 --n-epochs 2 --minibatch-size 1024 ^
   --kl-mode adaptive --kl-hard-factor 4 --critic-full-batch --lr-min 0.00001 --lr-max 0.0003 ^
   --gamma 0.997 --gae-lambda 0.975 --reward-profile win_v2 --stall-target-weight 0 ^
-  --entropy-coef 0.003 --entropy-target 0.5 --entropy-coef-max 0.01 --move-school ^
+  --entropy-coef 0.003 --entropy-target 0.5 --entropy-coef-max 0.01 --move-school --button-floor attack=0.1 ^
   --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 ^
   --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 20 ^
   --d-max-start 1.0 --d-max-cap 1.0 --d-step 0.1 --d-min 1.0 ^
