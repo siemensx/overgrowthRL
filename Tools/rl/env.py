@@ -284,6 +284,7 @@ class OvergrowthEnv:
         self.episode_count = 0
         self.ground_only = False          # move school (OGRL-20261004-010); see reset()
         self._rule_episode = False
+        self.rule_hidden = False
         self.blocked_air_attacks = 0      # cumulative attack presses dropped by the ground-only rule
         # last_reset_seed: the REAL seed most recently used to reset this
         # env, for episodes.jsonl (OGRL-20260817-028 Sec8.6 -- ghost replay
@@ -601,13 +602,15 @@ class OvergrowthEnv:
         weapon_type: int = 0,
         throw_aggression: float = 1.0,
         ground_only: bool | None = None,
+        rule_hidden: bool = False,
     ) -> np.ndarray:
         """Reset the requested scenario, including on a fresh engine.
 
         ground_only (OGRL-20261004-010, "move school"): None (default) leaves actions and observations
         exactly as before. True/False makes this episode a rule episode: when True, the attack button
         is dropped while the agent is airborne or presses jump in the same decision (no jump kick);
-        either way the rule is written into the RULE_GROUND_ONLY observation slot of every frame.
+        either way the rule is written into the RULE_GROUND_ONLY observation slot of every frame --
+        except with rule_hidden=True, where the slot reads 0 so the fight looks normal (OGRL-20261004-012).
 
         The first call drains the engine's natural post-load observation before
         sending the reset request. The returned observation therefore always
@@ -625,6 +628,7 @@ class OvergrowthEnv:
         self.last_reset_seed = reset_seed
         self._rule_episode = ground_only is not None
         self.ground_only = bool(ground_only)
+        self.rule_hidden = bool(rule_hidden)
         self._mark_rule(obs.values)
         self._prev_values = obs.values
         self._episode_steps = 0
@@ -640,7 +644,7 @@ class OvergrowthEnv:
         """Write this episode's move-school rule into the RULE_GROUND_ONLY slot (the v6 self
         FEINTING field, constant 0 whenever rl_no_feint is set -- which move school requires)."""
         if self._rule_episode:
-            values[self.layout.RULE_GROUND_ONLY] = 1.0 if self.ground_only else 0.0
+            values[self.layout.RULE_GROUND_ONLY] = 1.0 if (self.ground_only and not self.rule_hidden) else 0.0
 
     def write_action(self, action: np.ndarray) -> None:
         """Publish an action without waiting for its observation.

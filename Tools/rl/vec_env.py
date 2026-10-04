@@ -400,6 +400,7 @@ class VecOvergrowthEnv:
             weapon_type=int(scenario.get("weapon_type", 0) or 0),
             throw_aggression=float(scenario.get("throw_aggression", 1.0) or 1.0),
             ground_only=scenario.get("ground_only"),  # None unless move school is on (OGRL-20261004-010)
+            rule_hidden=bool(scenario.get("rule_hidden", False)),
         )
         with self._perf_lock:
             self._reset_seconds_accum += env.last_reset_seconds
@@ -485,7 +486,8 @@ class VecOvergrowthEnv:
                                  armed_count=int(scenario.get("armed_count", 0) or 0),
                                  weapon_type=int(scenario.get("weapon_type", 0) or 0),
                                  throw_aggression=float(scenario.get("throw_aggression", 1.0) or 1.0),
-                                 ground_only=scenario.get("ground_only"))
+                                 ground_only=scenario.get("ground_only"),
+                                 rule_hidden=bool(scenario.get("rule_hidden", False)))
                 scenario = dict(scenario)
                 scenario["soft_reset"] = soft
             else:

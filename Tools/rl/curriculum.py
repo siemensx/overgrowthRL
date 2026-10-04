@@ -169,15 +169,22 @@ ARMED_STAGES = [
 # last stage is permanent: a standing fraction of ground-only refresher episodes so the skill does
 # not decay once jump kicks are back. Reward is NOT changed in any stage.
 #
+# hidden_share (amendment OGRL-20261004-012, before S2 began): the fraction of ground-only fights whose
+# rule is NOT shown to the policy (RULE_GROUND_ONLY stays 0, so the fight looks normal). With the rule
+# always announced the policy can learn two separate habits -- ground fighting when flagged, jump kicks
+# otherwise -- and since its normal-fight habit in 1v3 is ~100% jump kick it would never re-test ground
+# options there. Unannounced fights make the normal-fight habit itself carry ground skill, at the cost
+# of a small bias against the jump kick (it "sometimes fails"), proportional to the hidden share.
+#
 # ground_max_opponents caps the enemy count of GROUND-ONLY fights per stage. Measured before launch
 # (OGRL-20261004-010 probe, run31 @380.4M, greedy, ground-only): 1v1 0/20 won, 1v3 0/20 won with not a
 # single ground attack thrown. Hopeless fights carry no learning signal, so ground school starts at 1v1.
 MOVE_SCHOOL_STAGES = (
-    {"label": "S1 ground school", "ground_prob": 0.70, "ground_max_opponents": 1,
+    {"label": "S1 ground school", "ground_prob": 0.70, "ground_max_opponents": 1, "hidden_share": 0.0,
      "min_steps": 6_000_000, "max_steps": 20_000_000, "gate_opponents": 1, "gate_win_rate": 0.60},
-    {"label": "S2 mixed", "ground_prob": 0.40, "ground_max_opponents": 2,
+    {"label": "S2 mixed", "ground_prob": 0.40, "ground_max_opponents": 2, "hidden_share": 0.5,
      "min_steps": 10_000_000, "max_steps": 30_000_000, "gate_opponents": 2, "gate_win_rate": 0.40},
-    {"label": "S3 free + refresher", "ground_prob": 0.15, "ground_max_opponents": 3},
+    {"label": "S3 free + refresher", "ground_prob": 0.15, "ground_max_opponents": 3, "hidden_share": 1.0},
 )
 
 
@@ -353,9 +360,11 @@ class ScenarioSampler:
             lo = min(self.d_min, self._d_max)
             d = self._rng.uniform(lo, self._d_max)
             ground_only = None
+            rule_hidden = False
             if self.move_school_stages:
                 stage = self.move_school_stages[min(self._ms_stage, len(self.move_school_stages) - 1)]
                 ground_only = self._rng.random() < stage["ground_prob"]
+                rule_hidden = bool(ground_only) and self._rng.random() < stage.get("hidden_share", 0.0)
             if self._opp_max <= 1:
                 opponents = 1
             elif ground_only:
@@ -386,7 +395,7 @@ class ScenarioSampler:
             "armed_count": armed,
             "weapon_type": weap,
             "throw_aggression": throw_aggr if armed > 0 else 1.0,
-            **({"ground_only": ground_only} if ground_only is not None else {}),
+            **({"ground_only": ground_only, "rule_hidden": rule_hidden} if ground_only is not None else {}),
         }
 
     @property
@@ -598,6 +607,7 @@ class ScenarioSampler:
         with self._lock:
             st = self.move_school_stages[min(self._ms_stage, len(self.move_school_stages) - 1)]
             return {"stage": self._ms_stage, "label": st["label"], "ground_prob": st["ground_prob"],
+                    "hidden_share": st.get("hidden_share", 0.0),
                     "stage_start": self._ms_stage_start}
 
 

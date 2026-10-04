@@ -1050,7 +1050,8 @@ def main():
                         "species": ended_scenario.get("species"), "armed": (ended_scenario.get("weapons") or 0) > 0,
                         "soft_reset": ended_scenario.get("soft_reset"),
                         "level": infos[i].get("level"),
-                        **({"ground_only": ended_ground} if "ground_only" in ended_scenario else {}),
+                        **({"ground_only": ended_ground, "rule_hidden": bool(ended_scenario.get("rule_hidden"))}
+                           if "ground_only" in ended_scenario else {}),
                     })
                     if tape_recorder is not None:
                         sampled_worker0 = (i == 0 and args.tape_every > 0 and update % args.tape_every == 0)

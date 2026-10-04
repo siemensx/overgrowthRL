@@ -30,6 +30,7 @@ def bare_env(ground_only: bool, grounded: bool) -> OvergrowthEnv:
     env.ground_only = ground_only
     env._rule_episode = True
     env.blocked_air_attacks = 0
+    env.rule_hidden = False
     vals = [0.0] * L.total_floats
     vals[L.GROUNDED] = 1.0 if grounded else 0.0
     env._prev_values = vals
@@ -70,6 +71,30 @@ def test_rule_flag_written_only_in_rule_episodes():
     v[L.RULE_GROUND_ONLY] = 0.5
     e._mark_rule(v)
     assert v[L.RULE_GROUND_ONLY] == 0.5           # non-rule episode (eval/watch): engine value untouched
+
+
+def test_hidden_rule_masks_but_reads_normal():
+    e = bare_env(True, grounded=False)
+    e.rule_hidden = True
+    e.write_action(act(attack=1.0))
+    assert e._shm.last["attack"] is False                # the jump kick is still off...
+    v = [0.0] * L.total_floats
+    e._mark_rule(v)
+    assert v[L.RULE_GROUND_ONLY] == 0.0                  # ...but the fight looks normal to the policy
+
+
+def test_hidden_share_per_stage():
+    s = sampler(move_school_stages=MOVE_SCHOOL_STAGES)
+    eps = [s.sample_episode() for _ in range(3000)]
+    assert not any(e["rule_hidden"] for e in eps)                     # S1: all announced
+    s.load_curriculum_state({"move_school_stage": 1, "move_school_stage_start": 0})
+    g = [e for e in (s.sample_episode() for _ in range(6000)) if e["ground_only"]]
+    frac = sum(e["rule_hidden"] for e in g) / len(g)
+    assert abs(frac - 0.5) < 0.04, frac                               # S2: half hidden
+    s.load_curriculum_state({"move_school_stage": 2, "move_school_stage_start": 0})
+    g = [e for e in (s.sample_episode() for _ in range(6000)) if e["ground_only"]]
+    assert all(e["rule_hidden"] for e in g)                            # S3: all hidden
+    assert not any(e["rule_hidden"] for e in (s.sample_episode() for _ in range(2000)) if not e["ground_only"])
 
 
 def sampler(**kw):
