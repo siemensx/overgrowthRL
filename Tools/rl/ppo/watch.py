@@ -52,7 +52,7 @@ from shm_env import ShmWaitTimeout
 from obs_schema import DEFAULT_LAYOUT
 from run_config import load_run_env_config
 
-from policy import ActorCritic
+from policy import ActorCritic, set_button_floor
 from normalize import ObservationNormalizer
 
 
@@ -131,6 +131,9 @@ def parse_args():
                         "(corrected, corrected-nofeint, v6-omni, old). Unset = engine defaults, which "
                         "is the OLD turbo profile -- wrong for every checkpoint trained since 2026-09-24.")
     p.add_argument("--config-line", action="append", default=[], help="extra engine config line (repeatable)")
+    p.add_argument("--sampled", action="store_true",
+                   help="play the way TRAINING plays: sample each decision from the policy (with the training "
+                        "attack floor, attack=0.1 when grounded) instead of taking its single best guess")
     p.add_argument("--ground-only", action="store_true",
                    help="OGRL-20261004-010 move school: watch ground-only fights (no air attacks; the rule is "
                         "also shown to the policy, exactly as in training). Needs --controls v6-omni.")
@@ -219,6 +222,8 @@ def main():
         )
     policy.load_state_dict(checkpoint["policy"])
     policy.eval()
+    if args.sampled:
+        set_button_floor(policy, "attack=0.1")  # grounded-only by default, exactly as in training
     obs_normalizer = ObservationNormalizer(layout, frame_stack=args.frame_stack)
     obs_normalizer.load_state_dict(checkpoint["obs_normalizer"])
     print(f"loaded checkpoint from global_step={checkpoint['global_step']}")
@@ -276,7 +281,11 @@ def main():
             step = 0
             for step in range(args.max_episode_steps):
                 obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
-                action = deterministic_action(policy, obs_tensor)
+                if args.sampled:
+                    with torch.no_grad():
+                        action = policy.get_action_and_value(obs_tensor)[0].squeeze(0).cpu().numpy()
+                else:
+                    action = deterministic_action(policy, obs_tensor)
                 if not args.no_ghost:
                     ghost_rows.append([
                         step, float(action[0]), float(action[1]),
