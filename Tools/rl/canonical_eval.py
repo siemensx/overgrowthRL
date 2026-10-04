@@ -54,7 +54,8 @@ CONTROLS = {
     # stick dead zone (dodge/frontkick), stance walk (backpedal). Requires a v6 engine + v6 checkpoint.
     "v6-omni": ["rl_target_select: 2", "rl_button_edges: 1", "rl_no_feint: 1", "rl_obs_omniscient: 1",
                 "rl_stick_deadzone: 0.3", "rl_stance_walk: 1"],
-    "old": [],  # auto-repeating buttons + frozen-camera targeting: everything trained before 2026-09-24
+    "old": [],  # auto-repeating buttons + frozen-camera targeting: everything trained before 2026-09-24.
+                # Kept ONLY to re-score legacy checkpoints; not a training profile (user decision 2026-10-04).
 }
 
 
