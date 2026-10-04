@@ -15,6 +15,8 @@ REM bounds the engine commit leak (~0.4 GB fresh + 0.19 GB/h each -> ~27 GB peak
 REM 05:30 (OGRL-20261004-015): --button-floor attack=0.1. After 3.5M steps of S1 the policy still threw ZERO
 REM ground attacks: p(attack | grounded, enemy < 2 m) = 1e-4, so ground attacks were never sampled. The floor
 REM keeps attack at p >= 0.05 everywhere (training only; greedy play unchanged). S1's clock was restarted.
+REM 06:55 (OGRL-20261004-016): the floor now applies only while GROUNDED (mid-jump it launched the leg cannon
+REM early: training 1v3 wins fell ~0.22 -> ~0.05; greedy play was unaffected, 8/20).
 call :acquire %*
 exit /b %ERRORLEVEL%
 

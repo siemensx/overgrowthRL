@@ -28,7 +28,8 @@ def test_floor_raises_min_prob_and_keeps_mode():
     x = torch.randn(64, L.total_floats * 4)
     feats = pol.actor_trunk(pol._features(x))
     z0 = pol.discrete_logits(feats).detach()
-    set_button_floor(pol, "attack=0.1")
+    set_button_floor(pol, "attack=0.1", grounded_only=False)
+    pol.discrete_logits.gate = None
     z1 = pol.discrete_logits(feats).detach()
     p1 = torch.sigmoid(z1)
     assert float(p1[:, 2].min()) >= 0.05 - 1e-6           # attack never below 5%
@@ -39,7 +40,7 @@ def test_floor_raises_min_prob_and_keeps_mode():
 
 def test_logprob_matches_sampling_distribution():
     pol = make()
-    set_button_floor(pol, "attack=0.1")
+    set_button_floor(pol, "attack=0.1", grounded_only=False)
     x = torch.randn(4096, L.total_floats * 4)
     with torch.no_grad():
         act, logp, ent, val, raw = pol.get_action_and_value(x, return_raw=True)
@@ -48,6 +49,23 @@ def test_logprob_matches_sampling_distribution():
     with torch.no_grad():
         _a, logp2, _e, _v = pol.get_action_and_value(x, act, raw_continuous=raw)
     assert torch.allclose(logp, logp2, atol=1e-5)         # re-evaluation agrees with the sampler
+
+
+def test_grounded_gate():
+    pol = make()
+    set_button_floor(pol, "attack=0.1")              # grounded_only by default
+    x = torch.randn(4096, L.total_floats * 4)
+    newest = 3 * L.total_floats + L.GROUNDED
+    x[:2048, newest] = 1.0                          # normalised "on the ground"
+    x[2048:, newest] = -1.0                         # in the air
+    with torch.no_grad():
+        act, logp, ent, val, raw = pol.get_action_and_value(x, return_raw=True)
+        _a, logp2, _e, _v = pol.get_action_and_value(x, act, raw_continuous=raw)
+    ground_press = act[:2048, 4].mean().item()
+    air_press = act[2048:, 4].mean().item()
+    assert 0.03 < ground_press < 0.08, ground_press   # floored on the ground
+    assert air_press < 0.01, air_press                # untouched in the air (bias -9)
+    assert torch.allclose(logp, logp2, atol=1e-5)     # gate recomputed identically on re-evaluation
 
 
 def test_checkpoint_keys_unchanged_and_clear():

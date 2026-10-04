@@ -152,12 +152,18 @@ class FlooredLogits(nn.Linear):
     grounded within 2 m of an enemy, so ground attacks are never sampled and can never be learned."""
 
     floor: torch.Tensor | None = None
+    # Optional per-sample gate (OGRL-20261004-016): the floor applies only where gate is True. Set by
+    # ActorCritic._features from the observation being evaluated, so sampling and re-evaluation agree.
+    gate: torch.Tensor | None = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         z = super().forward(x)
         if self.floor is None:
             return z
         f = self.floor.to(dtype=z.dtype, device=z.device)
+        g = self.gate
+        if g is not None and g.numel() == z[..., 0].numel():
+            f = f * g.reshape(z.shape[:-1]).to(dtype=z.dtype, device=z.device).unsqueeze(-1)
         p = 0.5 * f + (1.0 - f) * torch.sigmoid(z)
         return torch.where(f > 0, torch.log(p) - torch.log1p(-p), z)  # unfloored heads pass through exactly
 
@@ -198,8 +204,13 @@ class EntityEncoder(nn.Module):
 BUTTON_NAMES = ("jump", "crouch", "attack", "grab", "drop", "walk")
 
 
-def set_button_floor(policy: "ActorCritic", spec: str | None) -> dict:
-    """spec like 'attack=0.1,grab=0.05' -> per-head floor on policy.discrete_logits; '' or None clears."""
+def set_button_floor(policy: "ActorCritic", spec: str | None, grounded_only: bool = True) -> dict:
+    """spec like 'attack=0.1,grab=0.05' -> per-head floor on policy.discrete_logits; '' or None clears.
+
+    grounded_only (default): the floor applies only when the agent is on the ground in the newest
+    frame. Measured 2026-10-04 (OGRL-20261004-016): an unconditional attack floor fires mid-jump and
+    launches the leg cannon early -- training-time 1v3 wins fell from ~0.22 to ~0.05."""
+    policy.floor_grounded_only = bool(grounded_only)
     floors = {}
     if spec:
         for part in spec.split(","):
@@ -282,6 +293,11 @@ class ActorCritic(nn.Module):
         [proprioception_branch_out, entity_embed_frame_0, ..., entity_embed_frame_{K-1}]."""
         batch = obs.shape[0]
         frames = obs.view(batch, self.frame_stack, self.frame_floats)
+        if self.discrete_logits.floor is not None and getattr(self, "floor_grounded_only", False):
+            # normalised GROUNDED of the newest frame: (g - mean)/std is > 0 exactly when g = 1
+            self.discrete_logits.gate = frames[:, -1, self.layout.GROUNDED] > 0
+        else:
+            self.discrete_logits.gate = None
 
         entities = frames[:, :, self.entities_start:self.entities_start + self.entities_region]
         entities = entities.reshape(batch, self.frame_stack, self.n_entities, self.entity_floats)
