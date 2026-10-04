@@ -9,6 +9,9 @@ REM   S2 mixed          40%% ground-only (up to 1v2)   >= 10M steps, then ground
 REM   S3 free+refresher 15%% ground-only (up to 1v3)   permanent
 REM Reward unchanged (win_v2). Stage state is in the checkpoint, so the 6-h recycles resume mid-stage.
 REM A snapshot is written to checkpoints\snapshots at every stage change.
+REM 04:40 throughput change (OGRL-20261004-013): CPUs 0-9 measured only ~55%% busy with 10+2 engines (lockstep
+REM waits), so 20 active + 4 standby (= 2 per map) with n_steps 512 keeps the 10,240-decision batch; 4-h recycle
+REM bounds the engine commit leak (~0.4 GB fresh + 0.19 GB/h each -> ~27 GB peak; commit was 26/91 GB).
 call :acquire %*
 exit /b %ERRORLEVEL%
 
@@ -44,9 +47,9 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run35.log
 %PY% -u Tools\rl\ppo\train_vec.py ^
   --repo-root %REPO% ^
   --levels arenas/t_train_101.xml,arenas/t_train_102.xml,arenas/t_train_103.xml,arenas/t_train_104.xml,arenas/t_train_105.xml,arenas/t_train_106.xml,arenas/t_train_107.xml,arenas/t_train_108.xml,arenas/t_train_109.xml,arenas/t_train_110.xml,arenas/t_train_111.xml,arenas/t_train_112.xml ^
-  --shm-prefix /ogrl_r35_%RANDOM%%TRIES% --n-envs 10 --k-standby 2 --seed 35 --allow-n-envs-change ^
+  --shm-prefix /ogrl_r35_%RANDOM%%TRIES% --n-envs 20 --k-standby 4 --seed 35 --allow-n-envs-change ^
   --checkpoint-path %CKPT% %START% --run-id %RUN% ^
-  --total-timesteps 2000000000 --n-steps 1024 --n-epochs 2 --minibatch-size 1024 ^
+  --total-timesteps 2000000000 --n-steps 512 --n-epochs 2 --minibatch-size 1024 ^
   --kl-mode adaptive --kl-hard-factor 4 --critic-full-batch --lr-min 0.00001 --lr-max 0.0003 ^
   --gamma 0.997 --gae-lambda 0.975 --reward-profile win_v2 --stall-target-weight 0 ^
   --entropy-coef 0.003 --entropy-target 0.5 --entropy-coef-max 0.01 --move-school ^
@@ -57,7 +60,7 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run35.log
   --collection-torch-threads 2 --update-torch-threads 2 --torch-interop-threads 1 ^
   --engine-config-line "rl_target_select: 2" --engine-config-line "rl_button_edges: 1" --engine-config-line "rl_no_feint: 1" --engine-config-line "rl_obs_omniscient: 1" --engine-config-line "rl_stick_deadzone: 0.3" --engine-config-line "rl_stance_walk: 1" ^
   --periodic-eval-steps 5000000 --periodic-eval-episodes 200 --periodic-eval-sampled 0 --periodic-eval-parallel 2 ^
-  --max-wall-hours 6 ^
+  --max-wall-hours 4 ^
   --no-tapes --no-native-capture --device cpu ^
   --purpose "OGRL-20261004-011 move school: staged ground-only fights from run32 weights" >> C:\ogrl\%RUN%.out 2>&1
 set RC=%ERRORLEVEL%
