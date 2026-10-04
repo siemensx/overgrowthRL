@@ -139,6 +139,14 @@ def parse_args():
     p.add_argument("--entropy-anneal-steps", type=int, default=1_000_000,
                     help="global_step at which the entropy_coef anneal reaches --entropy-coef-final; linear before that, "
                          "held at --entropy-coef-final after. Ignored if --entropy-coef-final is not set.")
+    p.add_argument("--entropy-target", type=float, default=None,
+                    help="OGRL-20261004-004: if set, entropy_coef adapts after every update (x1.05 when the "
+                         "measured policy entropy is below this target, /1.05 when above), clamped to "
+                         "[--entropy-coef-min, --entropy-coef-max]. run31 at a fixed 0.003 collapsed from "
+                         "1.71 to -1.14 nats (stick sigma 0.39 -> 0.07) over 80M steps with flat win rates. "
+                         "Overrides the linear anneal when set.")
+    p.add_argument("--entropy-coef-min", type=float, default=1e-4)
+    p.add_argument("--entropy-coef-max", type=float, default=0.05)
     p.add_argument("--value-coef", type=float, default=0.5)
     p.add_argument("--max-grad-norm", type=float, default=0.5)
     p.add_argument("--learning-rate", type=float, default=3e-4)
@@ -1100,7 +1108,9 @@ def main():
             # function's signature -- it already reads args.entropy_coef directly.
             # None (--entropy-coef-final not set) leaves args.entropy_coef untouched,
             # exactly reproducing the old constant-coefficient behavior.
-            if args.entropy_coef_final is not None:
+            if args.entropy_target is not None:
+                pass  # adapted after the update, from that update's measured entropy (below)
+            elif args.entropy_coef_final is not None:
                 anneal_progress = min(1.0, global_step / max(1, args.entropy_anneal_steps))
                 args.entropy_coef = args.entropy_coef_start + (args.entropy_coef_final - args.entropy_coef_start) * anneal_progress
 
@@ -1110,6 +1120,9 @@ def main():
             logger.heartbeat("updating", global_step, update=update)
             stats = ppo_update(policy, optimizer, batch, args, update_forward=update_forward)
             stats["value_warmup"] = int(args._value_only)
+            if args.entropy_target is not None and not args._value_only:
+                step = 1.05 if stats["entropy"] < args.entropy_target else 1 / 1.05
+                args.entropy_coef = float(min(args.entropy_coef_max, max(args.entropy_coef_min, args.entropy_coef * step)))
 
             update += 1
             explained_var = _explained_variance(batch["values"].cpu().numpy(), batch["returns"].cpu().numpy())
