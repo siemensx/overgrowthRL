@@ -169,7 +169,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=20260820)
     parser.add_argument("--round-timeout", type=float, default=60.0)
     parser.add_argument("--device", choices=("cpu", "mps"), default="cpu")
+    parser.add_argument("--controls", default=None,
+                        help="engine control/observation profile for the CHECKPOINT, same names as "
+                             "canonical_eval.py (e.g. v6-omni for run30/run31/run32). Unset = engine defaults "
+                             "(the old turbo profile).")
+    parser.add_argument("--config-line", action="append", default=[])
     return parser.parse_args()
+
+
+def _control_lines(args) -> list:
+    lines = list(args.config_line)
+    if args.controls:
+        from canonical_eval import CONTROLS
+        lines = CONTROLS[args.controls] + lines
+    return lines
 
 
 def main() -> int:
@@ -248,6 +261,7 @@ def main() -> int:
             act_period=args.act_period,
             binary_path=args.binary_path,
             write_dir_parent=repo_root / ".rl_match_write_dirs",
+            extra_config_lines=_control_lines(args),
         )
         status.update(phase="fighting", round=1, engine_pid=env._process.pid if env._process else None)
         raw_obs = env.reset(seed=args.seed)
