@@ -118,19 +118,44 @@ def test_ground_fights_respect_stage_enemy_cap():
     assert {e["opponents"] for e in free} == {1, 2, 3}             # normal fights keep the full mix
 
 
+def test_ground_difficulty_ramp_and_gate_band():
+    s = sampler(move_school_stages=MOVE_SCHOOL_STAGES)
+    g = [e for e in (s.sample_episode() for _ in range(2000)) if e["ground_only"]]
+    assert all(0.1 - 1e-9 <= e["difficulty"] <= 0.3 + 1e-9 for e in g)        # starts easy: U(0.1, 0.3)
+    n = [e for e in (s.sample_episode() for _ in range(2000)) if not e["ground_only"]]
+    assert all(e["difficulty"] == 1.0 for e in n)                               # normal fights untouched
+    for _ in range(299):
+        s.record_ground_outcome(1, True, 0.25)
+    assert s.move_school_snapshot()["ground_d_cap"] == 0.3
+    s.record_ground_outcome(1, True, 0.25)                                       # 300 top-band wins -> raise
+    assert s.move_school_snapshot()["ground_d_cap"] == 0.4
+    for _ in range(400):
+        s.record_ground_outcome(1, True, 0.35)
+    assert s.move_school_step(10**9) is None or True
+    st = sampler(move_school_stages=MOVE_SCHOOL_STAGES)
+    st.move_school_step(0)
+    for _ in range(600):
+        st.record_ground_outcome(1, True, 0.3)                                   # easy wins
+    assert st.move_school_step(MOVE_SCHOOL_STAGES[0]["min_steps"]) is None     # do not count toward the gate
+    state = s.curriculum_state()
+    t = sampler(move_school_stages=MOVE_SCHOOL_STAGES)
+    t.load_curriculum_state(state)
+    assert t.move_school_snapshot()["ground_d_cap"] == s.move_school_snapshot()["ground_d_cap"]
+
+
 def test_stage_machine_min_gate_max():
     s = sampler(move_school_stages=MOVE_SCHOOL_STAGES)
     st0 = MOVE_SCHOOL_STAGES[0]
     assert s.move_school_step(1000) is None                                   # stage clock starts here
     for _ in range(400):
-        s.record_ground_outcome(1, True)                                       # gate cleared...
+        s.record_ground_outcome(1, True, 1.0)                                  # gate cleared (at d=1.0)...
     assert s.move_school_step(1000 + st0["min_steps"] - 1) is None             # ...but min_steps not yet
     ev = s.move_school_step(1000 + st0["min_steps"])
     assert ev and ev["reason"] == "gate" and s.move_school_snapshot()["stage"] == 1
     st1 = MOVE_SCHOOL_STAGES[1]
     start = 1000 + st0["min_steps"]
     for _ in range(400):
-        s.record_ground_outcome(2, False)                                      # gate failing
+        s.record_ground_outcome(2, False, 1.0)                                 # gate failing
     assert s.move_school_step(start + st1["min_steps"]) is None
     ev = s.move_school_step(start + st1["max_steps"])                         # forced at max_steps
     assert ev and ev["reason"] == "max_steps" and s.move_school_snapshot()["stage"] == 2

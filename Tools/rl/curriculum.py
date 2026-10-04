@@ -176,11 +176,19 @@ ARMED_STAGES = [
 # options there. Unannounced fights make the normal-fight habit itself carry ground skill, at the cost
 # of a small bias against the jump kick (it "sometimes fails"), proportional to the hidden share.
 #
+# ground_d_start (OGRL-20261004-017): ground-only fights get their own difficulty ramp. Measured: with
+# the attack floor the agent attacks on the ground, but at d=1.0 it deals ~0.06 damage and wins 2-3%
+# of ground-only 1v1s, flat for ~4M steps -- too little signal. Ground-only difficulty is drawn
+# U(max(0, cap-0.2), cap) with cap starting at ground_d_start and rising +0.1 whenever >= 50% of the
+# last 300 ground-only fights in the top band [cap-0.1, cap] are won. A stage gate only counts
+# ground-only fights at d >= 0.9, so no stage can advance on easy fights. Normal fights stay at d=1.0.
+#
 # ground_max_opponents caps the enemy count of GROUND-ONLY fights per stage. Measured before launch
 # (OGRL-20261004-010 probe, run31 @380.4M, greedy, ground-only): 1v1 0/20 won, 1v3 0/20 won with not a
 # single ground attack thrown. Hopeless fights carry no learning signal, so ground school starts at 1v1.
 MOVE_SCHOOL_STAGES = (
     {"label": "S1 ground school", "ground_prob": 0.70, "ground_max_opponents": 1, "hidden_share": 0.0,
+     "ground_d_start": 0.3,
      "min_steps": 6_000_000, "max_steps": 20_000_000, "gate_opponents": 1, "gate_win_rate": 0.60},
     {"label": "S2 mixed", "ground_prob": 0.40, "ground_max_opponents": 2, "hidden_share": 0.5,
      "min_steps": 10_000_000, "max_steps": 30_000_000, "gate_opponents": 2, "gate_win_rate": 0.40},
@@ -336,7 +344,9 @@ class ScenarioSampler:
     move_school_stages: tuple = ()  # () = off; MOVE_SCHOOL_STAGES to enable (OGRL-20261004-010)
     _ms_stage: int = field(default=0, repr=False)
     _ms_stage_start: object = field(default=None, repr=False)   # global_step the current stage began
-    _ms_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (opponents, won), ground-only
+    _ms_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (opponents, won, d), ground-only
+    _ms_d_cap: object = field(default=None, repr=False)          # ground-only difficulty cap (None = off)
+    _ms_ramp: deque = field(default_factory=lambda: deque(maxlen=300), repr=False)  # top-band outcomes since last raise
 
     def __post_init__(self):
         self._rng = random.Random(self.rng_seed)
@@ -370,6 +380,10 @@ class ScenarioSampler:
             elif ground_only:
                 # ground-only fights get their own learnability mix, from their own outcomes, capped per stage
                 opponents = self._learnability_draw(self._ms_recent, cap=stage.get("ground_max_opponents"))
+            if ground_only and self._ms_d_cap is None and stage.get("ground_d_start") is not None:
+                self._ms_d_cap = float(stage["ground_d_start"])
+            if ground_only and self._ms_d_cap is not None:
+                d = self._rng.uniform(max(0.0, self._ms_d_cap - 0.2), self._ms_d_cap)
             elif self.opp_sampling == "learnability":
                 opponents = self._learnability_draw()
             elif self.opp_keep_solo <= 0.0:
@@ -535,7 +549,8 @@ class ScenarioSampler:
         with self._lock:
             return {"d_max": self._d_max, "opponents_max": self._opp_max,
                     "armed_stage": self._armed_stage,
-                    "move_school_stage": self._ms_stage, "move_school_stage_start": self._ms_stage_start}
+                    "move_school_stage": self._ms_stage, "move_school_stage_start": self._ms_stage_start,
+                    "move_school_ground_d_cap": self._ms_d_cap}
 
     def load_curriculum_state(self, state: dict | None) -> None:
         """Restore a checkpointed position. Clamped to this run's own caps, so
@@ -558,21 +573,32 @@ class ScenarioSampler:
                 self._ms_stage = max(0, min(int(ms), len(self.move_school_stages) - 1))
                 start = state.get("move_school_stage_start")
                 self._ms_stage_start = int(start) if start is not None else None
+                cap = state.get("move_school_ground_d_cap")
+                self._ms_d_cap = float(cap) if cap is not None else None
 
     # --- move school (OGRL-20261004-010) ---
 
-    def record_ground_outcome(self, opponents: int, won: bool) -> None:
+    def record_ground_outcome(self, opponents: int, won: bool, difficulty: float | None = None) -> None:
         """Ground-only episodes feed ONLY this window -- never the opponent-count, difficulty or
-        armed gates, which certify normal fights."""
+        armed gates, which certify normal fights. Also drives the ground-only difficulty ramp."""
+        d = 1.0 if difficulty is None else float(difficulty)
         with self._lock:
-            self._ms_recent.append((int(opponents), bool(won)))
+            self._ms_recent.append((int(opponents), bool(won), d))
+            cap = self._ms_d_cap
+            if cap is None or cap >= 1.0:
+                return
+            if d >= cap - 0.1 - 1e-9:
+                self._ms_ramp.append(bool(won))
+            if len(self._ms_ramp) >= 300 and sum(self._ms_ramp) / len(self._ms_ramp) >= 0.5:
+                self._ms_d_cap = min(1.0, round(cap + 0.1, 3))
+                self._ms_ramp.clear()
 
     def ground_win_rates(self) -> dict:
         with self._lock:
             recent = list(self._ms_recent)[-6000:]
         out = {}
         for k in range(1, self.opponents_cap + 1):
-            sub = [w for o, w in recent if o == k][-600:]
+            sub = [r[1] for r in recent if r[0] == k][-600:]
             out[k] = (sum(sub) / len(sub)) if sub else None
         return out
 
@@ -588,7 +614,7 @@ class ScenarioSampler:
             st = self.move_school_stages[self._ms_stage]
             in_stage = int(global_step) - int(self._ms_stage_start)
             k = st["gate_opponents"]
-            sub = [w for o, w in list(self._ms_recent)[-6000:] if o == k][-600:]
+            sub = [r[1] for r in list(self._ms_recent)[-6000:] if r[0] == k and r[2] >= 0.9][-600:]
             wr = (sum(sub) / len(sub)) if len(sub) >= 300 else None
             gate = wr is not None and wr >= st["gate_win_rate"]
             if in_stage < st["min_steps"] or not (gate or in_stage >= st["max_steps"]):
@@ -607,7 +633,7 @@ class ScenarioSampler:
         with self._lock:
             st = self.move_school_stages[min(self._ms_stage, len(self.move_school_stages) - 1)]
             return {"stage": self._ms_stage, "label": st["label"], "ground_prob": st["ground_prob"],
-                    "hidden_share": st.get("hidden_share", 0.0),
+                    "hidden_share": st.get("hidden_share", 0.0), "ground_d_cap": self._ms_d_cap,
                     "stage_start": self._ms_stage_start}
 
 
@@ -618,7 +644,7 @@ class ScenarioSampler:
         ks = list(range(1, (min(self._opp_max, cap) if cap else self._opp_max) + 1))
         weights = []
         for k in ks:
-            outcomes = [won for o, won in list(src)[-6000:] if o == k][-600:]
+            outcomes = [r[1] for r in list(src)[-6000:] if r[0] == k][-600:]
             p = (sum(outcomes) / len(outcomes)) if len(outcomes) >= 30 else 0.5
             weights.append(p * (1.0 - p) + 0.05)
         return self._rng.choices(ks, weights=weights, k=1)[0]

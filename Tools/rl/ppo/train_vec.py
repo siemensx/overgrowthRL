@@ -1033,7 +1033,7 @@ def main():
                     if ended_ground:
                         # Move school: a ground-only fight is not evidence for any gate that certifies
                         # normal fights (difficulty, opponent count, armed ladder) -- its own window only.
-                        sampler.record_ground_outcome(ended_scenario.get("opponents", 1) or 1, won)
+                        sampler.record_ground_outcome(ended_scenario.get("opponents", 1) or 1, won, ended_difficulty)
                         ground_outcomes_this_update[outcome] += 1
                     else:
                         if ended_difficulty is not None:

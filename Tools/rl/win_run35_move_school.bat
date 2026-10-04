@@ -17,6 +17,8 @@ REM ground attacks: p(attack | grounded, enemy < 2 m) = 1e-4, so ground attacks 
 REM keeps attack at p >= 0.05 everywhere (training only; greedy play unchanged). S1's clock was restarted.
 REM 06:55 (OGRL-20261004-016): the floor now applies only while GROUNDED (mid-jump it launched the leg cannon
 REM early: training 1v3 wins fell ~0.22 -> ~0.05; greedy play was unaffected, 8/20).
+REM 07:50 (OGRL-20261004-017): ground-only fights get their own difficulty ramp (start U(0.1,0.3), +0.1 per
+REM 50%% win over 300 top-band fights); stage gates count only ground fights at d >= 0.9. Normal fights d=1.0.
 call :acquire %*
 exit /b %ERRORLEVEL%
 
