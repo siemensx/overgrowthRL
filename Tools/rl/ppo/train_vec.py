@@ -617,7 +617,9 @@ def main():
     # OGRL-20260817-028 Sec5: ActorCritic/ObservationNormalizer now take the
     # layout + frame_stack directly (they need to know where the entity
     # region lives within each stacked frame), not just a flat obs_dim.
-    policy = ActorCritic(layout, frame_stack=args.frame_stack).to(device)
+    _ln = bool(resumed_checkpoint is not None and ActorCritic.state_dict_has_layer_norm(resumed_checkpoint["policy"]))
+    policy = ActorCritic(layout, frame_stack=args.frame_stack, layer_norm=_ln).to(device)
+    print(f"policy architecture: layer_norm={_ln}")
     if args.button_floor:
         print(f"button floor: {set_button_floor(policy, args.button_floor)}")
     policy.detach_critic_features = bool(args.critic_detach_shared)

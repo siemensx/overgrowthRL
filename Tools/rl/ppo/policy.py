@@ -227,7 +227,8 @@ def set_button_floor(policy: "ActorCritic", spec: str | None, grounded_only: boo
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, layout, frame_stack: int = 1, hidden_dim: int = 256, entity_embed_dim: int = 64):
+    def __init__(self, layout, frame_stack: int = 1, hidden_dim: int = 256, entity_embed_dim: int = 64,
+                 layer_norm: bool = False):
         """layout: obs_schema.ObsLayout (or any object exposing the same
         entities_start/max_visible_entities/total_floats contract). Replaces
         the old flat obs_dim constructor arg (Sec5's checkpoint-invalidating
@@ -246,37 +247,13 @@ class ActorCritic(nn.Module):
         self.obs_dim = self.frame_floats * self.frame_stack  # kept for logging/back-compat only
 
         self.entity_encoder = EntityEncoder(self.entity_floats, entity_embed_dim)
-        self.proprioception_branch = nn.Sequential(
-            _layer_init(nn.Linear(self.non_entity_per_frame * self.frame_stack, hidden_dim)),
-            nn.Tanh(),
-        )
-        trunk_input_dim = hidden_dim + entity_embed_dim * self.frame_stack
-
-        # Separate actor/critic trunks (not shared) -- the more common choice
-        # in continuous-control PPO baselines (the original PPO paper's
-        # MuJoCo experiments, most spinning-up-style implementations), which
-        # avoids the actor and critic losses fighting over shared features --
-        # a real risk here given how different "what should I do" and "how
-        # good is this state" are for a combat task. The entity encoder
-        # itself IS shared between actor and critic (one set of weights) --
-        # both need the same "what's out there" summary, and splitting it
-        # would double the entity-encoder parameter count for no known benefit.
-        self.actor_trunk = nn.Sequential(
-            _layer_init(nn.Linear(trunk_input_dim, hidden_dim)),
-            nn.Tanh(),
-            _layer_init(nn.Linear(hidden_dim, hidden_dim)),
-            nn.Tanh(),
-        )
+        self._hidden_dim = hidden_dim
+        self._trunk_input_dim = hidden_dim + entity_embed_dim * self.frame_stack
+        self.layer_norm = bool(layer_norm)
+        self._build_trunks(self.layer_norm)
         self.continuous_mean = _layer_init(nn.Linear(hidden_dim, CONTINUOUS_DIM), gain=0.01)
         self.continuous_log_std = nn.Parameter(torch.zeros(CONTINUOUS_DIM))  # state-independent, standard PPO practice
         self.discrete_logits = _layer_init(FlooredLogits(hidden_dim, DISCRETE_DIM), gain=0.01)
-
-        self.critic_trunk = nn.Sequential(
-            _layer_init(nn.Linear(trunk_input_dim, hidden_dim)),
-            nn.Tanh(),
-            _layer_init(nn.Linear(hidden_dim, hidden_dim)),
-            nn.Tanh(),
-        )
         self.critic_out = _layer_init(nn.Linear(hidden_dim, 1), gain=1.0)
         # 2026-09-20 (review): entity_encoder + proprioception_branch are SHARED
         # by actor and critic and both losses go through one backward pass, so
@@ -284,6 +261,38 @@ class ActorCritic(nn.Module):
         # on, the critic trunk learns on a detached copy of the shared features
         # -- the causal test for critic->actor representation interference.
         self.detach_critic_features = False
+
+    @staticmethod
+    def state_dict_has_layer_norm(state_dict) -> bool:
+        return "actor_trunk.4.weight" in state_dict
+
+    def load_state_dict(self, state_dict, strict: bool = True):
+        """Rebuilds the trunks to match the checkpoint's architecture (plain or LayerNorm,
+        OGRL-20261004-019) so every loader keeps working unchanged. Build the optimizer AFTER this."""
+        want = self.state_dict_has_layer_norm(state_dict)
+        if want != self.layer_norm:
+            device = next(self.parameters()).device
+            self._build_trunks(want)
+            self.layer_norm = want
+            self.to(device)
+        return super().load_state_dict(state_dict, strict)
+
+    def _build_trunks(self, layer_norm: bool) -> None:
+        """LayerNorm before each tanh (OGRL-20261004-019): the plain trunks saturated to ~95% of
+        |tanh| > 0.99 with 4x weight growth by ~180-260M steps and stopped learning (plasticity loss);
+        normalising pre-activations keeps them in tanh's responsive range (Lyle et al. 2023)."""
+        hidden_dim, trunk_input_dim = self._hidden_dim, self._trunk_input_dim
+
+        def block(i, o):
+            return [_layer_init(nn.Linear(i, o))] + ([nn.LayerNorm(o)] if layer_norm else []) + [nn.Tanh()]
+
+        self.proprioception_branch = nn.Sequential(*block(self.non_entity_per_frame * self.frame_stack, hidden_dim))
+
+        # Separate actor/critic trunks (not shared) -- the more common choice
+        # in continuous-control PPO baselines, which avoids the actor and critic losses fighting over
+        # shared features. The entity encoder itself IS shared between actor and critic.
+        self.actor_trunk = nn.Sequential(*block(trunk_input_dim, hidden_dim), *block(hidden_dim, hidden_dim))
+        self.critic_trunk = nn.Sequential(*block(trunk_input_dim, hidden_dim), *block(hidden_dim, hidden_dim))
 
     def _features(self, obs: torch.Tensor) -> torch.Tensor:
         """obs: (batch, frame_stack * frame_floats), the exact flat layout
