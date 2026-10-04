@@ -56,6 +56,15 @@ from policy import ActorCritic
 from normalize import ObservationNormalizer
 
 
+def _control_lines(args) -> list:
+    lines = list(args.config_line)
+    if args.controls:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from canonical_eval import CONTROLS
+        lines = CONTROLS[args.controls] + lines
+    return lines
+
+
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--checkpoint", required=True, help="path saved by train.py/train_vec.py's _save_checkpoint")
@@ -117,6 +126,11 @@ def parse_args():
     p.add_argument("--spectator-fov", type=float, default=110.0,
                    help="render-only chase-camera FOV in degrees (default: 110; engine range 1..179)")
     p.add_argument("--episode-events", default=None, help="JSONL path for rendered recorder episode boundaries")
+    p.add_argument("--controls", default=None,
+                   help="OGRL-20261004: engine control/observation profile, same names as canonical_eval.py "
+                        "(corrected, corrected-nofeint, v6-omni, v6-omni-old, old). Unset = engine defaults, which "
+                        "is the OLD turbo profile -- wrong for every checkpoint trained since 2026-09-24.")
+    p.add_argument("--config-line", action="append", default=[], help="extra engine config line (repeatable)")
     args = p.parse_args()
 
     if not 1.0 <= args.spectator_fov <= 179.0:
@@ -219,6 +233,7 @@ def main():
         throw_aggression_launch=args.throw_aggression,
         auto_camera=args.auto_camera,
         spectator_fov=args.spectator_fov,
+        extra_config_lines=_control_lines(args),
     )
     try:
         for episode in range(args.episodes):

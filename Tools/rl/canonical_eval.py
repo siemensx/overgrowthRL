@@ -55,6 +55,9 @@ CONTROLS = {
     "v6-omni": ["rl_target_select: 2", "rl_button_edges: 1", "rl_no_feint: 1", "rl_obs_omniscient: 1",
                 "rl_stick_deadzone: 0.3", "rl_stance_walk: 1"],
     "old": [],  # auto-repeating buttons + frozen-camera targeting: everything trained before 2026-09-24
+    # "old" (turbo buttons, frozen-camera targeting) plus the v6 see-everyone listing. Legal under the
+    # 2026-10-02 fairness decision; for turbo-era checkpoints transplanted by surgery_v5_to_v6.py.
+    "v6-omni-old": ["rl_obs_omniscient: 1"],
 }
 
 
