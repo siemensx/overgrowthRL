@@ -4,7 +4,7 @@ REM held .77/.39/.14) continued under the same v2 rules with two changes, both a
 REM   1. 12 training maps (t_train_101..112) instead of 3 -- the unseen-map gap is the largest left; 107-112
 REM      were generated 2026-10-04 (gen_arena_map.py --randomize, seeds 107-112, 109/110/112 with clutter).
 REM      t_held_203 stays out. 10 active + 2 standby engines = 12 = one map per engine (AGENTS invariant 6).
-REM   2. --entropy-target 0.5: run31's fixed 0.003 bonus let entropy collapse 1.71 -> -1.14 with flat 1v3.
+REM   2. --entropy-target 0.5 (coef capped at 0.01): run31's fixed 0.003 bonus let entropy collapse 1.71 -> -1.14 with flat 1v3.
 REM Gate (canonical suite v2, v6-omni): 1v3 held-out > 18/100 and train >= 29/100 by ~40M steps, else stop.
 REM First launch seeds from run32_seed.pt (copy of run31_surgery_000378394332.pt) with 5 critic-only updates.
 call :acquire %*
@@ -47,7 +47,7 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run32.log
   --total-timesteps 2000000000 --n-steps 1024 --n-epochs 2 --minibatch-size 1024 ^
   --kl-mode adaptive --kl-hard-factor 4 --critic-full-batch --lr-min 0.00001 --lr-max 0.0003 ^
   --gamma 0.997 --gae-lambda 0.975 --reward-profile win_v2 --stall-target-weight 0 ^
-  --entropy-coef 0.003 --entropy-target 0.5 ^
+  --entropy-coef 0.003 --entropy-target 0.5 --entropy-coef-max 0.01 ^
   --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 ^
   --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 20 ^
   --d-max-start 1.0 --d-max-cap 1.0 --d-step 0.1 --d-min 1.0 ^
