@@ -53,6 +53,8 @@ def main() -> int:
     ap.add_argument("--config-line", action="append", default=[])
     ap.add_argument("--shm-name", default=None)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--sampled", action="store_true",
+                    help="sample actions like training (incl. the grounded attack floor) instead of greedy")
     ap.add_argument("--ground-only", action="store_true",
                     help="OGRL-20261004-010: run every episode under the move-school ground-only rule")
     a = ap.parse_args()
@@ -66,6 +68,9 @@ def main() -> int:
     pol = ActorCritic(L, frame_stack=fs)
     pol.load_state_dict(ck["policy"])
     pol.eval()
+    if a.sampled:
+        from policy import set_button_floor
+        set_button_floor(pol, "attack=0.1")
     nrm = ObservationNormalizer(L, frame_stack=fs)
     nrm.load_state_dict(ck["obs_normalizer"])
 
@@ -92,7 +97,11 @@ def main() -> int:
             except OSError:
                 off = 0
             segments.append((off, sid))
-        return deterministic_action(pol, torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0))
+        x = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+        if a.sampled:
+            with torch.no_grad():
+                return pol.get_action_and_value(x)[0].squeeze(0).numpy()
+        return deterministic_action(pol, x)
 
     t0 = time.time()
     try:
@@ -140,7 +149,7 @@ def main() -> int:
         "feint_share_of_attacks": (feints / n_att) if n_att else None,
         "agent_moves": dict(attacks), "opponent_attacks": opp_attacks, "opponent_moves": dict(opp_moves),
         "attribution": "per-segment self id (OGRL-20261004-014)",
-        "ground_only": bool(a.ground_only), "blocked_air_attacks": int(getattr(env, "blocked_air_attacks", 0)),
+        "ground_only": bool(a.ground_only), "sampled": bool(a.sampled), "blocked_air_attacks": int(getattr(env, "blocked_air_attacks", 0)),
         "self_ids": sorted(self_ids), "seconds": round(time.time() - t0, 1),
     }
     Path(a.out).write_text(json.dumps(payload, indent=1))
