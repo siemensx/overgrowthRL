@@ -201,6 +201,42 @@ class EntityEncoder(nn.Module):
         return pooled
 
 
+class AttentionEntityEncoder(nn.Module):
+    """OGRL-20261004-025: attention over fighters instead of a masked max-pool.
+
+    The max-pool keeps, per feature, the largest value across enemies -- it blends them, so the
+    network cannot tell WHICH enemy is winding up while it engages another. Here (after Necto/Nexto,
+    the strongest Rocket League bots: Perceiver-style cross-attention over entities, LayerNorm, no
+    recurrence) every fighter becomes a token, the agent's own per-frame state becomes a query token,
+    and one pre-norm transformer layer lets all tokens attend to each other, padding slots masked.
+    Output per frame = Linear([self token, masked max over entity tokens]) -> embed_dim, so the trunk
+    input size is unchanged."""
+
+    def __init__(self, entity_floats: int, self_floats: int, embed_dim: int = 64, heads: int = 4):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.entity_in = nn.Sequential(_layer_init(nn.Linear(entity_floats, embed_dim)), nn.LayerNorm(embed_dim), nn.GELU())
+        self.self_in = nn.Sequential(_layer_init(nn.Linear(self_floats, embed_dim)), nn.LayerNorm(embed_dim), nn.GELU())
+        self.attn = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=heads, dim_feedforward=2 * embed_dim,
+                                               dropout=0.0, activation="gelu", batch_first=True, norm_first=True)
+        self.out = nn.Sequential(nn.LayerNorm(2 * embed_dim), _layer_init(nn.Linear(2 * embed_dim, embed_dim)), nn.Tanh())
+
+    def forward(self, entities: torch.Tensor, valid_mask: torch.Tensor, self_feats: torch.Tensor) -> torch.Tensor:
+        """entities (B, F, N, E), valid_mask (B, F, N), self_feats (B, F, S) -> (B, F, embed_dim)."""
+        B, F_, N, E = entities.shape
+        ent = self.entity_in(entities.reshape(B * F_, N, E))
+        me = self.self_in(self_feats.reshape(B * F_, -1)).unsqueeze(1)
+        tokens = torch.cat([me, ent], dim=1)                                    # (B*F, 1+N, D)
+        valid = valid_mask.reshape(B * F_, N) > 0.5
+        pad = torch.cat([torch.zeros(B * F_, 1, dtype=torch.bool, device=valid.device), ~valid], dim=1)
+        h = self.attn(tokens, src_key_padding_mask=pad)
+        self_tok = h[:, 0]
+        ent_tok = h[:, 1:].masked_fill(~valid.unsqueeze(-1), torch.finfo(h.dtype).min)
+        pooled = ent_tok.max(dim=1).values
+        pooled = torch.where(valid.any(dim=1, keepdim=True), pooled, torch.zeros_like(pooled))
+        return self.out(torch.cat([self_tok, pooled], dim=-1)).reshape(B, F_, self.embed_dim)
+
+
 BUTTON_NAMES = ("jump", "crouch", "attack", "grab", "drop", "walk")
 
 
@@ -228,7 +264,7 @@ def set_button_floor(policy: "ActorCritic", spec: str | None, grounded_only: boo
 
 class ActorCritic(nn.Module):
     def __init__(self, layout, frame_stack: int = 1, hidden_dim: int = 256, entity_embed_dim: int = 64,
-                 layer_norm: bool = False):
+                 layer_norm: bool = False, entity_attention: bool = False):
         """layout: obs_schema.ObsLayout (or any object exposing the same
         entities_start/max_visible_entities/total_floats contract). Replaces
         the old flat obs_dim constructor arg (Sec5's checkpoint-invalidating
@@ -246,7 +282,9 @@ class ActorCritic(nn.Module):
         self.non_entity_per_frame = self.frame_floats - self.entities_region
         self.obs_dim = self.frame_floats * self.frame_stack  # kept for logging/back-compat only
 
-        self.entity_encoder = EntityEncoder(self.entity_floats, entity_embed_dim)
+        self._entity_embed_dim = entity_embed_dim
+        self.entity_attention = bool(entity_attention)
+        self._build_entity_encoder(self.entity_attention)
         self._hidden_dim = hidden_dim
         self._trunk_input_dim = hidden_dim + entity_embed_dim * self.frame_stack
         self.layer_norm = bool(layer_norm)
@@ -266,15 +304,30 @@ class ActorCritic(nn.Module):
     def state_dict_has_layer_norm(state_dict) -> bool:
         return "actor_trunk.4.weight" in state_dict
 
+    @staticmethod
+    def state_dict_has_entity_attention(state_dict) -> bool:
+        return any(k.startswith("entity_encoder.attn.") for k in state_dict)
+
+    def _build_entity_encoder(self, attention: bool) -> None:
+        if attention:
+            self.entity_encoder = AttentionEntityEncoder(self.entity_floats, self.non_entity_per_frame,
+                                                         self._entity_embed_dim)
+        else:
+            self.entity_encoder = EntityEncoder(self.entity_floats, self._entity_embed_dim)
+
     def load_state_dict(self, state_dict, strict: bool = True):
         """Rebuilds the trunks to match the checkpoint's architecture (plain or LayerNorm,
         OGRL-20261004-019) so every loader keeps working unchanged. Build the optimizer AFTER this."""
+        device = next(self.parameters()).device
         want = self.state_dict_has_layer_norm(state_dict)
         if want != self.layer_norm:
-            device = next(self.parameters()).device
             self._build_trunks(want)
             self.layer_norm = want
-            self.to(device)
+        want_attn = self.state_dict_has_entity_attention(state_dict)
+        if want_attn != self.entity_attention:
+            self._build_entity_encoder(want_attn)
+            self.entity_attention = want_attn
+        self.to(device)
         return super().load_state_dict(state_dict, strict)
 
     def _build_trunks(self, layer_norm: bool) -> None:
@@ -317,7 +370,10 @@ class ActorCritic(nn.Module):
             dim=-1,
         )  # (batch, frame_stack, non_entity_per_frame)
 
-        entity_embed = self.entity_encoder(entities, valid_mask)  # (batch, frame_stack, entity_embed_dim)
+        if self.entity_attention:
+            entity_embed = self.entity_encoder(entities, valid_mask, non_entity)
+        else:
+            entity_embed = self.entity_encoder(entities, valid_mask)  # (batch, frame_stack, entity_embed_dim)
         entity_embed_flat = entity_embed.reshape(batch, -1)
         prop_flat = non_entity.reshape(batch, -1)
         prop_features = self.proprioception_branch(prop_flat)

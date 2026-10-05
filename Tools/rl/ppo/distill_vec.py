@@ -67,6 +67,7 @@ def parse_args():
     p.add_argument("--move-school", action="store_true", help="sample the move-school scenario mix")
     p.add_argument("--opponents-cap", type=int, default=3)
     p.add_argument("--layer-norm", action="store_true")
+    p.add_argument("--entity-attention", action="store_true", help="student uses attention over fighters")
     p.add_argument("--total-steps", type=int, default=6_000_000)
     p.add_argument("--teacher-acts-iters", type=int, default=60)
     p.add_argument("--replay", type=int, default=150_000, help="ring buffer of labelled states (~8.3 KB each)")
@@ -119,7 +120,7 @@ def main() -> int:
     out = Path(a.out)
     state_path = out.with_suffix(".distill_state.pt")
 
-    student = ActorCritic(layout, frame_stack=fs, layer_norm=a.layer_norm)
+    student = ActorCritic(layout, frame_stack=fs, layer_norm=a.layer_norm, entity_attention=a.entity_attention)
     with torch.no_grad():
         student.continuous_log_std.copy_(teacher.continuous_log_std)
     opt = torch.optim.Adam(student.parameters(), lr=a.lr, eps=1e-5)

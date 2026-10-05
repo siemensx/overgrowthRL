@@ -151,6 +151,10 @@ def parse_args():
                     help="OGRL-20261004-015: minimum press probability per button during training, e.g. "
                          "'attack=0.1' -> attack is pressed with p >= 0.05 in every state. Not saved in the "
                          "checkpoint; greedy play (mode) is unchanged.")
+    p.add_argument("--layer-norm", action="store_true",
+                    help="fresh runs: LayerNorm before every trunk tanh (OGRL-20261004-019). Resumes follow the checkpoint.")
+    p.add_argument("--entity-attention", action="store_true",
+                    help="fresh runs: attention over fighters instead of max-pool (OGRL-20261004-025). Resumes follow the checkpoint.")
     p.add_argument("--move-school-stages", default=None,
                     help="OGRL-20261004-024: JSON file with the stage list (same keys as curriculum."
                          "MOVE_SCHOOL_STAGES); default = the built-in schedule")
@@ -621,9 +625,13 @@ def main():
     # OGRL-20260817-028 Sec5: ActorCritic/ObservationNormalizer now take the
     # layout + frame_stack directly (they need to know where the entity
     # region lives within each stacked frame), not just a flat obs_dim.
-    _ln = bool(resumed_checkpoint is not None and ActorCritic.state_dict_has_layer_norm(resumed_checkpoint["policy"]))
-    policy = ActorCritic(layout, frame_stack=args.frame_stack, layer_norm=_ln).to(device)
-    print(f"policy architecture: layer_norm={_ln}")
+    if resumed_checkpoint is not None:
+        _ln = ActorCritic.state_dict_has_layer_norm(resumed_checkpoint["policy"])
+        _att = ActorCritic.state_dict_has_entity_attention(resumed_checkpoint["policy"])
+    else:
+        _ln, _att = bool(args.layer_norm), bool(args.entity_attention)
+    policy = ActorCritic(layout, frame_stack=args.frame_stack, layer_norm=_ln, entity_attention=_att).to(device)
+    print(f"policy architecture: layer_norm={_ln} entity_attention={_att}")
     if args.button_floor:
         print(f"button floor: {set_button_floor(policy, args.button_floor)}")
     policy.detach_critic_features = bool(args.critic_detach_shared)
