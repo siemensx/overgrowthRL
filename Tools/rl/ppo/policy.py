@@ -212,9 +212,16 @@ class AttentionEntityEncoder(nn.Module):
     Output per frame = Linear([self token, masked max over entity tokens]) -> embed_dim, so the trunk
     input size is unchanged."""
 
-    def __init__(self, entity_floats: int, self_floats: int, embed_dim: int = 64, heads: int = 4):
+    def __init__(self, entity_floats: int, self_floats: int, embed_dim: int = 64, heads: int = 4,
+                 last_frame_only: bool = False):
         super().__init__()
         self.embed_dim = embed_dim
+        # last_frame_only (OGRL-20261005-002): attention for the NEWEST stacked frame only; older frames
+        # (which mainly carry motion) use the cheap masked max-pool encoder. ~4x less attention work --
+        # the full version cost 7.8x per update minibatch on the trainer and ~1/3 of throughput.
+        self.last_frame_only = bool(last_frame_only)
+        if self.last_frame_only:
+            self.pool = EntityEncoder(entity_floats, embed_dim)
         self.entity_in = nn.Sequential(_layer_init(nn.Linear(entity_floats, embed_dim)), nn.LayerNorm(embed_dim), nn.GELU())
         self.self_in = nn.Sequential(_layer_init(nn.Linear(self_floats, embed_dim)), nn.LayerNorm(embed_dim), nn.GELU())
         self.attn = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=heads, dim_feedforward=2 * embed_dim,
@@ -223,6 +230,13 @@ class AttentionEntityEncoder(nn.Module):
 
     def forward(self, entities: torch.Tensor, valid_mask: torch.Tensor, self_feats: torch.Tensor) -> torch.Tensor:
         """entities (B, F, N, E), valid_mask (B, F, N), self_feats (B, F, S) -> (B, F, embed_dim)."""
+        if self.last_frame_only:
+            older = self.pool(entities[:, :-1], valid_mask[:, :-1])                     # (B, F-1, D)
+            newest = self._attend(entities[:, -1:], valid_mask[:, -1:], self_feats[:, -1:])
+            return torch.cat([older, newest], dim=1)
+        return self._attend(entities, valid_mask, self_feats)
+
+    def _attend(self, entities: torch.Tensor, valid_mask: torch.Tensor, self_feats: torch.Tensor) -> torch.Tensor:
         B, F_, N, E = entities.shape
         ent = self.entity_in(entities.reshape(B * F_, N, E))
         me = self.self_in(self_feats.reshape(B * F_, -1)).unsqueeze(1)
@@ -264,7 +278,7 @@ def set_button_floor(policy: "ActorCritic", spec: str | None, grounded_only: boo
 
 class ActorCritic(nn.Module):
     def __init__(self, layout, frame_stack: int = 1, hidden_dim: int = 256, entity_embed_dim: int = 64,
-                 layer_norm: bool = False, entity_attention: bool = False):
+                 layer_norm: bool = False, entity_attention: bool = False, attention_last_frame_only: bool = False):
         """layout: obs_schema.ObsLayout (or any object exposing the same
         entities_start/max_visible_entities/total_floats contract). Replaces
         the old flat obs_dim constructor arg (Sec5's checkpoint-invalidating
@@ -284,6 +298,7 @@ class ActorCritic(nn.Module):
 
         self._entity_embed_dim = entity_embed_dim
         self.entity_attention = bool(entity_attention)
+        self.attention_last_frame_only = bool(attention_last_frame_only)
         self._build_entity_encoder(self.entity_attention)
         self._hidden_dim = hidden_dim
         self._trunk_input_dim = hidden_dim + entity_embed_dim * self.frame_stack
@@ -308,10 +323,15 @@ class ActorCritic(nn.Module):
     def state_dict_has_entity_attention(state_dict) -> bool:
         return any(k.startswith("entity_encoder.attn.") for k in state_dict)
 
+    @staticmethod
+    def state_dict_attention_last_frame_only(state_dict) -> bool:
+        return any(k.startswith("entity_encoder.pool.") for k in state_dict)
+
     def _build_entity_encoder(self, attention: bool) -> None:
         if attention:
             self.entity_encoder = AttentionEntityEncoder(self.entity_floats, self.non_entity_per_frame,
-                                                         self._entity_embed_dim)
+                                                         self._entity_embed_dim,
+                                                         last_frame_only=getattr(self, "attention_last_frame_only", False))
         else:
             self.entity_encoder = EntityEncoder(self.entity_floats, self._entity_embed_dim)
 
@@ -324,7 +344,9 @@ class ActorCritic(nn.Module):
             self._build_trunks(want)
             self.layer_norm = want
         want_attn = self.state_dict_has_entity_attention(state_dict)
-        if want_attn != self.entity_attention:
+        want_last = self.state_dict_attention_last_frame_only(state_dict)
+        if want_attn != self.entity_attention or want_last != self.attention_last_frame_only:
+            self.attention_last_frame_only = want_last
             self._build_entity_encoder(want_attn)
             self.entity_attention = want_attn
         self.to(device)

@@ -29,9 +29,10 @@ def obs_with(n_valid: int, batch: int = 8, seed: int = 0) -> torch.Tensor:
     return x.reshape(batch, -1)
 
 
-def net(seed: int = 1) -> ActorCritic:
+def net(seed: int = 1, last: bool = False) -> ActorCritic:
     torch.manual_seed(seed)
-    return ActorCritic(L, frame_stack=FS, layer_norm=True, entity_attention=True).eval()
+    return ActorCritic(L, frame_stack=FS, layer_norm=True, entity_attention=True,
+                       attention_last_frame_only=last).eval()
 
 
 def heads(p, x):
@@ -45,6 +46,20 @@ def ent_view(x):
     ef = L.entity_slice(0).stop - L.entity_slice(0).start
     return x.view(x.shape[0], FS, L.total_floats)[:, :, L.entities_start:L.entities_start + L.max_visible_entities * ef] \
         .reshape(x.shape[0], FS, L.max_visible_entities, ef)
+
+
+def test_last_frame_variant():
+    p = net(last=True)
+    sd = p.state_dict()
+    q = ActorCritic(L, frame_stack=FS)
+    q.load_state_dict(sd)
+    assert q.attention_last_frame_only and q.entity_attention
+    x = obs_with(3)
+    assert torch.allclose(heads(p, x), heads(q.eval(), x), atol=1e-6)
+    y = x.clone()
+    ev = ent_view(y)
+    ev[:, :, [0, 1, 2]] = ent_view(x)[:, :, [2, 0, 1]].clone()
+    assert torch.allclose(heads(p, x), heads(p, y), atol=1e-5)
 
 
 def test_permutation_invariance():
@@ -92,9 +107,10 @@ def test_cost_report():
     torch.set_num_threads(2)
     old = ActorCritic(L, frame_stack=FS, layer_norm=True)
     new = net()
+    last = net(last=True)
     for name, bs, train in (("collect (20 envs)", 20, False), ("update minibatch", 1024, True)):
         res = {}
-        for tag, p in (("maxpool", old), ("attention", new)):
+        for tag, p in (("maxpool", old), ("attention", new), ("attn-last", last)):
             x = obs_with(3, batch=bs)
             p.train(train)
             t0 = time.perf_counter()
@@ -108,7 +124,8 @@ def test_cost_report():
                         p.get_action_and_value(x)
             res[tag] = (time.perf_counter() - t0) / (20 if train else 200) * 1000
         print(f"  {name}: maxpool {res['maxpool']:.2f} ms, attention {res['attention']:.2f} ms "
-              f"(x{res['attention'] / res['maxpool']:.2f})")
+              f"(x{res['attention'] / res['maxpool']:.2f}), last-frame {res['attn-last']:.2f} ms "
+              f"(x{res['attn-last'] / res['maxpool']:.2f})")
     print(f"  params: maxpool {sum(t.numel() for t in old.parameters()):,}, "
           f"attention {sum(t.numel() for t in new.parameters()):,}")
 

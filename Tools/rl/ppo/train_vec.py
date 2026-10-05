@@ -155,6 +155,8 @@ def parse_args():
                     help="fresh runs: LayerNorm before every trunk tanh (OGRL-20261004-019). Resumes follow the checkpoint.")
     p.add_argument("--entity-attention", action="store_true",
                     help="fresh runs: attention over fighters instead of max-pool (OGRL-20261004-025). Resumes follow the checkpoint.")
+    p.add_argument("--attention-last-frame-only", action="store_true",
+                    help="with --entity-attention: attention on the newest stacked frame only (OGRL-20261005-002)")
     p.add_argument("--move-school-stages", default=None,
                     help="OGRL-20261004-024: JSON file with the stage list (same keys as curriculum."
                          "MOVE_SCHOOL_STAGES); default = the built-in schedule")
@@ -630,8 +632,12 @@ def main():
         _att = ActorCritic.state_dict_has_entity_attention(resumed_checkpoint["policy"])
     else:
         _ln, _att = bool(args.layer_norm), bool(args.entity_attention)
-    policy = ActorCritic(layout, frame_stack=args.frame_stack, layer_norm=_ln, entity_attention=_att).to(device)
-    print(f"policy architecture: layer_norm={_ln} entity_attention={_att}")
+        _last = bool(args.attention_last_frame_only)
+    if resumed_checkpoint is not None:
+        _last = ActorCritic.state_dict_attention_last_frame_only(resumed_checkpoint["policy"])
+    policy = ActorCritic(layout, frame_stack=args.frame_stack, layer_norm=_ln, entity_attention=_att,
+                         attention_last_frame_only=_last).to(device)
+    print(f"policy architecture: layer_norm={_ln} entity_attention={_att} last_frame_only={_last}")
     if args.button_floor:
         print(f"button floor: {set_button_floor(policy, args.button_floor)}")
     policy.detach_critic_features = bool(args.critic_detach_shared)
