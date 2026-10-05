@@ -45,6 +45,12 @@ from train import _save_checkpoint  # noqa: E402
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--teacher", required=True)
+    p.add_argument("--teacher-ground", default=None,
+                   help="OGRL-20261004-023: optional second teacher used on ANNOUNCED ground-only fights "
+                        "(rule visible); --teacher labels everything else. Its own normaliser is used for its "
+                        "inputs; the student uses --teacher's normaliser.")
+    p.add_argument("--force-stage", type=int, default=None,
+                   help="override the move-school stage restored from --teacher (sets the scenario mix)")
     p.add_argument("--out", required=True, help="student checkpoint path (train_vec format)")
     p.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[3]))
     p.add_argument("--levels", required=True)
@@ -126,6 +132,17 @@ def main() -> int:
                               opponents_cap=a.opponents_cap, opp_sampling="learnability", rng_seed=a.seed + it0,
                               move_school_stages=MOVE_SCHOOL_STAGES if a.move_school else ())
     sampler.load_curriculum_state(tck.get("curriculum"))
+    if a.force_stage is not None and a.move_school:
+        sampler._ms_stage = int(a.force_stage)
+    gteacher = gnrm = None
+    if a.teacher_ground:
+        gck = torch.load(a.teacher_ground, map_location="cpu", weights_only=False)
+        gteacher = ActorCritic(layout, frame_stack=fs)
+        gteacher.load_state_dict(gck["policy"])
+        gteacher.eval()
+        gnrm = ObservationNormalizer(layout, frame_stack=fs)
+        gnrm.load_state_dict(gck["obs_normalizer"])
+        print(f"[distill] ground teacher {a.teacher_ground} step {int(gck['global_step']):,}", flush=True)
     levels = [s.strip() for s in a.levels.split(",") if s.strip()]
     venv = VecOvergrowthEnv(n_envs=a.n_envs, repo_root=a.repo_root, level=levels, shm_prefix=a.shm_prefix,
                             base_seed=a.seed * 1000 + it0, layout=layout, reward_config=win_v2_reward_config(),
@@ -153,6 +170,15 @@ def main() -> int:
             for _ in range(a.n_steps):
                 x = torch.as_tensor(nrm.normalize(obs, update=False), dtype=torch.float32)
                 tm, tl, tv = heads(teacher, x)
+                if gteacher is not None:
+                    gmask = torch.tensor([bool(sc.get("ground_only")) and not bool(sc.get("rule_hidden"))
+                                          for sc in venv._episode_scenario[:x.shape[0]]])
+                    if bool(gmask.any()):
+                        xg = torch.as_tensor(gnrm.normalize(obs, update=False), dtype=torch.float32)
+                        gm, gl, gv = heads(gteacher, xg)
+                        tm = torch.where(gmask[:, None], gm, tm)
+                        tl = torch.where(gmask[:, None], gl, tl)
+                        tv = torch.where(gmask, gv, tv)
                 sm, sl, _sv = heads(student, x)
                 agree.append(float(((tl > 0) == (sl > 0)).float().mean()))
                 if teacher_acts:
