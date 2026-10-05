@@ -77,6 +77,10 @@ def main() -> int:
     env = OvergrowthEnv(repo_root=str(HERE.parents[1]), level=a.level, shm_name=shm, seed=a.seed_base,
                         act_period=4, frame_stack=fs, log_attacks=True, extra_config_lines=a.config_line)
     log_path = env._write_dir.parent / (env._write_dir.name + ".log")
+    if os.name == "nt":
+        # OGRL-20261005-003: the Windows engine writes its log to <write_dir>/logfile.txt, not stdout,
+        # so the stdout capture holds ~300 bytes and every RLATK line is missed.
+        log_path = env._write_dir / "logfile.txt"
     if a.ground_only:
         _reset = env.reset
         env.reset = lambda *args, **kw: _reset(*args, ground_only=True, **kw)
