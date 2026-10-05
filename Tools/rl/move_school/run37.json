@@ -1,0 +1,5 @@
+[
+ {"label": "S2b integrate", "ground_prob": 0.25, "ground_max_opponents": 2, "hidden_share": 0.3,
+  "min_steps": 10000000, "max_steps": 30000000, "gate_opponents": 2, "gate_win_rate": 0.40},
+ {"label": "S3b refresher", "ground_prob": 0.12, "ground_max_opponents": 3, "hidden_share": 0.5}
+]

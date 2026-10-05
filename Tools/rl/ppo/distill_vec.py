@@ -49,6 +49,10 @@ def parse_args():
                    help="OGRL-20261004-023: optional second teacher used on ANNOUNCED ground-only fights "
                         "(rule visible); --teacher labels everything else. Its own normaliser is used for its "
                         "inputs; the student uses --teacher's normaliser.")
+    p.add_argument("--move-school-stages", default=None, help="JSON stage list for the distillation scenario mix")
+    p.add_argument("--force-ground-cap", type=float, default=None, help="ground-only difficulty cap during distillation")
+    p.add_argument("--out-stage", type=int, default=None, help="move-school stage written into the output checkpoint")
+    p.add_argument("--out-ground-cap", type=float, default=None, help="ground difficulty cap written into the output")
     p.add_argument("--force-stage", type=int, default=None,
                    help="override the move-school stage restored from --teacher (sets the scenario mix)")
     p.add_argument("--out", required=True, help="student checkpoint path (train_vec format)")
@@ -130,10 +134,13 @@ def main() -> int:
 
     sampler = ScenarioSampler(d_max_start=1.0, d_max_cap=1.0, d_min=1.0, opponents=a.opponents_cap,
                               opponents_cap=a.opponents_cap, opp_sampling="learnability", rng_seed=a.seed + it0,
-                              move_school_stages=MOVE_SCHOOL_STAGES if a.move_school else ())
+                              move_school_stages=(tuple(json.load(open(a.move_school_stages))) if a.move_school_stages
+                                                  else MOVE_SCHOOL_STAGES) if a.move_school else ())
     sampler.load_curriculum_state(tck.get("curriculum"))
     if a.force_stage is not None and a.move_school:
         sampler._ms_stage = int(a.force_stage)
+    if a.force_ground_cap is not None and a.move_school:
+        sampler._ms_d_cap = float(a.force_ground_cap)
     gteacher = gnrm = None
     if a.teacher_ground:
         gck = torch.load(a.teacher_ground, map_location="cpu", weights_only=False)
@@ -256,6 +263,10 @@ def main() -> int:
     fresh_opt = torch.optim.Adam(student.parameters(), lr=3e-4, eps=1e-5)
     os.environ.setdefault("OGRL_ALLOW_CHECKPOINT_REGRESSION", "1")
     cur = dict(tck.get("curriculum") or {})
+    if a.out_stage is not None:
+        cur["move_school_stage"] = int(a.out_stage)
+    if a.out_ground_cap is not None:
+        cur["move_school_ground_d_cap"] = float(a.out_ground_cap)
     if cur.get("move_school_stage") is not None:
         cur["move_school_stage_start"] = int(tck["global_step"])  # the student gets a full window in its stage
     _save_checkpoint(str(out), student, fresh_opt, nrm, rn, int(tck["global_step"]), curriculum=cur)

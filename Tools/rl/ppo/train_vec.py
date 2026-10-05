@@ -151,6 +151,9 @@ def parse_args():
                     help="OGRL-20261004-015: minimum press probability per button during training, e.g. "
                          "'attack=0.1' -> attack is pressed with p >= 0.05 in every state. Not saved in the "
                          "checkpoint; greedy play (mode) is unchanged.")
+    p.add_argument("--move-school-stages", default=None,
+                    help="OGRL-20261004-024: JSON file with the stage list (same keys as curriculum."
+                         "MOVE_SCHOOL_STAGES); default = the built-in schedule")
     p.add_argument("--move-school", action="store_true",
                     help="OGRL-20261004-010: staged ground-only episodes (no air attacks; rule visible in the "
                          "observation) per curriculum.MOVE_SCHOOL_STAGES, advancing automatically. "
@@ -592,7 +595,8 @@ def main():
         opp_gate_window=args.opp_gate_window, opp_gate_min_samples=args.opp_gate_min_samples,
         opp_keep_solo=args.opp_keep_solo, opp_sampling=args.opp_sampling,
         rng_seed=args.seed,
-        move_school_stages=MOVE_SCHOOL_STAGES if args.move_school else (),
+        move_school_stages=(tuple(json.load(open(args.move_school_stages))) if args.move_school_stages
+                            else MOVE_SCHOOL_STAGES) if args.move_school else (),
     )
     if args.move_school and "rl_no_feint: 1" not in args.engine_config_line:
         raise SystemExit("--move-school needs --engine-config-line 'rl_no_feint: 1': the rule flag lives in the "
