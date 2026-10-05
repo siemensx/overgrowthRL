@@ -8,6 +8,8 @@ REM t_train_101..124 (t_held_203 never trained on), 20 active + 4 standby = one 
 REM Learner: run35/36 settings (mb1024 x2 adaptive KL, critic full batch, win_v2), entropy target 0.5 (coef
 REM <= 0.01) and the grounded attack floor (attack=0.1) to keep ground attacks explored. No move school.
 REM 03:45 (OGRL-20261005-002): attention on the newest stacked frame only (full version cost ~1/3 of throughput).
+REM 12:10 (OGRL-20261005-004): + grab floor 0.3 gated on "an enemy within 2 m is attacking" -- the counter-throw
+REM window (baseline at 15.2M: 0 counter-throws in 20 1v1, 2 in 20 1v3). No reward change.
 REM Judge ONLY on canonical suite v2 every ~50M steps; first gate at ~50M: 1v1 train >= .60.
 call :acquire %*
 exit /b %ERRORLEVEL%
@@ -50,7 +52,7 @@ echo [%date% %time%] %RUN%: launch %TRIES% %START% >> C:\ogrl\run38.log
   --total-timesteps 2000000000 --n-steps 512 --n-epochs 2 --minibatch-size 1024 ^
   --kl-mode adaptive --kl-hard-factor 4 --critic-full-batch --lr-min 0.00001 --lr-max 0.0003 ^
   --gamma 0.997 --gae-lambda 0.975 --reward-profile win_v2 --stall-target-weight 0 ^
-  --entropy-coef 0.003 --entropy-target 0.5 --entropy-coef-max 0.01 --button-floor attack=0.1 ^
+  --entropy-coef 0.003 --entropy-target 0.5 --entropy-coef-max 0.01 --button-floor attack=0.1,grab=0.3@threat ^
   --learning-rate 0.0003 --target-kl 0.02 --max-episode-steps 1200 ^
   --frame-stack 4 --act-period 4 --soft-reset --hard-reset-every 20 ^
   --d-max-start 0.15 --d-max-cap 1.0 --d-step 0.1 --d-min 0.0 ^

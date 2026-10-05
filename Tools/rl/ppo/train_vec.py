@@ -43,7 +43,7 @@ from tape import TapeRecorder, decision_record
 from ogreplay import runtime_fingerprint
 from emergence import EmergenceAccumulator
 
-from policy import ActorCritic, CONTINUOUS_DIM, DISCRETE_DIM, set_button_floor
+from policy import ActorCritic, CONTINUOUS_DIM, DISCRETE_DIM, refresh_floor_stats, set_button_floor
 from vec_buffer import VecRolloutBuffer
 from normalize import ObservationNormalizer, RewardNormalizer
 from train import ppo_update, _explained_variance, _save_checkpoint  # reuse, not reimplement
@@ -638,8 +638,6 @@ def main():
     policy = ActorCritic(layout, frame_stack=args.frame_stack, layer_norm=_ln, entity_attention=_att,
                          attention_last_frame_only=_last).to(device)
     print(f"policy architecture: layer_norm={_ln} entity_attention={_att} last_frame_only={_last}")
-    if args.button_floor:
-        print(f"button floor: {set_button_floor(policy, args.button_floor)}")
     policy.detach_critic_features = bool(args.critic_detach_shared)
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.learning_rate, eps=1e-5)
     update_forward = policy.get_action_and_value
@@ -788,6 +786,9 @@ def main():
         raw_obs = vec_env.reset(seeds=[args.seed + i for i in range(args.n_envs)])
         print(f"[RL_READY] t={time.time():.6f} active_workers={args.n_envs} "
               f"ready_standbys={len(vec_env._standby)}", flush=True)
+        if args.button_floor:
+            # after the normaliser is final (fresh or resumed): @threat gates read its entity stats
+            print(f"button floor: {set_button_floor(policy, args.button_floor, normalizer=obs_normalizer)}")
         obs = obs_normalizer.normalize(raw_obs)
         raw_obs_current = raw_obs  # OGRL-20260817-028 Sec8.1: the raw (unnormalized) observation each
                                     # step's action was actually chosen from -- tape.decision_record needs
@@ -1179,6 +1180,8 @@ def main():
             logger.heartbeat("updating", global_step, update=update)
             stats = ppo_update(policy, optimizer, batch, args, update_forward=update_forward)
             stats["value_warmup"] = int(args._value_only)
+            if args.button_floor and getattr(policy, "floor_gates", None) and "threat" in policy.floor_gates:
+                refresh_floor_stats(policy, obs_normalizer)  # between this batch's update and the next collection
             if args.entropy_target is not None and not args._value_only:
                 step = 1.05 if stats["entropy"] < args.entropy_target else 1 / 1.05
                 args.entropy_coef = float(min(args.entropy_coef_max, max(args.entropy_coef_min, args.entropy_coef * step)))

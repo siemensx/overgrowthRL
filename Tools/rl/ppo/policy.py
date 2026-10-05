@@ -162,7 +162,9 @@ class FlooredLogits(nn.Linear):
             return z
         f = self.floor.to(dtype=z.dtype, device=z.device)
         g = self.gate
-        if g is not None and g.numel() == z[..., 0].numel():
+        if g is not None and g.dim() == 2 and g.shape[-1] == z.shape[-1] and g.shape[0] * g.shape[1] == z.numel():
+            f = f * g.reshape(z.shape).to(dtype=z.dtype, device=z.device)            # per-head gates (B, 6)
+        elif g is not None and g.numel() == z[..., 0].numel():
             f = f * g.reshape(z.shape[:-1]).to(dtype=z.dtype, device=z.device).unsqueeze(-1)
         p = 0.5 * f + (1.0 - f) * torch.sigmoid(z)
         return torch.where(f > 0, torch.log(p) - torch.log1p(-p), z)  # unfloored heads pass through exactly
@@ -254,26 +256,57 @@ class AttentionEntityEncoder(nn.Module):
 BUTTON_NAMES = ("jump", "crouch", "attack", "grab", "drop", "walk")
 
 
-def set_button_floor(policy: "ActorCritic", spec: str | None, grounded_only: bool = True) -> dict:
-    """spec like 'attack=0.1,grab=0.05' -> per-head floor on policy.discrete_logits; '' or None clears.
+FLOOR_GATES = ("all", "grounded", "threat")
+THREAT_RANGE_M = 2.0
 
-    grounded_only (default): the floor applies only when the agent is on the ground in the newest
-    frame. Measured 2026-10-04 (OGRL-20261004-016): an unconditional attack floor fires mid-jump and
-    launches the leg cannon early -- training-time 1v3 wins fell from ~0.22 to ~0.05."""
+
+def set_button_floor(policy: "ActorCritic", spec: str | None, grounded_only: bool = True,
+                     normalizer=None) -> dict:
+    """spec like 'attack=0.1,grab=0.3@threat' -> per-head floor on policy.discrete_logits; '' or None clears.
+
+    Each entry may name the state in which its floor applies (newest frame):
+      @grounded  the agent is on the ground (default when grounded_only). OGRL-20261004-016: an
+                 unconditional attack floor fires mid-jump and launches the leg cannon early.
+      @threat    an enemy within THREAT_RANGE_M is in its attack state -- the window in which a grab
+                 becomes the over-shoulder counter-throw (OGRL-20261005-004). Needs `normalizer`
+                 (entity distance/state are read back through its mean/std).
+      @all       always."""
     policy.floor_grounded_only = bool(grounded_only)
-    floors = {}
+    floors, gates = {}, {}
     if spec:
         for part in spec.split(","):
             name, val = part.split("=")
+            gate = "grounded" if grounded_only else "all"
+            if "@" in val:
+                val, gate = val.split("@")
+            if gate not in FLOOR_GATES:
+                raise ValueError(f"unknown floor gate '{gate}' (use {FLOOR_GATES})")
             floors[name.strip()] = float(val)
+            gates[name.strip()] = gate
     unknown = set(floors) - set(BUTTON_NAMES)
     if unknown:
         raise ValueError(f"unknown buttons in --button-floor: {sorted(unknown)}")
     if not floors:
         policy.discrete_logits.floor = None
+        policy.floor_gates = None
     else:
         policy.discrete_logits.floor = torch.tensor([floors.get(b, 0.0) for b in BUTTON_NAMES])
-    return floors
+        policy.floor_gates = [gates.get(b, "all") for b in BUTTON_NAMES]
+        if "threat" in policy.floor_gates:
+            if normalizer is None:
+                raise ValueError("a @threat floor needs the observation normalizer")
+            refresh_floor_stats(policy, normalizer)
+    return {k: f"{v}@{gates[k]}" for k, v in floors.items()}
+
+
+def refresh_floor_stats(policy: "ActorCritic", normalizer) -> None:
+    """Snapshot the entity normaliser's mean/std of distance (field 8) and the attack-state one-hot
+    (field 15) so the @threat gate can recover raw values from normalised observations. Refresh it
+    only between an update and the next collection, so sampling and re-evaluation of one batch use
+    the same snapshot."""
+    rms = normalizer.entity_rms
+    policy.floor_entity_mean = torch.as_tensor(rms.mean, dtype=torch.float32).clone()
+    policy.floor_entity_std = torch.as_tensor(rms.std, dtype=torch.float32).clone()
 
 
 class ActorCritic(nn.Module):
@@ -377,8 +410,25 @@ class ActorCritic(nn.Module):
         [proprioception_branch_out, entity_embed_frame_0, ..., entity_embed_frame_{K-1}]."""
         batch = obs.shape[0]
         frames = obs.view(batch, self.frame_stack, self.frame_floats)
-        if self.discrete_logits.floor is not None and getattr(self, "floor_grounded_only", False):
+        gates = getattr(self, "floor_gates", None)
+        if self.discrete_logits.floor is not None and gates is not None:
+            newest = frames[:, -1]
             # normalised GROUNDED of the newest frame: (g - mean)/std is > 0 exactly when g = 1
+            grounded = (newest[:, self.layout.GROUNDED] > 0).float()
+            threat = torch.zeros_like(grounded)
+            if "threat" in gates:
+                ent = newest[:, self.entities_start:self.entities_start + self.entities_region].reshape(
+                    batch, self.n_entities, self.entity_floats)
+                mean, std = self.floor_entity_mean, self.floor_entity_std
+                dist = ent[..., 8] * std[8] + mean[8]
+                attacking = ent[..., 15] * std[15] + mean[15]          # state one-hot: attack
+                ally = ent[..., 23] * std[23] + mean[23]
+                hostile = (ent[..., 0] > 0.5) & (attacking > 0.5) & (dist < THREAT_RANGE_M) & (ally < 0.5)
+                threat = hostile.any(dim=-1).float()
+            cols = [torch.ones_like(grounded) if g == "all" else (grounded if g == "grounded" else threat)
+                    for g in gates]
+            self.discrete_logits.gate = torch.stack(cols, dim=-1)
+        elif self.discrete_logits.floor is not None and getattr(self, "floor_grounded_only", False):
             self.discrete_logits.gate = frames[:, -1, self.layout.GROUNDED] > 0
         else:
             self.discrete_logits.gate = None
