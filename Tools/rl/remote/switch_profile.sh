@@ -50,18 +50,24 @@ if [ "$PROFILE" = "--status" ]; then running_runs; exit 0; fi
 
 if [ "$PROFILE" != "--stop" ]; then
   [ -f "$HERE/profiles/$PROFILE.json" ] || die "no profile Tools/rl/profiles/$PROFILE.json"
-  say "1. trainer checkout"
-  git -C "$HERE/../.." fetch -q origin && \
-    [ "$(git -C "$HERE/../.." rev-parse HEAD)" = "$(git -C "$HERE/../.." rev-parse '@{u}')" ] || \
-    die "local branch is not pushed / not equal to its upstream -- commit and push first (the trainer pulls from git)"
-  pull=$([ $DRY = 1 ] && echo 'git fetch -q; "would fast-forward: " + ((git log --oneline HEAD..@{u}) -join " | ")' || echo 'git pull --ff-only 2>&1 | Select-Object -Last 1')
+  say "1. code: this Mac's pushed branch vs the trainer's checkout"
+  BRANCH=$(git -C "$HERE/../.." rev-parse --abbrev-ref HEAD)
+  git -C "$HERE/../.." fetch -q origin "$BRANCH" && \
+    [ "$(git -C "$HERE/../.." rev-parse HEAD)" = "$(git -C "$HERE/../.." rev-parse FETCH_HEAD)" ] || \
+    die "$BRANCH is not pushed (local HEAD != origin) -- commit and push first; the trainer only takes code from git"
+  # The trainer checkout is a DETACHED HEAD at a commit of $BRANCH; it moves only forward.
   out=$(cat <<EOF | ps1
 cd $REPO
 \$d = git status --porcelain --untracked-files=no
-if (\$d) { "DIRTY: " + (\$d -join '; ') } else { $pull; "HEAD " + (git rev-parse --short HEAD) }
+if (\$d) { "DIRTY: " + (\$d -join '; ') }
+git fetch -q origin $BRANCH 2>&1 | Out-Null
+git merge-base --is-ancestor HEAD FETCH_HEAD; if (\$LASTEXITCODE -ne 0) { "NOT-FORWARD: trainer HEAD is not an ancestor of origin/$BRANCH" }
+"trainer at " + (git rev-parse --short HEAD) + "; will move forward over: " + ((git log --oneline HEAD..FETCH_HEAD) -join " | ")
 EOF
 )
-  echo "$out"; echo "$out" | grep -q '^DIRTY' && die "trainer checkout has local changes"
+  echo "$out"
+  echo "$out" | grep -q '^DIRTY' && die "trainer checkout has local changes"
+  echo "$out" | grep -q '^NOT-FORWARD' && die "trainer checkout is not behind $BRANCH -- inspect it by hand"
 fi
 
 say "2. stop the running run gracefully"
@@ -85,28 +91,38 @@ EOF
 done < <(echo "$info" | grep '^RUNNING')
 [ "$PROFILE" = "--stop" ] && exit 0
 
+say "2b. move the trainer checkout to origin/$BRANCH"
+run "git checkout --detach origin/$BRANCH" <<EOF
+cd $REPO
+git fetch -q origin $BRANCH 2>&1 | Out-Null
+git checkout -q --detach FETCH_HEAD 2>&1 | Out-Null
+"trainer now at " + (git rev-parse --short HEAD)
+EOF
+
 say "3. maps and level script on the trainer"
 need=$(cd "$HERE" && python3 -c "
 import sys; sys.argv=['x','$PROFILE']; import run_profile as r
 print(' '.join(r.load_profile('$PROFILE')['levels']))")
 DATA_MAC=$(cd "$HERE" && python3 -c 'import paths;print(paths.data_dir())')
-DATA_WIN=$(echo "cd $REPO; & '$PY' -c 'import sys; sys.path.insert(0, \"Tools/rl\"); import paths; print(paths.data_dir())'" | ps1 | tail -1)
-[ -z "$DATA_WIN" ] && die "could not resolve the trainer's Data directory"
+DATA_WIN=$(printf '%s\n' "cd $REPO; & '$PY' -c \"import sys; sys.path.insert(0, 'Tools/rl'); import paths; print(paths.data_dir())\"" | ps1 | tail -1)
+case "$DATA_WIN" in [A-Z]:\\*) ;; *) die "could not resolve the trainer's Data directory (got: $DATA_WIN)";; esac
 echo "trainer Data: $DATA_WIN"
-missing=$(for l in $need; do echo "if (-not (Test-Path '$DATA_WIN\\Levels\\${l//\//\\}')) { '$l' }"; done | ps1)
+missing=$(for l in $need; do printf '%s\n' "if (-not (Test-Path '$DATA_WIN\\Levels\\${l//\//\\}')) { '$l' }"; done | ps1)
 for l in $missing; do
   [ -f "$DATA_MAC/Levels/$l" ] || die "map $l missing on BOTH hosts -- generate it on the Mac first"
   echo "copying $l to the trainer"
   if [ $DRY = 0 ]; then
-    scp -q "$DATA_MAC/Levels/$l" "$HOST:$(echo "$DATA_WIN/Levels/$l" | sed 's#\\#/#g')" || die "scp of $l failed"
+    # via a staging folder: the Steam path has spaces and parentheses, which scp to Windows mangles
+    printf '%s\n' 'New-Item -ItemType Directory -Force C:\ogrl\maps_staging | Out-Null' | ps1 >/dev/null
+    scp -q "$DATA_MAC/Levels/$l" "$HOST:C:/ogrl/maps_staging/$(basename "$l")" || die "scp of $l failed"
     m1=$(md5 -q "$DATA_MAC/Levels/$l")
-    m2=$(echo "(Get-FileHash -Algorithm MD5 '$DATA_WIN\\Levels\\${l//\//\\}').Hash.ToLower()" | ps1 | tail -1)
+    m2=$(printf '%s\n' "Copy-Item -Force 'C:\ogrl\maps_staging\\$(basename "$l")' '$DATA_WIN\\Levels\\${l//\//\\}'; (Get-FileHash -Algorithm MD5 '$DATA_WIN\\Levels\\${l//\//\\}').Hash.ToLower()" | ps1 | tail -1)
     [ "$m1" = "$m2" ] || die "MD5 mismatch for $l ($m1 vs $m2)"
   fi
 done
 req=$(python3 -c "import json;print(json.load(open('$HERE/profiles/$PROFILE.json')).get('requires_scenario') or '')")
 if [ -n "$req" ]; then
-  has=$(echo "Select-String -Path '$DATA_WIN\\Scripts\\arena_level_1v1_unarmed.as' -Pattern '$req' -Quiet" | ps1 | tail -1)
+  has=$(printf '%s\n' "Select-String -Path '$DATA_WIN\\Scripts\\arena_level_1v1_unarmed.as' -Pattern '$req' -Quiet" | ps1 | tail -1)
   if [ "$has" != "True" ]; then
     echo "level script predates $req -- regenerating it on the trainer (backward compatible: persona 0 = old opponent)"
     run "gen_1v1_scenario.py on the trainer" <<EOF
@@ -116,7 +132,7 @@ EOF
 fi
 
 say "4. preflight on the trainer"
-pre=$(echo "cd $REPO; & '$PY' Tools\rl\run_profile.py $PROFILE --check 2>&1" | ps1)
+pre=$(printf '%s\n' "cd $REPO; & '$PY' Tools\rl\run_profile.py $PROFILE --check 2>&1" | ps1)
 echo "$pre"
 echo "$pre" | grep -q '"problems": \[\]' || { [ $DRY = 1 ] && echo "[dry-run] preflight would fail as above" || die "preflight failed"; }
 
