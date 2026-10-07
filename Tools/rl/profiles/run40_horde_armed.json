@@ -1,0 +1,12 @@
+{
+  "_doc": "OGRL-20261007-006 (switched off). Forks run38 at switch time onto the 12 horde maps (t_horde_301..312; t_horde_held_401 is never trained on). Opponent count unlocks 3 -> 7 on the existing gate (60% at the current max), and the armed ladder climbs B1 -> C on its deterministic gate. 12 engines, not 20: every engine carries up to 8 characters, so per-engine memory roughly doubles, and engine count must stay a multiple of the 12-map corpus. Question: how far up the 1vN ladder does the agent get, armed and unarmed (robust r1 horde cells)?",
+  "base": "_base_v6_attn.json",
+  "run_id": "run40_horde_armed",
+  "seed": 40,
+  "shm_tag": "r40",
+  "seed_from": "run38_attn_last.pt",
+  "requires_scenario": "rl_persona",
+  "levels": "arenas/t_horde_{301..312}.xml",
+  "purpose": "OGRL-20261007-006 run40: run38 fork, horde maps, opponents up to 1v7, armed ladder B1..C",
+  "args": ["--n-envs", "12", "--k-standby", "0", "--opponents-cap", "7", "--armed-stage", "1"]
+}

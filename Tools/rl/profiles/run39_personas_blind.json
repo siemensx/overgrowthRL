@@ -1,0 +1,12 @@
+{
+  "_doc": "OGRL-20261007-005 (switched off until the user turns it on). Forks run38 at switch time. Same maps, same learner; 50% of fights are against a non-stock persona (patient/passive/berserker/expert/mixed) and 30% of fights hide the AI's intent fields. Question: does run38's win rate against patient and passive opponents (robust suite r1, where it times out) rise without losing suite v2? Expect suite v2 1v3 to dip first (fewer stock fights), robust r1 personas + blind cells to rise.",
+  "base": "_base_v6_attn.json",
+  "run_id": "run39_personas_blind",
+  "seed": 39,
+  "shm_tag": "r39",
+  "seed_from": "run38_attn_last.pt",
+  "requires_scenario": "rl_persona",
+  "purpose": "OGRL-20261007-005 run39: run38 fork + opponent personas (50%) + hidden AI intent (30%)",
+  "args": ["--persona-mix", "patient=0.15,passive=0.1,berserker=0.05,expert=0.1,mixed=0.1",
+           "--hide-intent-prob", "0.3"]
+}

@@ -1,0 +1,10 @@
+{
+  "_doc": "The run that is training now (OGRL-20261005-002), expressed as a profile. Identical arguments to win_run38_scratch_attn.bat; switching to it resumes run38 where it stopped.",
+  "base": "_base_v6_attn.json",
+  "run_id": "run38_attn_last",
+  "seed": 38,
+  "shm_tag": "r38b",
+  "seed_from": null,
+  "purpose": "OGRL-20261005-002 run38b: from scratch, LayerNorm + attention (newest frame) over fighters, 24 maps, run30 curriculum",
+  "args": []
+}

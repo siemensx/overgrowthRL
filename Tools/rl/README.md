@@ -36,7 +36,13 @@ health signal, not a result. See the script docstring for the determinism caveat
 
 ## Train
 
-Windows trainer (the grinder): one tracked launcher per run, e.g. `win_run29.bat`, registered as a
+**One click (OGRL-20261007-008):** a run is a JSON profile in `profiles/`; from the Mac,
+`remote/switch_profile.sh <profile>` stops the current run gracefully, syncs maps and the level script,
+preflights, and points the single scheduled task `OGRL_Train` at `win_train.bat <profile>`
+(`run_profile.py` = resume / fork / fresh + the 4-hour recycle). `--status`, `--stop`, `--dry-run`.
+See `profiles/README.md`. Older per-run `win_runNN.bat` launchers are in `attic/launchers/`.
+
+Windows trainer (the grinder): registered as a
 non-elevated scheduled task. Binding co-tenant rules (the box also runs the user's fbm / Aura /
 vastwatch workers): engines + trainer `OGRL_*_PRIORITY=below`, `OGRL_*_AFFINITY=0x3FF` (CPUs 0–9;
 10–13 stay free), ≤12 engines, `--max-wall-hours 6` (engines leak ~190 MB/h committed memory), kill
@@ -55,8 +61,8 @@ inflates the stick's sigma (OGRL-20261002-017); keep it at 0.003 or fix the esti
 |---|---|
 | core library | `env.py shm_env.py vec_env.py obs_schema.py reward.py curriculum.py paths.py telemetry.py run_config.py tape.py ogreplay.py emergence.py noaslr.py` |
 | trainer | `ppo/train_vec.py ppo/train.py ppo/policy.py ppo/normalize.py ppo/vec_buffer.py ppo/watch.py`, `remote_rollout.py` (only with `--remote-workers`) |
-| evaluation | `canonical_eval.py` (THE benchmark), `evaluate.py` (one cell), `bench.py` (periodic), `benchmark_compare.py` (paired per-seed stats) |
-| maps | `gen_arena_map.py` (no overwrite guard — never reuse a live map name), `gen_1v1_scenario.py`, `gen_human_duel_scenario.py`, `validate_maps.py`, `fork_workshop_level.py` |
+| evaluation | `canonical_eval.py` (THE benchmark), `robust_eval.py` (robustness suite r1: personas, hidden intent, armed, 1v4-1v7), `evaluate.py` (one cell), `bench.py` (periodic), `benchmark_compare.py` (paired per-seed stats) |
+| maps | `gen_arena_map.py` (no overwrite guard — never reuse a live map name; `--horde N` adds 1v4..1vN groups), `gen_horde_maps.sh`, `gen_1v1_scenario.py`, `gen_human_duel_scenario.py`, `validate_maps.py`, `fork_workshop_level.py` |
 | behaviour probes | `probe_feint.py probe_button_edges.py probe_self_motion.py probe_self_identity.py probe_damage_context.py probe_ko_accounting.py probe_throws.py action_profile.py move_stats.py kill_attribution.py measure_visibility.py visibility_outcome.py greedy_ab.py action_mode_probe.py diagnose_checkpoint.py` |
 | scripted baselines | `engine_ai_baseline.py` (privileged), `observation_oracle_bot.py` (**left/right mirrored, results invalid until fixed**) |
 | watch / play | `play_match.py play_1v3_human.py play_match_forever.sh record_watch.py render_smoke.sh replay_*.py dashboard/` |

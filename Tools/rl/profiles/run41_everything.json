@@ -1,0 +1,25 @@
+{
+  "_doc": "OGRL-20261007-007 (switched off). Both new axes at once, for after run39 and run40 have each shown their axis is learnable: personas 50%, hidden intent 30%, opponents up to 1v7, armed ladder from B1. Horde maps only, because a map without the 1vN group falls back to 1v3 and the fight becomes unwinnable (run_profile.py refuses that mix). 12 engines, one per map.",
+  "base": "_base_v6_attn.json",
+  "run_id": "run41_everything",
+  "seed": 41,
+  "shm_tag": "r41",
+  "seed_from": "run38_attn_last.pt",
+  "requires_scenario": "rl_persona",
+  "levels": "arenas/t_horde_{301..312}.xml",
+  "purpose": "OGRL-20261007-007 run41: run38 fork, horde maps, personas + hidden intent + 1v7 + armed ladder",
+  "args": [
+    "--n-envs",
+    "12",
+    "--k-standby",
+    "0",
+    "--opponents-cap",
+    "7",
+    "--armed-stage",
+    "1",
+    "--persona-mix",
+    "patient=0.15,passive=0.1,berserker=0.05,expert=0.1,mixed=0.1",
+    "--hide-intent-prob",
+    "0.3"
+  ]
+}

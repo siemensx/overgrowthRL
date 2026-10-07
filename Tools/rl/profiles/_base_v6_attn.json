@@ -1,0 +1,23 @@
+{
+  "_doc": "Shared learner + engine settings of run38 (OGRL-20261005-001/002/004). A profile's own args are appended after these, so a repeated single-value flag in the profile wins.",
+  "controls": "v6-omni",
+  "args": [
+    "--n-envs", "20", "--k-standby", "4", "--allow-n-envs-change",
+    "--total-timesteps", "2000000000", "--n-steps", "512", "--n-epochs", "2", "--minibatch-size", "1024",
+    "--kl-mode", "adaptive", "--kl-hard-factor", "4", "--critic-full-batch", "--lr-min", "0.00001", "--lr-max", "0.0003",
+    "--gamma", "0.997", "--gae-lambda", "0.975", "--reward-profile", "win_v2", "--stall-target-weight", "0",
+    "--entropy-coef", "0.003", "--entropy-target", "0.5", "--entropy-coef-max", "0.01",
+    "--button-floor", "attack=0.1,grab=0.3@threat",
+    "--learning-rate", "0.0003", "--target-kl", "0.02", "--max-episode-steps", "1200",
+    "--frame-stack", "4", "--act-period", "4", "--soft-reset", "--hard-reset-every", "20",
+    "--d-max-start", "0.15", "--d-max-cap", "1.0", "--d-step", "0.1", "--d-min", "0.0",
+    "--opponents-cap", "3", "--opp-keep-solo", "0.2", "--opp-sampling", "learnability", "--armed-stage", "0",
+    "--collection-torch-threads", "2", "--update-torch-threads", "6", "--torch-interop-threads", "1",
+    "--periodic-eval-steps", "5000000", "--periodic-eval-episodes", "200", "--periodic-eval-sampled", "0",
+    "--periodic-eval-parallel", "2",
+    "--max-wall-hours", "4",
+    "--no-tapes", "--no-native-capture", "--device", "cpu"
+  ],
+  "fresh_args": ["--layer-norm", "--entity-attention", "--attention-last-frame-only"],
+  "levels": "arenas/t_train_{101..124}.xml"
+}
