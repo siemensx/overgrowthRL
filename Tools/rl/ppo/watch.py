@@ -162,6 +162,21 @@ def parse_args():
         if args.act_period is None:
             args.act_period = cfg["act_period"]
     args.level = args.level or "arenas/oval_arena.xml"
+    if args.frame_stack is None or args.act_period is None:
+        # 2026-10-07: read what the checkpoint itself records instead of defaulting to 1 -- the old default
+        # made every plain `watch.py --checkpoint X` refuse a frame_stack=4 checkpoint. act_period is not
+        # stored in checkpoints; every run since run8 trains at 4 (30 Hz decisions), so that is the default.
+        try:
+            meta = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+            ck_fs = meta.get("frame_stack")
+        except Exception:
+            ck_fs = None
+        if args.frame_stack is None and ck_fs:
+            args.frame_stack = int(ck_fs)
+            print(f"frame_stack {args.frame_stack} (from checkpoint)")
+        if args.act_period is None and ck_fs:
+            args.act_period = 4
+            print("act_period 4 (training default since run8; pass --act-period to override)")
     args.frame_stack = args.frame_stack if args.frame_stack is not None else 1
     args.act_period = args.act_period if args.act_period is not None else 1
     return args
