@@ -97,6 +97,21 @@ def _run_chunk(ckpt, cell, flags, out, seed_base, episodes, extra=()):
         subprocess.call(cmd, cwd=str(HERE), stdout=lf, stderr=subprocess.STDOUT)
 
 
+def run_all_chunks(ckpt: str, todo: list, flags: list[str], out_dir: Path, episodes: int, tag: str,
+                   parallel: int, name=None, extra_of=None) -> None:
+    """Run every chunk of every cell through one pool (OGRL-20261007-010). A cell used to be the unit of
+    parallelism, so a 4-cell run (--only-opp 3) used 4 engines however large --parallel was. Each chunk
+    is already its own engine process on its own seed slice, so running chunks concurrently changes
+    nothing about the episodes -- only the wall time. Results are cached by file, so run_cell afterwards
+    just aggregates. name(cell, k) gives the chunk's output file; extra_of(cell) its extra args."""
+    name = name or (lambda c, k: out_dir / f"{tag}_{c['map']}_{c['opp']}v_s{k:03d}.json")
+    jobs = [(c, k) for c in todo for k in range(0, episodes, CHUNK)]
+    with ThreadPoolExecutor(parallel) as ex:
+        list(ex.map(lambda ck: _run_chunk(ckpt, ck[0], flags, name(ck[0], ck[1]), ck[0]["seed_base"] + ck[1],
+                                          min(CHUNK, episodes - ck[1]),
+                                          extra=extra_of(ck[0]) if extra_of else ()), jobs))
+
+
 def run_cell(ckpt: str, cell: dict, flags: list[str], out_dir: Path, episodes: int, tag: str) -> dict:
     """One cell = ceil(episodes / CHUNK) fresh engine processes on consecutive seed slices.
     OGRL-20261002-007c: within one process, runs stay identical only for the first ~20 episodes."""
@@ -145,8 +160,8 @@ def main() -> int:
             {"cell": c, "wins": [r1["won"], r2["won"]], "same_outcome": same, "same_length": steps,
              "n": len(r1["episodes"])}, indent=1))
         return 0
-    with ThreadPoolExecutor(a.parallel) as ex:
-        res = list(ex.map(lambda c: run_cell(a.checkpoint, c, flags, out_dir, a.episodes, tag), todo))
+    run_all_chunks(a.checkpoint, todo, flags, out_dir, a.episodes, tag, a.parallel)
+    res = [run_cell(a.checkpoint, c, flags, out_dir, a.episodes, tag) for c in todo]
     summary = {"suite": SUITE_VERSION + (f"-only{a.only_opp}v-DIAGNOSTIC" if a.only_opp else ""), "checkpoint": a.checkpoint, "controls": a.controls, "config_lines": flags,
                "episodes_per_cell": a.episodes, "seconds": round(time.time() - t0), "cells": []}
     print(f"\n{tag}  suite {SUITE_VERSION}  controls={a.controls}  ({a.episodes}/cell, d=1.0, greedy)")

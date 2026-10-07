@@ -26,13 +26,12 @@ import argparse
 import json
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from canonical_eval import CONTROLS, CHUNK, wilson, _run_chunk  # noqa: E402
+from canonical_eval import CONTROLS, CHUNK, wilson, _run_chunk, run_all_chunks  # noqa: E402
 
 SUITE_VERSION = "r1-2026-10-07"
 SEED0 = 8_000_000
@@ -66,11 +65,15 @@ def cells() -> list[dict]:
     return out
 
 
+def chunk_path(out_dir: Path, tag: str, cell: dict, k: int) -> Path:
+    return out_dir / f"{tag}_r{cell['idx']:02d}_{cell['map']}_{cell['opp']}v_s{k:03d}.json"
+
+
 def run_cell(ckpt: str, cell: dict, flags: list[str], out_dir: Path, episodes: int, tag: str) -> dict:
     outcomes, eps = {"won": 0, "lost": 0, "timeout": 0}, []
     for k in range(0, episodes, CHUNK):
         m = min(CHUNK, episodes - k)
-        out = out_dir / f"{tag}_r{cell['idx']:02d}_{cell['map']}_{cell['opp']}v_s{k:03d}.json"
+        out = chunk_path(out_dir, tag, cell, k)
         _run_chunk(ckpt, cell, flags, out, cell["seed_base"] + k, m, extra=cell["extra"])
         pol = json.loads(out.read_text())["bands"][0]["policy"]
         for key in outcomes:
@@ -102,8 +105,9 @@ def main() -> int:
     flags = CONTROLS[a.controls]
     tag = Path(a.checkpoint).stem
     t0 = time.time()
-    with ThreadPoolExecutor(a.parallel) as ex:
-        res = list(ex.map(lambda c: run_cell(a.checkpoint, c, flags, out_dir, a.episodes, tag), todo))
+    run_all_chunks(a.checkpoint, todo, flags, out_dir, a.episodes, tag, a.parallel,
+                   name=lambda c, k: chunk_path(out_dir, tag, c, k), extra_of=lambda c: c["extra"])
+    res = [run_cell(a.checkpoint, c, flags, out_dir, a.episodes, tag) for c in todo]
     full = set(groups) >= {"personas", "blind", "armed", "horde"} and a.episodes == EPISODES
     summary = {"suite": SUITE_VERSION + ("" if full else "-DIAGNOSTIC"), "checkpoint": a.checkpoint,
                "controls": a.controls, "config_lines": flags, "episodes_per_cell": a.episodes,
