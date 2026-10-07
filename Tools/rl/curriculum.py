@@ -747,11 +747,20 @@ class ScenarioSampler:
                 self._recent_solo.append((difficulty, won))
             if self._d_max >= self.d_max_cap:
                 return
-            # Window over SOLO episodes, then filter to the top band -- not the
-            # other way round. See _recent_solo's comment for why.
-            window = list(self._recent_solo)[-self.gate_window:]
+            # The most recent gate_window SOLO episodes IN THE TOP BAND (OGRL-20261007-012).
+            # Filtering a fixed 300-episode solo window to the top band starves the gate as d_max
+            # grows: with d ~ U(0, d_max) only d_step/d_max of solo fights land in the top band, so at
+            # d_max 0.95 a 300-window holds ~32 qualifying fights against gate_min_samples 50. run38
+            # sat at d_max 0.95 from ~35M to 76M+ while winning 0.89 of its top-band solo fights, so it
+            # never trained at the difficulty the benchmark uses (1.0). Same bug class as the
+            # 2026-09-06 solo-window fix, one filter further in.
             top_band_lo = self._d_max - self.d_step
-            qualifying = [w for d, w in window if d >= top_band_lo]
+            qualifying = []
+            for d, w in reversed(self._recent_solo):
+                if d >= top_band_lo:
+                    qualifying.append(w)
+                    if len(qualifying) >= self.gate_window:
+                        break
             if len(qualifying) < self.gate_min_samples:
                 return
             win_rate = sum(qualifying) / len(qualifying)
