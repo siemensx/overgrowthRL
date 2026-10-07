@@ -84,7 +84,9 @@ def parse_args():
                    help="default: a fresh name per invocation. A FIXED name means a second watch "
                         "run attaches to the shm segment the first one left behind, which hangs on "
                         "the skybox or times out after 120s (DEAD_ENDS.md's orphaned-semaphore trap).")
-    p.add_argument("--seed", type=int, default=1)
+    # 2026-10-07: default was a fixed 1, so every invocation replayed the SAME starting setups (the user's two
+    # 5-fight runs were the same 5 fights twice). Now random unless given; printed so a fight can be replayed.
+    p.add_argument("--seed", type=int, default=None)
     p.add_argument("--episodes", type=int, default=3)
     # 2026-10-07: was 20 s, which cut 1v3 fights (~20 s of game time on average) short and reported them as
     # "timed out" -- 2 of 10 fights the user watched. The fight now ends where training and the benchmark end it
@@ -164,6 +166,9 @@ def parse_args():
             args.frame_stack = cfg["frame_stack"]
         if args.act_period is None:
             args.act_period = cfg["act_period"]
+    if args.seed is None:
+        args.seed = int.from_bytes(os.urandom(3), "big")
+    print(f"seed {args.seed} (fights use seeds {args.seed}..{args.seed + max(1, args.episodes or 1) - 1})")
     args.level = args.level or "arenas/oval_arena.xml"
     if args.frame_stack is None or args.act_period is None:
         # 2026-10-07: read what the checkpoint itself records instead of defaulting to 1 -- the old default
