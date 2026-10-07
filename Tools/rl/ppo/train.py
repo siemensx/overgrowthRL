@@ -543,6 +543,22 @@ def _checkpoint_step(path) -> int:
         return -1
 
 
+def _replace_with_retry(tmp, path, attempts: int = 60, delay: float = 1.0) -> bool:
+    """os.replace, retried on PermissionError (OGRL-20261006-002). On Windows a destination that another
+    process has open -- e.g. an scp pulling the checkpoint to the Mac -- cannot be replaced
+    ("[WinError 5] Access is denied"); run38 crashed this way at 73.4M on 2026-10-06. Copying a
+    checkpoint must never kill training: wait for the reader to finish instead."""
+    for i in range(attempts):
+        try:
+            os.replace(tmp, path)
+            return True
+        except PermissionError:
+            if i == attempts - 1:
+                return False
+            time.sleep(delay)
+    return False
+
+
 def _save_checkpoint(path: str, policy, optimizer, obs_normalizer, reward_normalizer, global_step: int,
                      archive_every: int = 40, curriculum: dict | None = None) -> None:
     """Write a checkpoint atomically, refusing to regress, keeping snapshots.
@@ -609,7 +625,10 @@ def _save_checkpoint(path: str, policy, optimizer, obs_normalizer, reward_normal
         torch.save(payload, fh)
         fh.flush()
         os.fsync(fh.fileno())
-    os.replace(tmp, path)
+    if not _replace_with_retry(tmp, path):
+        print(f"[checkpoint] WARNING: could not replace {path} (file held open by another process for 60 s); "
+              f"this save is skipped, the new state stays in {tmp} and the next save retries", flush=True)
+        return
 
     _save_checkpoint._n = getattr(_save_checkpoint, "_n", 0) + 1
     if archive_every > 0 and _save_checkpoint._n % archive_every == 0:
