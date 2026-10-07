@@ -80,7 +80,7 @@ def cells():
 CHUNK = 20  # episodes per engine process; see the determinism note in the module docstring
 
 
-def _run_chunk(ckpt, cell, flags, out, seed_base, episodes):
+def _run_chunk(ckpt, cell, flags, out, seed_base, episodes, extra=()):
     if out.exists():
         return
     cmd = [sys.executable, str(HERE / "evaluate.py"), "--checkpoint", ckpt,
@@ -92,6 +92,7 @@ def _run_chunk(ckpt, cell, flags, out, seed_base, episodes):
            "--out", str(out)]
     for f in flags:
         cmd += ["--config-line", f]
+    cmd += list(extra)   # robust_eval.py's scenario flags; suite v2 passes none
     with open(out.with_suffix(".log"), "w") as lf:
         subprocess.call(cmd, cwd=str(HERE), stdout=lf, stderr=subprocess.STDOUT)
 
