@@ -77,6 +77,7 @@ def random_action(rng: np.random.Generator) -> np.ndarray:
 
 
 _ARMED = [0, 0, 1.0]   # armed_count, weapon_type, throw_aggression -- set from args in main()
+_OPPONENT = {"persona": 0, "hide_intent": False}   # OGRL-20261007-002 -- set from args in main()
 
 
 def run_episodes(
@@ -92,7 +93,8 @@ def run_episodes(
     for ep in range(episodes):
         seed = seed_base + ep
         raw_obs = env.reset(seed=seed, soft=False, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
-                            armed_count=_ARMED[0], weapon_type=_ARMED[1], throw_aggression=_ARMED[2])
+                            armed_count=_ARMED[0], weapon_type=_ARMED[1], throw_aggression=_ARMED[2],
+                            persona=_OPPONENT["persona"], hide_intent=_OPPONENT["hide_intent"])
         obs = obs_normalizer.normalize(raw_obs, update=False) if obs_normalizer is not None else None
         ep_components = defaultdict(float)
         won = False
@@ -173,6 +175,10 @@ def parse_args():
     p.add_argument("--opponents", type=int, default=1)
     p.add_argument("--weapons", type=float, default=0.0)
     p.add_argument("--species", type=int, default=0)
+    p.add_argument("--persona", default="stock",
+                   help="OGRL-20261007-002 opponent persona: one of env.PERSONAS (stock = the old opponent)")
+    p.add_argument("--hide-intent", action="store_true",
+                   help="OGRL-20261007-002: zero the AI-intent entity fields in the policy's observation")
     p.add_argument("--stochastic", action="store_true", help="sample from the policy's distribution instead of its deterministic mode")
     p.add_argument("--no-control", action="store_true", help="skip the matched random-policy control (not recommended -- see module docstring)")
     p.add_argument("--config-line", action="append", default=[],
@@ -184,6 +190,9 @@ def parse_args():
                    help="include per-episode seed/outcome records for paired checkpoint comparisons")
     args = p.parse_args()
     _ARMED[0], _ARMED[1], _ARMED[2] = args.armed_count, args.weapon_type, args.throw_aggression
+    from env import PERSONAS
+    _OPPONENT["persona"] = PERSONAS.index(args.persona) if args.persona in PERSONAS else int(args.persona)
+    _OPPONENT["hide_intent"] = bool(args.hide_intent)
     if args.from_run:
         cfg = load_run_env_config(args.repo_root, args.from_run, runs_root=args.runs_root)
         args.level = args.level if args.level is not None else cfg["level"]

@@ -35,6 +35,9 @@ ACTION_DIM = 8
 CONTINUOUS_ACTION_DIM = 2   # move_x, move_y
 DISCRETE_ACTION_DIM = 6     # jump, crouch, attack, grab, drop, walk
 
+# OGRL-20261007-002: opponent personas, by the index the level script decodes (gen_1v1_scenario.py 3b).
+PERSONAS = ("stock", "patient", "passive", "berserker", "expert", "mixed")
+
 _STALE_CLEANUP_LOCK = threading.Lock()
 _STALE_CLEANED_PARENTS: set[Path] = set()
 
@@ -285,6 +288,7 @@ class OvergrowthEnv:
         self.ground_only = False          # move school (OGRL-20261004-010); see reset()
         self._rule_episode = False
         self.rule_hidden = False
+        self.hide_intent = False          # OGRL-20261007-002; see reset()
         self.blocked_air_attacks = 0      # cumulative attack presses dropped by the ground-only rule
         # last_reset_seed: the REAL seed most recently used to reset this
         # env, for episodes.jsonl (OGRL-20260817-028 Sec8.6 -- ghost replay
@@ -603,6 +607,8 @@ class OvergrowthEnv:
         throw_aggression: float = 1.0,
         ground_only: bool | None = None,
         rule_hidden: bool = False,
+        persona: int = 0,
+        hide_intent: bool = False,
     ) -> np.ndarray:
         """Reset the requested scenario, including on a fresh engine.
 
@@ -611,6 +617,13 @@ class OvergrowthEnv:
         is dropped while the agent is airborne or presses jump in the same decision (no jump kick);
         either way the rule is written into the RULE_GROUND_ONLY observation slot of every frame --
         except with rule_hidden=True, where the slot reads 0 so the fight looks normal (OGRL-20261004-012).
+
+        persona (OGRL-20261007-002): opponent temperament, 0 = stock. Packed into the species word as
+        species + 16*persona (the level script splits it), so it needs no engine change; see
+        gen_1v1_scenario.py step 3b and PERSONAS below.
+        hide_intent (OGRL-20261007-002): zero the scripted AI's privileged intent fields (entity
+        fields E_INTENT, i.e. targets_me .. sub-goal one-hot) in every frame of this episode, so
+        the policy must read the fight from bodies alone -- as it must against a human.
 
         The first call drains the engine's natural post-load observation before
         sending the reset request. The returned observation therefore always
@@ -621,6 +634,9 @@ class OvergrowthEnv:
             self._used_initial_observation = True
         reset_seed = seed if seed is not None else self.seed
         reset_start = time.perf_counter()
+        if not 0 <= int(persona) < len(PERSONAS):
+            raise ValueError(f"persona {persona} not in 0..{len(PERSONAS) - 1}")
+        species = int(species) + 16 * int(persona)
         obs = self._shm.reset(reset_seed, soft=soft, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
                           armed_count=armed_count, weapon_type=weapon_type, throw_aggression=throw_aggression)
         self.last_reset_seconds = time.perf_counter() - reset_start  # OGRL-20260817-028 Sec8.2: perf.reset_seconds source
@@ -629,7 +645,10 @@ class OvergrowthEnv:
         self._rule_episode = ground_only is not None
         self.ground_only = bool(ground_only)
         self.rule_hidden = bool(rule_hidden)
+        self.persona = int(persona)
+        self.hide_intent = bool(hide_intent)
         self._mark_rule(obs.values)
+        self._mask_intent(obs.values)
         self._prev_values = obs.values
         self._episode_steps = 0
         if self._prealloc_frame_stack:
@@ -645,6 +664,17 @@ class OvergrowthEnv:
         FEINTING field, constant 0 whenever rl_no_feint is set -- which move school requires)."""
         if self._rule_episode:
             values[self.layout.RULE_GROUND_ONLY] = 1.0 if (self.ground_only and not self.rule_hidden) else 0.0
+
+    def _mask_intent(self, values) -> None:
+        """Zero every entity slot's AI-intent fields when this episode hides them. Runs after the
+        reward is computed, and the reward never reads these fields (they are observation-only)."""
+        if self.hide_intent:
+            ef = self.layout.entity_slice(0).stop - self.layout.entity_slice(0).start
+            base = self.layout.entities_start
+            for slot in range(self.layout.max_visible_entities):
+                o = base + slot * ef
+                for f in range(self.layout.E_INTENT.start, self.layout.E_INTENT.stop):
+                    values[o + f] = 0.0
 
     def write_action(self, action: np.ndarray) -> None:
         """Publish an action without waiting for its observation.
@@ -677,6 +707,7 @@ class OvergrowthEnv:
 
         reward, reward_info = self.reward_computer.compute(self._prev_values, obs.values)
         self._mark_rule(obs.values)
+        self._mask_intent(obs.values)
         self._prev_values = obs.values
 
         info = {"reward_components": reward_info, "episode_steps": self._episode_steps, "engine_step": obs.step}

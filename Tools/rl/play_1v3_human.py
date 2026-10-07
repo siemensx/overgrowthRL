@@ -12,6 +12,8 @@ difficulty and one opponent.
     python3 Tools/rl/play_1v3_human.py                 # 1v3, difficulty 1.0
     python3 Tools/rl/play_1v3_human.py --opponents 1   # the 1v1 the scripted oracle won 90% of
     python3 Tools/rl/play_1v3_human.py --difficulty 0.5
+    python3 Tools/rl/play_1v3_human.py --persona patient --opponents 1          # OGRL-20261007-002
+    python3 Tools/rl/play_1v3_human.py --level arenas/t_horde_301.xml --opponents 6 --persona berserker
 
 Controls are stock Overgrowth. Esc quits. The round restarts on its own after
 a knockout. Rendering is on, so this is real-time.
@@ -33,7 +35,10 @@ import paths
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--level", default="arenas/t_train_101.xml")
-    ap.add_argument("--opponents", type=int, default=3, choices=[1, 2, 3])
+    ap.add_argument("--opponents", type=int, default=3, choices=range(1, 8),
+                    help="4..7 need a horde map (t_horde_*); other maps fall back to 1v3")
+    ap.add_argument("--persona", default="stock",
+                    help="opponent persona: stock, patient, passive, berserker, expert, mixed (env.PERSONAS)")
     ap.add_argument("--difficulty", type=float, default=1.0)
     ap.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[2]))
     ap.add_argument("--binary-path", default=None)
@@ -44,7 +49,10 @@ def main() -> int:
     binary = paths.engine_binary(Path(args.repo_root), args.binary_path)
     write_dir = Path(args.write_dir) if args.write_dir else Path(args.repo_root) / "Tools" / "rl" / "runs" / "human_play" / f"wd-{int(time.time())}"
     write_dir.mkdir(parents=True, exist_ok=True)
+    from env import PERSONAS
+    persona = PERSONAS.index(args.persona)
     config = "\n".join([
+        f"rl_human_persona: {persona}",
         f"rl_human_difficulty: {min(max(args.difficulty, 0.0), 1.0):g}",
         f"rl_human_opponents: {args.opponents}",
         "blood: 0",                  # same NaN-decal mitigation env.py uses for rendered sessions
@@ -56,7 +64,8 @@ def main() -> int:
         "--no-dialogues", "--level", args.level, "--config", config,
     ])
     log = write_dir.parent / f"{write_dir.name}.log"
-    print(f"level={args.level}  opponents={args.opponents}  difficulty={args.difficulty:g}\nlog: {log}", flush=True)
+    print(f"level={args.level}  opponents={args.opponents}  persona={args.persona}  difficulty={args.difficulty:g}"
+          f"\nlog: {log}", flush=True)
     with open(log, "w") as lf:
         proc = subprocess.Popen(cmd, cwd=args.repo_root, stdout=lf, stderr=subprocess.STDOUT)
         try:

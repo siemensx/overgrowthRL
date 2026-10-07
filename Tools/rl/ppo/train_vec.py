@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Tools/rl
 from vec_env import VecOvergrowthEnv
 from env import _cleanup_stale_write_dirs  # disk-low recovery reuses the launch-time stale sweep
 from obs_schema import DEFAULT_LAYOUT, SCHEMA_VERSION
-from curriculum import MOVE_SCHOOL_STAGES, Curriculum, ScenarioSampler
+from curriculum import MOVE_SCHOOL_STAGES, Curriculum, ScenarioSampler, parse_persona_mix
 from reward import run8_reward_config, win_reward_config, win_notimeout_reward_config, win_v2_reward_config
 from telemetry import RunLogger
 from tape import TapeRecorder, decision_record
@@ -160,6 +160,13 @@ def parse_args():
     p.add_argument("--move-school-stages", default=None,
                     help="OGRL-20261004-024: JSON file with the stage list (same keys as curriculum."
                          "MOVE_SCHOOL_STAGES); default = the built-in schedule")
+    p.add_argument("--persona-mix", default="",
+                    help="OGRL-20261007-002: opponent personas per episode, e.g. 'patient=0.15,passive=0.1,"
+                         "berserker=0.1,expert=0.15,mixed=0.1'; the remainder up to 1 is stock. Names: env.PERSONAS. "
+                         "Needs the level script from gen_1v1_scenario.py >= OGRL-20261007-002 on the host.")
+    p.add_argument("--hide-intent-prob", type=float, default=0.0,
+                    help="OGRL-20261007-002: probability an episode zeroes the AI-intent entity fields "
+                         "(obs_schema E_INTENT), so the policy cannot rely on knowing what the AI decided.")
     p.add_argument("--move-school", action="store_true",
                     help="OGRL-20261004-010: staged ground-only episodes (no air attacks; rule visible in the "
                          "observation) per curriculum.MOVE_SCHOOL_STAGES, advancing automatically. "
@@ -296,7 +303,9 @@ def parse_args():
     p.add_argument("--opponents-cap", type=int, default=1,
                    help="maximum opponents the curriculum may unlock (1 disables it). Needs maps "
                         "carrying game_type 3 (1v2) and 4 (1v3); any level without them falls back "
-                        "to the 1v1 pair, so this is safe on oval and every stock arena.")
+                        "to the 1v1 pair, so this is safe on oval and every stock arena. Up to 7 "
+                        "(OGRL-20261007-003) on maps built with gen_arena_map.py --horde N; a level "
+                        "without the 1vN group falls back to its largest group (1v3 on t_train_1xx).")
     p.add_argument("--opp-gate-win-rate", type=float, default=0.60,
                    help="win rate AT THE CURRENT MAX opponent count needed to unlock the next. "
                         "Lower than the difficulty gate on purpose -- being outnumbered should stay hard.")
@@ -603,6 +612,8 @@ def main():
         rng_seed=args.seed,
         move_school_stages=(tuple(json.load(open(args.move_school_stages))) if args.move_school_stages
                             else MOVE_SCHOOL_STAGES) if args.move_school else (),
+        persona_mix=parse_persona_mix(args.persona_mix),
+        hide_intent_prob=args.hide_intent_prob,
     )
     if args.move_school and "rl_no_feint: 1" not in args.engine_config_line:
         raise SystemExit("--move-school needs --engine-config-line 'rl_no_feint: 1': the rule flag lives in the "
@@ -1051,6 +1062,10 @@ def main():
                     ended_seed = infos[i].get("seed")
                     ended_difficulty = ended_scenario.get("difficulty")
                     ended_ground = bool(ended_scenario.get("ground_only"))
+                    if "persona" in ended_scenario or "hide_intent" in ended_scenario:
+                        sampler.record_persona_outcome(ended_scenario.get("persona", 0) or 0,
+                                                       bool(ended_scenario.get("hide_intent")),
+                                                       ended_scenario.get("opponents", 1) or 1, won)
                     if ended_ground:
                         # Move school: a ground-only fight is not evidence for any gate that certifies
                         # normal fights (difficulty, opponent count, armed ladder) -- its own window only.
@@ -1419,6 +1434,8 @@ def main():
                 # it is, so without this the ladder would advance invisibly.
                 "armed_stage": sampler.armed_stage_index,
                 "armed_stage_label": sampler.armed_stage_label,
+                "personas": (sampler.persona_win_rates()
+                             if (args.persona_mix or args.hide_intent_prob > 0) else None),  # OGRL-20261007-002
                 "move_school": None if not args.move_school else {
                     **sampler.move_school_snapshot(),
                     "ground_outcomes": dict(ground_outcomes_this_update),

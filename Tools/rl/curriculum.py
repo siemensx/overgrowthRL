@@ -146,6 +146,28 @@ def band_for(d: float) -> str:
     return f"[{DIFFICULTY_BANDS[-1][0]:.1f},{DIFFICULTY_BANDS[-1][1]:.1f}]"
 
 
+def parse_persona_mix(spec: str) -> tuple:
+    """'patient=0.15,expert=0.1' -> ((1, 0.15), (4, 0.1), (0, 0.75)). Stock takes the remainder."""
+    from env import PERSONAS
+    if not spec:
+        return ()
+    out, total = [], 0.0
+    for part in spec.split(","):
+        name, _, w = part.strip().partition("=")
+        if name not in PERSONAS:
+            raise ValueError(f"unknown persona {name!r}; choose from {PERSONAS}")
+        weight = float(w)
+        if weight < 0:
+            raise ValueError(f"negative persona weight {part!r}")
+        out.append((PERSONAS.index(name), weight))
+        total += weight
+    if total > 1.0 + 1e-9:
+        raise ValueError(f"persona weights sum to {total:.3f} > 1")
+    if not any(i == 0 for i, _ in out) and total < 1.0:
+        out.append((0, 1.0 - total))
+    return tuple(out)
+
+
 # stage: (label, armed_count, weapon_type, throw_aggression, species_mode, min_opponents)
 # weapon_type 0=random 1=knife 2=big_sword 3=sword 4=spear
 # species_mode 0=guard/raider 6=guard/raider/cat
@@ -342,6 +364,11 @@ class ScenarioSampler:
     _opp_advance_log: list = field(default_factory=list, repr=False)
     _advance_log: list = field(default_factory=list, repr=False)  # (episode_index, old_d_max, new_d_max) for the research log / events.jsonl
     move_school_stages: tuple = ()  # () = off; MOVE_SCHOOL_STAGES to enable (OGRL-20261004-010)
+    # OGRL-20261007-002: opponent personas and privileged-intent hiding. Both are drawn per episode
+    # and only when enabled, so a run without them consumes the RNG exactly as before.
+    persona_mix: tuple = ()         # ((persona_index, weight), ...); () = always stock (0). See env.PERSONAS
+    hide_intent_prob: float = 0.0   # P(an episode zeroes the AI-intent entity fields)
+    _persona_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (persona, hidden, opponents, won)
     _ms_stage: int = field(default=0, repr=False)
     _ms_stage_start: object = field(default=None, repr=False)   # global_step the current stage began
     _ms_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (opponents, won, d), ground-only
@@ -394,6 +421,11 @@ class ScenarioSampler:
                 opponents = 1                       # anti-forgetting: keep fighting 1v1
             else:
                 opponents = self._rng.randint(2, self._opp_max)
+            persona = 0
+            if self.persona_mix:
+                ids, weights = zip(*self.persona_mix)
+                persona = int(self._rng.choices(ids, weights=weights, k=1)[0])
+            hide_intent = self.hide_intent_prob > 0.0 and self._rng.random() < self.hide_intent_prob
             label, armed, weap, throw_aggr, species, min_opp = ARMED_STAGES[
                 min(self._armed_stage, len(ARMED_STAGES) - 1)]
             # A stage that needs 2+ hostiles must not be sampled as a 1v1; the
@@ -410,7 +442,30 @@ class ScenarioSampler:
             "weapon_type": weap,
             "throw_aggression": throw_aggr if armed > 0 else 1.0,
             **({"ground_only": ground_only, "rule_hidden": rule_hidden} if ground_only is not None else {}),
+            **({"persona": persona} if self.persona_mix else {}),
+            **({"hide_intent": hide_intent} if self.hide_intent_prob > 0.0 else {}),
         }
+
+    def record_persona_outcome(self, persona: int, hide_intent: bool, opponents: int, won: bool) -> None:
+        """Bookkeeping only (OGRL-20261007-002): nothing gates on personas yet."""
+        with self._lock:
+            self._persona_recent.append((int(persona), bool(hide_intent), int(opponents), bool(won)))
+
+    def persona_win_rates(self, window: int = 3000) -> dict:
+        """{"patient": {"n": .., "win": ..}, ..., "intent_hidden": {...}, "intent_shown": {...}}."""
+        from env import PERSONAS
+        with self._lock:
+            recent = list(self._persona_recent)[-window:]
+        out = {}
+        for i, name in enumerate(PERSONAS):
+            sub = [w for p, _h, _o, w in recent if p == i]
+            if sub:
+                out[name] = {"n": len(sub), "win": round(sum(sub) / len(sub), 4)}
+        for key, flag in (("intent_hidden", True), ("intent_shown", False)):
+            sub = [w for _p, h, _o, w in recent if h == flag]
+            if sub:
+                out[key] = {"n": len(sub), "win": round(sum(sub) / len(sub), 4)}
+        return out
 
     @property
     def opponents_max(self) -> int:
@@ -567,7 +622,9 @@ class ScenarioSampler:
                 self._opp_max = max(1, min(o, self.opponents_cap))
             st = state.get("armed_stage")
             if st is not None:
-                self._armed_stage = max(0, min(int(st), len(ARMED_STAGES) - 1))
+                # --armed-stage is a FLOOR (OGRL-20261007-006): a fork of an unarmed run (stage 0 in its
+                # checkpoint) onto the armed ladder must start at the requested rung, not fall back to 0.
+                self._armed_stage = min(max(int(self.armed_stage), int(st), 0), len(ARMED_STAGES) - 1)
             ms = state.get("move_school_stage")
             if ms is not None and self.move_school_stages:
                 self._ms_stage = max(0, min(int(ms), len(self.move_school_stages) - 1))

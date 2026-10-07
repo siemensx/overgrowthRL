@@ -131,6 +131,11 @@ class ObsLayout:
     E_RECOVERY_TIME = 51
     E_ATTACKED_BY_ME = 52
     E_LINE_OF_SIGHT = 53
+    # OGRL-20261007-002: the scripted AI's privileged INTENT (what it has decided, not what its body
+    # shows): targets_me, ai_attacking, is_follower, will_counter_throw, goal_attack, sub-goal
+    # one-hot. A human opponent has none of these (OGRL-20261007-001); env.reset(hide_intent=True)
+    # zeroes them. Blocking/stun/ragdoll/recovery stay: they are visible on the body.
+    E_INTENT = slice(33, 46)
 
     @property
     def action_history_start(self) -> int:

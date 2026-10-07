@@ -64,6 +64,9 @@ int rl_species = 0;        // 0 = random guard/raider (legacy default), 1 = guar
 int rl_armed_count = 0;    // how many HOSTILES carry a weapon. The agent is never armed by this axis.
 int rl_weapon_type = 0;    // 0 = random, 1 = knife, 2 = big_sword, 3 = sword, 4 = spear
 float rl_throw_aggression = 1.0f;  // multiplier on WantsToThrowItem's hardcoded 0.04 throttle
+int rl_persona = 0;        // OGRL-20261007-002 opponent persona, packed into set_rl_species as species + 16*persona
+                            // (no engine rebuild): 0 = stock, 1 = patient counter-fighter, 2 = passive,
+                            // 3 = berserker, 4 = expert, 5 = mixed (each hostile rolls 1..4). See ApplyRLPersona.
 ''', 1)
 
     # 2. ReceiveMessage: new set_rl_* tokens, right before set_all_hostile.
@@ -83,7 +86,10 @@ float rl_throw_aggression = 1.0f;  // multiplier on WantsToThrowItem's hardcoded
         rl_weapons = min(max(atof(token_iter.GetToken(msg)), 0.0f), 1.0f);
     } else if(token == "set_rl_species"){
         token_iter.FindNextToken(msg);
-        rl_species = atoi(token_iter.GetToken(msg));
+        // OGRL-20261007-002: the low 4 bits are the species axis, the rest the opponent persona.
+        int species_word = atoi(token_iter.GetToken(msg));
+        rl_species = species_word % 16;
+        rl_persona = species_word / 16;
     } else if(token == "set_rl_armed_count"){
         token_iter.FindNextToken(msg);
         rl_armed_count = atoi(token_iter.GetToken(msg));
@@ -125,6 +131,54 @@ float rl_throw_aggression = 1.0f;  // multiplier on WantsToThrowItem's hardcoded
         fur_channel = 1;
         actor_path = "Data/Objects/characters/cats/cat_actor.xml";
         break;''', 1)
+
+    # 3b. Opponent personas (OGRL-20261007-002). The stock parameter block draws Aggression from
+    # U(0.25, 0.75) regardless of difficulty, so every training opponent walks in and attacks -- the
+    # agent learned to wait for that (research-log 2026-10-07, OGRL-20261007-001: against a standing
+    # human it never initiates). A persona overrides only the AI's TEMPERAMENT and SKILL parameters,
+    # after the stock block has drawn everything else, so persona 0 is byte-for-byte the old roll.
+    # enemycontrol.as reads these params when the character script initialises:
+    #   Aggression       -> PickAttackSubGoal: P(rush/wait-and-attack) vs defend/provoke (close in, wait)
+    #   Block Skill      -> P(block/dodge) and P(avoid a jump kick)
+    #   Block Follow-up  -> P(counter-attack straight after a block)
+    #   Ground Aggression-> P(punish a downed target)
+    # Note PickAttackSubGoal forces rush-and-attack when game_difficulty < 0.25: personas only bite
+    # above that, which is every cell of the benchmark (d = 1.0).
+    anchor_ce = "void CreateEnemy(Object@ obj, float difficulty, int team){"
+    anchor_p = '    params.SetInt("Left handed", (rand()%5==0)?1:0);\n'
+    if anchor_ce not in out or anchor_p not in out:
+        raise RuntimeError("anchor 3b (CreateEnemy / Left handed) not found -- stock script changed shape")
+    out = out.replace(anchor_ce, '''// OGRL-20261007-002: opponent personas -- see gen_1v1_scenario.py step 3b.
+void ApplyRLPersona(ScriptParams@ params, float difficulty){
+    int persona = rl_persona;
+    if(persona == 5){ persona = rand()%4 + 1; }         // mixed: each hostile rolls its own
+    if(persona == 1){                                    // patient counter-fighter: waits, blocks, punishes
+        params.SetFloat("Aggression", RangedRandomFloat(0.03f, 0.12f));
+        params.SetFloat("Block Skill", RangedRandomFloat(0.85f, 1.0f));
+        params.SetFloat("Block Follow-up", 1.0f);
+        params.SetFloat("Ground Aggression", 1.0f);
+    } else if(persona == 2){                             // passive: closes in and stands there, defends normally
+        params.SetFloat("Aggression", 0.0f);
+    } else if(persona == 3){                             // berserker: always attacking, barely defends
+        params.SetFloat("Aggression", 1.0f);
+        params.SetFloat("Ground Aggression", 1.0f);
+        params.SetFloat("Block Skill", RangedRandomFloat(0.01f, 0.2f));
+        params.SetFloat("Block Follow-up", RangedRandomFloat(0.01f, 0.25f));
+    } else if(persona == 4){                             // expert: top of every stock skill range at d=1
+        params.SetFloat("Aggression", RangedRandomFloat(0.4f, 0.6f));
+        params.SetFloat("Block Skill", 1.0f);
+        params.SetFloat("Block Follow-up", 1.0f);
+        params.SetFloat("Ground Aggression", 1.0f);
+        params.SetFloat("Attack Speed", 1.1f);
+        params.SetFloat("Movement Speed", 1.1f);
+        params.SetFloat("Attack Damage", 1.1f);
+        params.SetFloat("Attack Knockback", 1.1f);
+        params.SetFloat("Damage Resistance", 1.1f);
+    }
+}
+
+''' + anchor_ce, 1)
+    out = out.replace(anchor_p, anchor_p + "    if(rl_persona > 0){ ApplyRLPersona(params, difficulty); }\n", 1)
 
     # 4. SetUpLevel: force game_type_int=0 (the OGRL-20260816-023 1v1 fork
     #    itself) + a comment on why rl_opponents isn't wired to it yet.
@@ -261,12 +315,11 @@ float rl_throw_aggression = 1.0f;  // multiplier on WantsToThrowItem's hardcoded
     out = out[:i] + """    bool knife_test = false;
 
     // OGRL-20260905-070: map the requested opponent count onto the
-    // generator-authored spawn groups (see Tools/rl/gen_arena_map.py).
+    // generator-authored spawn groups (see Tools/rl/gen_arena_map.py):
+    // 1vN is game_type N+1 for N >= 2 (3 = 1v2, 4 = 1v3, 5.. = gen_arena_map.py --horde).
     int game_type_int = 0;
-    if(rl_opponents == 2){
-        game_type_int = 3;
-    } else if(rl_opponents >= 3){
-        game_type_int = 4;
+    if(rl_opponents >= 2){
+        game_type_int = (rl_opponents > 7 ? 7 : rl_opponents) + 1;
     }
     if(knife_test){
         game_type_int = 0;
@@ -275,6 +328,12 @@ float rl_throw_aggression = 1.0f;  // multiplier on WantsToThrowItem's hardcoded
     array<SpawnPoint> character_spawns;
     CollectCharacterSpawns(game_type_int, character_spawns);
 
+    // OGRL-20261007-003: a level without the requested horde group falls back to the largest
+    // multi-opponent group it does define (the 24 training maps stop at 1v3), not straight to 1v1.
+    while(character_spawns.size() == 0 && game_type_int > 4){
+        game_type_int--;
+        CollectCharacterSpawns(game_type_int, character_spawns);
+    }
     // Levels predating the multi-opponent groups (oval, every stock arena)
     // do not define them. Fall back to the 1v1 pair rather than spawn nobody.
     if(character_spawns.size() == 0 && game_type_int != 0){
@@ -390,8 +449,13 @@ void SetUpLevel(""", 1)
     if(GetConfigValueInt("rl_human_opponents") > 0){
         rl_opponents = GetConfigValueInt("rl_human_opponents");
     }
-    if(rl_difficulty >= 0.0f || rl_opponents != 1){
-        Log(info, "RL: human-play overrides -> rl_difficulty=" + rl_difficulty + " rl_opponents=" + rl_opponents);
+    // OGRL-20261007-002: fight an opponent persona yourself (1 patient .. 5 mixed, see step 3b).
+    if(GetConfigValueInt("rl_human_persona") > 0){
+        rl_persona = GetConfigValueInt("rl_human_persona");
+    }
+    if(rl_difficulty >= 0.0f || rl_opponents != 1 || rl_persona != 0){
+        Log(info, "RL: human-play overrides -> rl_difficulty=" + rl_difficulty + " rl_opponents=" + rl_opponents
+            + " rl_persona=" + rl_persona);
     }
     SetUpLevel(curr_difficulty);
 """, 1)
