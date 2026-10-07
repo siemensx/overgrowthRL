@@ -419,6 +419,21 @@ def validate_level(lvl, half, arenas):
     return {"errors": errs, "lines": lines}
 
 
+def horde_positions(cx: float, cz: float, d: float, n: int) -> list:
+    """N hostile spawns for a 1vN group: an arc of up to 4 at distance d facing the agent, the rest on
+    a second arc 3.5u further back, so nobody spawns inside anybody else (min gap > 2.5u at d >= 9)."""
+    front = min(n, 4)
+    pos = []
+    for k in range(front):
+        ang = -0.75 + 1.5 * k / max(1, front - 1) if front > 1 else 0.0
+        pos.append((cx + math.sin(ang) * d, cz + math.cos(ang) * d))
+    back = n - front
+    for k in range(back):
+        ang = -0.5 + 1.0 * k / max(1, back - 1) if back > 1 else 0.0
+        pos.append((cx + math.sin(ang) * (d + 3.5), cz + math.cos(ang) * (d + 3.5)))
+    return pos
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -467,6 +482,11 @@ def main() -> int:
                     help="bare floor plus perimeter walls only -- no divider, cover or "
                          "ledges. The floor of achievable geometry cost, for throughput "
                          "baselines where map content is not the variable under test.")
+    ap.add_argument("--horde", type=int, default=3,
+                    help="OGRL-20261007-003: also emit 1vN spawn groups for N = 4..HORDE (game_type N+1, "
+                         "agent alone on team 0, every hostile on team 1), for vastly-outnumbered fights. "
+                         "Max 7: the observation lists 8 entities. Default 3 = the old maps exactly "
+                         "(no extra keep-outs, so the layout RNG is untouched).")
     ap.add_argument("--human-duel", action="store_true",
                     help="emit the map driven by arena_level_human_duel.as, so "
                          "play_match.py can fight a checkpoint on it. The duel "
@@ -488,6 +508,8 @@ def main() -> int:
     ap.add_argument("--overgrowth-data", default=None)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    if not 3 <= args.horde <= 7:
+        ap.error("--horde must be in 3..7")
 
     data = Path(args.overgrowth_data) if args.overgrowth_data else paths.data_dir()
     if not (data / "Levels" / "arenas").is_dir():
@@ -518,6 +540,9 @@ def main() -> int:
         for ang in (-0.7, -0.45, 0.0, 0.45, 0.7):
             keep_out.append(_rect(cx + math.sin(ang) * d, cz + math.cos(ang) * d, 3.5, 3.5))
         keep_out += _corridor(cx, cz - d, cx, cz + d, 2.5)
+        for n in range(4, args.horde + 1):
+            for hx, hz in horde_positions(cx, cz, d, n):
+                keep_out.append(_rect(hx, hz, 3.0, 3.0))
         build_court(lvl, rng, args.half_size, floor_top, cx, cz,
                     args.randomize, args.minimal, keep_out=keep_out)
 
@@ -625,6 +650,11 @@ def main() -> int:
             lvl.spawn(cx, sy, cz - d, 0.0, 4, 0)
             for ang in (-0.7, 0.0, 0.7):
                 lvl.spawn(cx + math.sin(ang) * d, sy, cz + math.cos(ang) * d, math.pi, 4, 1)
+            # OGRL-20261007-003: 1v4 .. 1vHORDE, game_type N+1, same team shape.
+            for n in range(4, args.horde + 1):
+                lvl.spawn(cx, sy, cz - d, 0.0, n + 1, 0)
+                for hx, hz in horde_positions(cx, cz, d, n):
+                    lvl.spawn(hx, sy, hz, math.pi, n + 1, 1)
 
     report = validate_level(lvl, args.half_size, args.arenas)
     for line in report["lines"]:
