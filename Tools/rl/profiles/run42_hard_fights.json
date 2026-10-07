@@ -1,10 +1,13 @@
 {
-  "_doc": "OGRL-20261007-011 (switched off). Forks run38. ONE change: --d-min 0.7, so every fight is drawn at difficulty U(0.7, 1.0). Measured on run38 since 55M (50,148 episodes): difficulty ~ U(0, 1) put only 7.8% of training fights in the benchmark's own cell (1v3, d >= 0.8, win rate 0.37); ~60% of fights were ones it already wins 70-96% of the time. Question: does concentrating on hard fights raise canonical 1v3 above run38's 0.31-0.36 plateau (55M-75M) within ~30M steps? Risk: fewer easy wins means sparser win signal; the learnability opponent mix still keeps 1v1/1v2 in.",
+  "_doc": "OGRL-20261007-011 (switched off). Forks run38. ONE change: --d-min 1.0, i.e. every training fight at difficulty 1.0 -- the project decision of 2026-09-09 (curriculum.ScenarioSampler d_min comment) that run38's launcher silently reverted by copying run30's curriculum (--d-min 0.0). Measured on run38 since 55M (50,148 episodes): U(0,1) put only 7.8% of training fights in the benchmark's cell (1v3, d >= 0.8, win 0.37) -- the same dilution and the same plateau value run21 showed at 279M (6.3%, 0.374). The learnability mix still decides 1v1/1v2/1v3. Question: does training only where the benchmark is raise canonical 1v3 above run38's 124-143/400 (55-75M)?",
   "base": "_base_v6_attn.json",
   "run_id": "run42_hard_fights",
   "seed": 42,
   "shm_tag": "r42",
   "seed_from": "run38_attn_last.pt",
-  "purpose": "OGRL-20261007-011 run42: run38 fork, difficulty floor 0.7 (train where the benchmark is)",
-  "args": ["--d-min", "0.7"]
+  "purpose": "OGRL-20261007-011 run42: run38 fork, every fight at difficulty 1.0 (d_min 1.0, the 2026-09-09 decision)",
+  "args": [
+    "--d-min",
+    "1.0"
+  ]
 }

@@ -25,7 +25,7 @@ which live in the purchased Steam tree and are copied with an MD5 check).
 | `run39_personas_blind` | fork of run38 | 50% of fights vs patient / passive / berserker / expert / mixed opponents; 30% with the AI's intent fields hidden | does it learn to start fights against opponents that wait (it times out against them and against a standing human)? |
 | `run40_horde_armed` | fork of run38 | 12 horde maps, opponents unlock up to 1v7, armed ladder from B1 | how outnumbered and how armed can the enemies get before it stops winning? |
 | `run41_everything` | fork of run38 | run39 + run40 together | only after each axis has been shown learnable on its own |
-| `run42_hard_fights` | fork of run38 | only `--d-min 0.7`: every fight at difficulty 0.7–1.0 (run38 spends 7.8% of fights in the benchmark's cell) | does training where the benchmark is break the 1v3 plateau? |
+| `run42_hard_fights` | fork of run38 | only `--d-min 1.0`: every fight at difficulty 1.0, as decided 2026-09-09 (run38's launcher used 0.0 by mistake; 7.8% of its fights are in the benchmark's cell) | does training where the benchmark is break the 1v3 plateau? |
 
 A fork freezes a copy of the parent's checkpoint as `<run_id>_seed.pt` at its first launch (after the
 parent has been stopped), so the parent can later be resumed unchanged.
