@@ -103,6 +103,45 @@ def test_checkpoint_autodetect_and_grad():
     assert q.entity_encoder.attn.self_attn.in_proj_weight.grad.abs().sum() > 0
 
 
+def test_out_norm_autodetect_and_old_unchanged():
+    """OGRL-20261007-013: the optional LayerNorm before the summary tanh round-trips through a plain
+    loader, and checkpoints without it still load into the old structure."""
+    torch.manual_seed(1)
+    p = ActorCritic(L, frame_stack=FS, layer_norm=True, entity_attention=True, attention_last_frame_only=True,
+                    entity_out_norm=True).eval()
+    sd = p.state_dict()
+    assert "entity_encoder.out.2.weight" in sd
+    q = ActorCritic(L, frame_stack=FS)
+    q.load_state_dict(sd)
+    assert q.entity_out_norm and q.entity_attention and q.attention_last_frame_only
+    x = obs_with(3)
+    assert torch.allclose(heads(p, x), heads(q.eval(), x), atol=1e-6)
+    old = net(last=True).state_dict()
+    r = ActorCritic(L, frame_stack=FS)
+    r.load_state_dict(old)
+    assert not r.entity_out_norm and "entity_encoder.out.2.weight" not in r.state_dict()
+
+
+def test_out_norm_does_not_saturate_with_large_weights():
+    """With the summary Linear scaled up 4x (what training does to it), the plain head saturates and the
+    normalised one does not."""
+    x = obs_with(3, batch=64)
+    res = {}
+    for onorm in (False, True):
+        torch.manual_seed(2)
+        p = ActorCritic(L, frame_stack=FS, layer_norm=True, entity_attention=True,
+                        attention_last_frame_only=True, entity_out_norm=onorm).eval()
+        with torch.no_grad():
+            p.entity_encoder.out[1].weight.mul_(4.0)
+        acts = []
+        h = p.entity_encoder.out[-1].register_forward_hook(lambda _m, _i, o: acts.append(o.detach()))
+        with torch.no_grad():
+            p._features(x)
+        h.remove()
+        res[onorm] = float((acts[0].abs() > 0.99).float().mean())
+    assert res[True] < 0.05 < res[False], res
+
+
 def test_cost_report():
     torch.set_num_threads(2)
     old = ActorCritic(L, frame_stack=FS, layer_norm=True)

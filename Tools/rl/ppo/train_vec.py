@@ -155,6 +155,9 @@ def parse_args():
                     help="fresh runs: LayerNorm before every trunk tanh (OGRL-20261004-019). Resumes follow the checkpoint.")
     p.add_argument("--entity-attention", action="store_true",
                     help="fresh runs: attention over fighters instead of max-pool (OGRL-20261004-025). Resumes follow the checkpoint.")
+    p.add_argument("--entity-out-norm", action="store_true",
+                   help="OGRL-20261007-013: LayerNorm before the attention summary's tanh (fresh networks only; "
+                        "resumed checkpoints keep their own architecture). run38's summary reached 60%% saturation.")
     p.add_argument("--attention-last-frame-only", action="store_true",
                     help="with --entity-attention: attention on the newest stacked frame only (OGRL-20261005-002)")
     p.add_argument("--move-school-stages", default=None,
@@ -644,11 +647,14 @@ def main():
     else:
         _ln, _att = bool(args.layer_norm), bool(args.entity_attention)
         _last = bool(args.attention_last_frame_only)
+        _onorm = bool(args.entity_out_norm)
     if resumed_checkpoint is not None:
         _last = ActorCritic.state_dict_attention_last_frame_only(resumed_checkpoint["policy"])
+        _onorm = ActorCritic.state_dict_entity_out_norm(resumed_checkpoint["policy"])
     policy = ActorCritic(layout, frame_stack=args.frame_stack, layer_norm=_ln, entity_attention=_att,
-                         attention_last_frame_only=_last).to(device)
-    print(f"policy architecture: layer_norm={_ln} entity_attention={_att} last_frame_only={_last}")
+                         attention_last_frame_only=_last, entity_out_norm=_onorm).to(device)
+    print(f"policy architecture: layer_norm={_ln} entity_attention={_att} last_frame_only={_last} "
+          f"entity_out_norm={_onorm}")
     policy.detach_critic_features = bool(args.critic_detach_shared)
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.learning_rate, eps=1e-5)
     update_forward = policy.get_action_and_value
