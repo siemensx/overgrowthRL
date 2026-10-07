@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Tools/rl
 from vec_env import VecOvergrowthEnv
 from env import _cleanup_stale_write_dirs  # disk-low recovery reuses the launch-time stale sweep
 from obs_schema import DEFAULT_LAYOUT, SCHEMA_VERSION
+from net_health import SUMMARY_WEIGHT, health_stats, install_weight_decay
 from curriculum import MOVE_SCHOOL_STAGES, Curriculum, ScenarioSampler, parse_persona_mix
 from reward import run8_reward_config, win_reward_config, win_notimeout_reward_config, win_v2_reward_config
 from telemetry import RunLogger
@@ -155,6 +156,14 @@ def parse_args():
                     help="fresh runs: LayerNorm before every trunk tanh (OGRL-20261004-019). Resumes follow the checkpoint.")
     p.add_argument("--entity-attention", action="store_true",
                     help="fresh runs: attention over fighters instead of max-pool (OGRL-20261004-025). Resumes follow the checkpoint.")
+    p.add_argument("--weight-decay", type=float, default=0.0,
+                   help="OGRL-20261007-014: decoupled weight decay on every weight matrix, applied after each "
+                        "optimizer step as w *= 1 - lr*wd (checkpoint/optimizer compatible). Counters the weight "
+                        "growth behind run38's saturating summary and narrowing trunk. 0 = off.")
+    p.add_argument("--weight-decay-summary", type=float, default=None,
+                   help="decay rate for the attention summary's Linear only (default = --weight-decay)")
+    p.add_argument("--health-every", type=int, default=5,
+                   help="log net_health (saturation, gradient pass-through, effective dims) every N updates; 0 = off")
     p.add_argument("--entity-out-norm", action="store_true",
                    help="OGRL-20261007-013: LayerNorm before the attention summary's tanh (fresh networks only; "
                         "resumed checkpoints keep their own architecture). run38's summary reached 60%% saturation.")
@@ -775,6 +784,11 @@ def main():
             reward_normalizer = RewardNormalizer(args.gamma, n_envs=args.n_envs)
             print(f"[reset-critic] critic re-initialised, reward normaliser fresh at gamma={args.gamma}", flush=True)
 
+    _decayed = install_weight_decay(policy, optimizer, args.weight_decay, args.weight_decay_summary)
+    if _decayed:
+        print(f"weight decay on {len(_decayed)} weight matrices: "
+              f"{sorted(set(r for _n, r in _decayed))} (summary {dict(_decayed).get(SUMMARY_WEIGHT)})", flush=True)
+    net_health = None
     global_step = initial_global_step
     update = 0  # this run's own update counter for ITS log/checkpoint cadence -- global_step is what actually
                 # carries continuity (curriculum phase, total-timesteps target), not this index
@@ -1201,6 +1215,11 @@ def main():
             logger.heartbeat("updating", global_step, update=update)
             stats = ppo_update(policy, optimizer, batch, args, update_forward=update_forward)
             stats["value_warmup"] = int(args._value_only)
+            if args.health_every and update % args.health_every == 0:
+                try:
+                    net_health = health_stats(policy, torch.as_tensor(batch["obs"], dtype=torch.float32))
+                except Exception as exc:          # telemetry must never stop training
+                    net_health = {"error": repr(exc)[:200]}
             if args.button_floor and getattr(policy, "floor_gates", None) and "threat" in policy.floor_gates:
                 refresh_floor_stats(policy, obs_normalizer)  # between this batch's update and the next collection
             if args.entropy_target is not None and not args._value_only:
@@ -1404,6 +1423,7 @@ def main():
                     "components": component_means,
                 },
                 "outcomes": outcomes_this_update,
+                "net_health": net_health,          # OGRL-20261007-014; refreshed every --health-every updates
                 "ppo": {
                     "policy_loss": stats["policy_loss"], "value_loss": stats["value_loss"], "approx_kl": stats["approx_kl"],
                     "clip_fraction": stats["clip_fraction"], "explained_variance": explained_var,

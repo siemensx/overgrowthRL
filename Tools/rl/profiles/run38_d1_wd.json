@@ -1,0 +1,10 @@
+{
+  "_doc": "OGRL-20261007-014. run38_d1 (run38 at difficulty 1.0 only) plus decoupled weight decay: 0.01 on every weight matrix, 0.05 on the attention summary's Linear. Why: run38's summary saturated 30% -> 60% (gradient pass-through 0.30 -> 0.15) and the actor trunk's effective dimensionality halved (8 -> 4) between 5M and 75M, both driven by weight growth (OGRL-20261007-013); weight decay with LayerNorm is the standard remedy. Applied as an optimizer step hook: nothing changes at the switch, the weights are pulled down gradually (~3%/M steps on the summary, ~0.6%/M elsewhere at lr 3e-4). net_health in metrics.jsonl tracks it every 5 updates. Forks from a frozen copy of run38_d1's checkpoint; the d=1.0 and decay effects are combined from ~78M+.",
+  "base": "_base_v6_attn.json",
+  "run_id": "run38_d1_wd",
+  "seed": 38,
+  "shm_tag": "r38w",
+  "seed_from": "run38_d1.pt",
+  "purpose": "OGRL-20261007-014 run38_d1_wd: run38 at difficulty 1.0 + weight decay (0.01, summary 0.05) against saturation/narrowing",
+  "args": ["--d-min", "1.0", "--d-max-start", "1.0", "--weight-decay", "0.01", "--weight-decay-summary", "0.05", "--health-every", "5"]
+}
