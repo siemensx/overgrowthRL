@@ -86,11 +86,14 @@ def parse_args():
                         "the skybox or times out after 120s (DEAD_ENDS.md's orphaned-semaphore trap).")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--episodes", type=int, default=3)
-    p.add_argument("--max-episode-real-seconds", type=float, default=20.0,
+    # 2026-10-07: was 20 s, which cut 1v3 fights (~20 s of game time on average) short and reported them as
+    # "timed out" -- 2 of 10 fights the user watched. The fight now ends where training and the benchmark end it
+    # (1200 decisions = 40 s of game time); the wall clock is only a backstop for a stalled engine.
+    p.add_argument("--max-episode-real-seconds", type=float, default=120.0,
                     help="wall-clock cap per episode, not a physics-tick count -- see module docstring for why "
                          "a tick-count cap is the wrong tool here: rendering + the Python round-trip can make "
                          "game-time fall well behind real-time, so a fixed tick count has no reliable real-world duration")
-    p.add_argument("--max-episode-steps", type=int, default=6000, help="backup cap in case something stalls without the wall-clock cap tripping (e.g. a hung engine); should rarely bind")
+    p.add_argument("--max-episode-steps", type=int, default=1200, help="decision cap, the same as training and the benchmark (1200 = 40 s of game time)")
     p.add_argument("--frame-stack", type=int, default=None, help="must match what the checkpoint was trained with; default: from --from-run's manifest, else 1")
     p.add_argument("--act-period", type=int, default=None,
                     help="OGRL-20260817-028 Sec8.1: this flag did not exist before -- watch.py always ran at "

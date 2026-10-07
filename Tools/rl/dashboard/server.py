@@ -1,1021 +1,517 @@
 #!/usr/bin/env python3
-"""OGRL-20260816-022/-023: stdlib-only local dashboard server. Reads
-Tools/rl/runs/<run_id>/{run.json,metrics.jsonl,episodes.jsonl,events.jsonl}
--- never writes any of those. The ONE exception is control.json, written
-via POST /api/runs/{id}/control for the pause/stop button (see
-telemetry.py's module docstring for why that one channel exists despite
-everything else being read-only).
+"""Training dashboard (rewritten 2026-10-07). Runs on the Mac; costs the Windows trainer almost nothing.
 
-No third-party dependencies, no build step. Binds 127.0.0.1 only.
+    python3 Tools/rl/dashboard/server.py            # then open http://127.0.0.1:8770
+
+What it does:
+  * every 60 s, ONE ssh/PowerShell call to the trainer reads only the bytes appended to the active run's
+    metrics.jsonl / episodes.jsonl since the last call, plus a few file names and process counts. No process
+    runs on the trainer for the dashboard and nothing there is parsed beyond tiny bench JSONs.
+  * aggregates on the Mac: win rate per opponent count at full difficulty, per 1M steps; steps/s; restarts.
+  * "Watch": copies a checkpoint to the Mac (a periodic snapshot, or a fresh copy of the live checkpoint made
+    on the trainer first so the live file is held only for a local copy) and runs ppo/watch.py rendered.
+    The Mac's game data lives on the external 1TB drive; without it the button says so instead of crashing.
+
+State is cached in Tools/rl/dashboard/cache/ (gitignored) so a restart does not re-download history.
+Binds 127.0.0.1 only. Python standard library only (the Mac's system python3 is 3.9).
 """
 from __future__ import annotations
 
+import base64
 import json
-import re
-import hashlib
 import os
-import signal
+import re
 import subprocess
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
-MIME_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
-              ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8"}
+HERE = Path(__file__).resolve().parent
+RL = HERE.parent
+REPO = RL.parents[1]
+CACHE = HERE / "cache"
+CKPT_CACHE = CACHE / "checkpoints"
+sys.path.insert(0, str(RL))
+import paths  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # Tools/rl -- for reward.py
-from ogreplay import Float32Bits, Float64Bits, ReplayReader, load_replay_summary
-
-# OGRL-20260816-024: "profile: run8" told the user nothing about what the
-# agent is actually rewarded/penalized for -- this maps each RewardConfig
-# field to a plain-language, sign-explicit description, so /api/runs/{id}/reward
-# can return the ACTUAL numeric values for that run's profile paired with
-# what triggers them. Field names are stable across profiles (only the
-# VALUES differ), so this dict doesn't need to change per profile.
-REWARD_FIELD_INFO = {
-    "damage_taken_weight": {"sign": "negative", "trigger": "Per unit of own (temp+blood)/2 health lost this decision, whoever caused it. Always active."},
-    "damage_dealt_weight": {"sign": "positive", "trigger": "Per unit of health lost by a NON-ALLY entity this agent itself most recently hit (causation-verified via attacked_by_id)."},
-    "friendly_fire_weight": {"sign": "negative", "trigger": "Per unit of health lost by an ALLY this agent itself hit, PLUS a flat +1.0 (before this weight) if that ally is knocked out."},
-    "self_knockout_penalty": {"sign": "negative", "trigger": "Once, the decision this agent transitions from awake to unconscious/dead."},
-    "opponent_knockout_bonus": {"sign": "positive", "trigger": "Once per non-ally opponent this agent caused to transition from awake to unconscious/dead."},
-    "time_cost": {"sign": "negative", "trigger": "Flat, every single decision -- discourages stalling. Always active."},
-    "ragdoll_penalty": {"sign": "negative", "trigger": "Every decision this agent is ragdolled (limp) AND still awake -- encourages rolling out of ragdoll instead of waiting for the slow auto-recovery."},
-    "closing_distance_weight": {"sign": "positive", "trigger": "Per meter closed toward the nearest non-ally entity within closing_distance_cap. 0.0 = OFF. Curriculum-gated in the default profile (tapers to 0 over training); permanently 0 in run8's profile -- no engagement bootstrap needed on a well-defined 1v1."},
-    "closing_distance_cap": {"sign": "n/a", "trigger": "Meters -- beyond this range, closing_distance_weight does not apply even when > 0."},
-    "stall_penalty_weight": {"sign": "negative", "trigger": "Every decision once stall_grace_steps consecutive decisions have passed with ZERO combat contact (either side landing a hit resets the clock to 0). 0.0 = OFF -- explicitly disabled in run8's profile."},
-    "stall_grace_steps": {"sign": "n/a", "trigger": "Decisions of zero combat contact tolerated before stall_penalty_weight starts applying."},
-}
+TRAINER_REPO = r"C:\ogrl\overgrowthRL_v6"
+HOSTS = [("trainer-lan", "192.168.99.33"), ("trainer-ts", "100.118.2.91")]
+POLL_SECONDS = 60
+CHUNK = 3_000_000            # bytes per file per poll; history backfills over a few quick polls
+BIN = 1_000_000              # steps per chart point
+FULL_D = 0.95                # "full difficulty" for win rates
+MAPS_TRAIN = [f"t_train_{i}" for i in range(101, 125)]
+MAPS_HELD = ["t_held_203"]
+CONTROLS = ["rl_target_select: 2", "rl_button_edges: 1", "rl_no_feint: 1", "rl_obs_omniscient: 1",
+            "rl_stick_deadzone: 0.3", "rl_stance_walk: 1"]   # v6-omni, kept for reference; watch uses --controls
 
 
-def _sanitize_json(obj):
-    """Recursively replace non-finite floats (NaN/Infinity/-Infinity) with
-    None. Python's json.dumps emits these as bare NaN/Infinity/-Infinity
-    tokens by default -- valid in Python's own JSON dialect (and accepted by
-    json.loads on the way in, which is how a bad float from train_vec.py's
-    telemetry survives long enough to reach here), but NOT valid JSON. A
-    browser's native JSON.parse() (what fetch().json() uses) throws a
-    SyntaxError on the bare token, which silently killed the dashboard's
-    entire metrics/episodes/events fetch for any run that ever logged one --
-    see research-log 2026-08-17 for the mean_ep_reward/mean_ep_length root
-    cause this was chasing. Fixing the writer stops NEW bad values; this is
-    the belt-and-suspenders read-side fix so already-written lines (smoke1's
-    file is frozen; run10's live process needs a restart to pick up the
-    writer fix) don't keep breaking the UI in the meantime."""
-    if isinstance(obj, float):
-        return obj if obj == obj and obj not in (float("inf"), float("-inf")) else None  # obj == obj is False only for NaN
-    if isinstance(obj, dict):
-        return {k: _sanitize_json(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_sanitize_json(v) for v in obj]
-    return obj
+# ---------------------------------------------------------------- trainer access
 
-
-def _resolve_reward_config(reward_profile: str) -> dict:
-    """Returns the ACTUAL numeric RewardConfig for the given profile name,
-    computed the same way train_vec.py does -- not a hardcoded guess."""
-    try:
-        from reward import RewardConfig, run8_reward_config
-        import dataclasses
-        cfg = run8_reward_config() if reward_profile == "run8" else RewardConfig()
-        return dataclasses.asdict(cfg)
-    except Exception as exc:  # noqa: BLE001 -- the dashboard must render even if this fails
-        return {"_error": str(exc)}
-
-_replay_jobs: dict[str, dict] = {}
-_replay_lock = threading.Lock()
-_match_jobs: dict[str, dict] = {}
-_match_lock = threading.Lock()
-_checkpoint_catalog_cache: list[dict] | None = None
-_checkpoint_catalog_signature: tuple[tuple[str, int, int], ...] | None = None
-
-
-def _safe_run_dir(runs_root: Path, run_id: str) -> Path | None:
-    """Resolve run_id against runs_root and reject anything that escapes it
-    (path traversal via a crafted run_id in the URL)."""
-    if not run_id or not all(c.isalnum() or c in "_.-" for c in run_id):
-        return None
-    candidate = (runs_root / run_id).resolve()
-    try:
-        candidate.relative_to(runs_root.resolve())
-    except ValueError:
-        return None
-    return candidate
-
-
-def _safe_filename_component(name: str) -> bool:
-    """Same character allowlist as _safe_run_dir, reused for tape/eval names
-    that get interpolated into a filesystem path -- no '/', no '..', no
-    absolute paths hiding in a URL segment."""
-    return bool(name) and all(c.isalnum() or c in "_.-" for c in name)
-
-
-def _checkpoint_dir() -> Path:
-    return Handler.repo_root / "Tools/rl/ppo/checkpoints"
-
-
-def _checkpoint_catalog() -> list[dict]:
-    """Return server-owned checkpoint IDs with a conservative compatibility badge."""
-    global _checkpoint_catalog_cache, _checkpoint_catalog_signature
-    root = _checkpoint_dir()
-    if not root.exists():
-        return []
-    paths = sorted(root.glob("*.pt"), key=lambda p: p.stat().st_mtime, reverse=True)
-    signature = tuple((path.name, path.stat().st_mtime_ns, path.stat().st_size) for path in paths)
-    if _checkpoint_catalog_cache is not None and signature == _checkpoint_catalog_signature:
-        return _checkpoint_catalog_cache
-    try:
-        from obs_schema import DEFAULT_LAYOUT, SCHEMA_VERSION
-        current_floats = DEFAULT_LAYOUT.total_floats
-    except Exception as exc:  # noqa: BLE001
-        current_floats = None
-        SCHEMA_VERSION = None
-        import_error = str(exc)
-    else:
-        import_error = None
-    out = []
-    for path in paths:
-        item = {"id": path.name, "label": path.stem, "size_bytes": path.stat().st_size,
-                "mtime": path.stat().st_mtime, "status": "blocked", "reason": "unreadable checkpoint"}
-        try:
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            item["sha256"] = digest
-            import torch
-            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
-            layout_floats = checkpoint.get("layout_total_floats")
-            frame_stack = checkpoint.get("frame_stack")
-            has_policy = isinstance(checkpoint.get("policy"), dict)
-            has_normalizer = isinstance(checkpoint.get("obs_normalizer"), dict)
-            item.update({"global_step": checkpoint.get("global_step"), "frame_stack": frame_stack,
-                         "layout_total_floats": layout_floats, "schema_version": SCHEMA_VERSION})
-            if import_error:
-                item["reason"] = import_error
-            elif not has_policy or not has_normalizer:
-                item["reason"] = "missing policy or normalizer"
-            elif layout_floats != current_floats:
-                item["reason"] = f"observation layout {layout_floats} != current {current_floats}"
-            elif frame_stack is None:
-                item["reason"] = "missing frame-stack metadata"
-            else:
-                item["status"] = "ready"
-                item["reason"] = "PPO / schema-compatible"
-        except Exception as exc:  # noqa: BLE001
-            item["reason"] = f"cannot inspect: {type(exc).__name__}"
-        out.append(item)
-    # Put the strongest compatible artifact first. File modification time is
-    # useful for discovery, but a freshly copied 1k-step smoke checkpoint
-    # must not silently become the default over a 46M-step production run.
-    out.sort(key=lambda item: (item.get("global_step") if item.get("global_step") is not None else -1,
-                               item.get("mtime", 0.0)), reverse=True)
-    _checkpoint_catalog_signature = signature
-    _checkpoint_catalog_cache = out
-    return out
-
-
-def _duel_levels() -> list[dict]:
-    """Levels playable in Fight-a-checkpoint, i.e. driven by the human-duel script.
-
-    Only these work: play_match spawns the human as a second player actor, which
-    arena_level.as does not do. gen_arena_map.py --human-duel emits corpus maps in
-    this form. oval is listed last and flagged, because a corpus-trained checkpoint
-    has partly forgotten it (OGRL-20260905-064: 82.5% -> 60.0% at band 0.9) and
-    fighting it there measures the map it lost rather than the policy it has.
-    """
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-        import paths as _paths
-        arenas = _paths.data_dir() / "Levels" / "arenas"
-    except Exception:
-        return []
-    out = []
-    for f in sorted(arenas.glob("*.xml")):
-        try:
-            head = f.read_text(errors="ignore")[:4096]
-        except OSError:
-            continue
-        if "arena_level_human_duel.as" not in head.lower():
-            continue
-        name = f.stem
-        out.append({
-            "level": f"arenas/{f.name}",
-            "label": name.replace("_duel", "").replace("oval_arena_human", "oval (stock)"),
-            "trained_on": name.startswith("t_train_"),
-            "warn": "forgotten by corpus-trained checkpoints" if name.startswith("oval") else "",
-        })
-    out.sort(key=lambda r: (r["level"].startswith("arenas/oval"), r["level"]))
-    return out
-
-
-def _match_dir(job_id: str) -> Path | None:
-    if not _safe_filename_component(job_id):
-        return None
-    candidate = (Handler.runs_root / "_matches" / job_id).resolve()
-    try:
-        candidate.relative_to((Handler.runs_root / "_matches").resolve())
-    except ValueError:
-        return None
-    return candidate
-
-
-def _match_snapshot(job_id: str, job: dict | None = None) -> dict:
-    match_dir = _match_dir(job_id)
-    status = {}
-    if match_dir is not None:
-        status_path = match_dir / "status.json"
-        if status_path.exists():
-            try:
-                status = json.loads(status_path.read_text())
-            except (OSError, json.JSONDecodeError):
-                status = {"phase": "status_unreadable"}
-    if job:
-        status.setdefault("match_id", job_id)
-        status.setdefault("checkpoint_id", job.get("checkpoint_id"))
-        status.setdefault("log_tail", _read_match_log(job))
-        proc = job.get("process")
-        if proc is not None and proc.poll() is not None:
-            status.setdefault("process_exit", proc.returncode)
-            if status.get("phase") in (None, "loading", "scenario", "fighting", "resetting"):
-                status["phase"] = "exited"
-    return status
-
-
-def _read_match_log(job: dict) -> str:
-    path = Path(job.get("log_path", ""))
-    try:
-        return path.read_text(errors="ignore")[-4000:] if path.exists() else ""
-    except OSError:
-        return ""
-
-
-def _list_eval_summaries(run_dir: Path) -> list[dict]:
-    """OGRL-20260817-028 Sec8.1: runs/<id>/eval/<global_step>.json, one file
-    per evaluate.py invocation. Lightweight per-entry summary (not the full
-    per-band breakdown -- see the {global_step} sub-resource for that) so a
-    run with many eval snapshots stays cheap to list."""
-    eval_dir = run_dir / "eval"
-    out = []
-    if not eval_dir.exists():
-        return out
-    for p in sorted(eval_dir.glob("*.json")):
-        try:
-            global_step = int(p.stem)
-        except ValueError:
-            continue  # a .tmp or otherwise-named file -- not a real eval snapshot
-        try:
-            data = json.loads(p.read_text())
-        except (OSError, json.JSONDecodeError):
-            continue
-        out.append({
-            "global_step": global_step, "checkpoint": data.get("checkpoint"), "episodes": data.get("episodes"),
-            "stochastic": data.get("stochastic"), "seed_base": data.get("seed_base"), "level": data.get("level"),
-            "frame_stack": data.get("frame_stack"), "act_period": data.get("act_period"),
-            "overall": data.get("overall"), "num_bands": len(data.get("bands") or []),
-        })
-    out.sort(key=lambda e: e["global_step"])
-    return out
-
-
-def _list_tapes(run_dir: Path) -> list[dict]:
-    """OGRL-20260817-028 Sec8.1: pairs of <name>.jsonl/<name>.meta.json under
-    runs/<id>/tapes/. Returns the parsed meta objects (newest-first by mtime)
-    with the filename stem attached as "name" so the front end can fetch the
-    matching .jsonl via GET .../tapes/{name}."""
-    tapes_dir = run_dir / "tapes"
-    out = []
-    if not tapes_dir.exists():
-        return out
-    for p in sorted(tapes_dir.glob("*.meta.json"), key=lambda p: p.stat().st_mtime, reverse=True):
-        try:
-            meta = json.loads(p.read_text())
-        except (OSError, json.JSONDecodeError):
-            continue
-        name = p.name
-        if name.endswith(".meta.json"):
-            name = name[: -len(".meta.json")]
-        meta["name"] = name
-        out.append(meta)
-    return out
-
-
-def _replay_paths(run_dir: Path) -> list[Path]:
-    """Return new binary traces without treating legacy JSONL as exact."""
-    paths = []
-    for directory in (run_dir / "tapes", run_dir / "replays"):
-        if directory.exists():
-            paths.extend(directory.glob("*.ogreplay"))
-    return sorted(set(paths), key=lambda p: p.stat().st_mtime, reverse=True)
-
-
-def _list_replays(run_dir: Path) -> list[dict]:
-    out = []
-    for path in _replay_paths(run_dir):
-        summary = load_replay_summary(path)
-        sidecar = path.with_suffix(".meta.json")
-        if sidecar.exists():
-            try:
-                summary.update(json.loads(sidecar.read_text()))
-            except (OSError, json.JSONDecodeError):
-                pass
-        # The container's mechanically-derived label always wins over a
-        # stale sidecar label. This prevents a copied/edited meta file from
-        # upgrading recorded state into an exact replay claim.
-        parsed = load_replay_summary(path)
-        summary["status"] = parsed.get("status", summary.get("status"))
-        summary["name"] = path.stem
-        summary["path"] = str(path)
-        out.append(summary)
-    return out
-
-
-def _replay_jsonable(value):
-    if isinstance(value, Float32Bits):
-        return {"__float32_bits__": value.bits, "value": value.value()}
-    if isinstance(value, Float64Bits):
-        return {"__float64_bits__": value.bits, "value": value.value()}
-    if isinstance(value, dict):
-        return {k: _replay_jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_replay_jsonable(v) for v in value]
-    return value
-
-
-def _resolve_replay_path(run_dir: Path, name: str) -> Path | None:
-    if not _safe_filename_component(name):
-        return None
-    for path in _replay_paths(run_dir):
-        if path.stem == name:
-            return path
+def pick_host() -> str | None:
+    forced = os.environ.get("OGRL_TRAINER_HOST")
+    if forced:
+        return forced
+    for name, ip in HOSTS:
+        if subprocess.call(["nc", "-z", "-G", "3", ip, "22"], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL) == 0:
+            return name
     return None
 
 
-def _read_jsonl_tail(path: Path, offset: int) -> tuple[int, list[dict]]:
-    """Seeks to byte `offset`, reads to EOF, returns only WHOLE lines and the
-    new offset -- a line still being written is left for the next poll."""
-    if not path.exists():
-        return offset, []
-    lines = []
-    with open(path, "rb") as f:
-        f.seek(offset)
-        data = f.read()
-    new_offset = offset
-    for raw_line in data.split(b"\n"):
-        if raw_line == b"" and data.endswith(b"\n"):
-            continue
-        line_bytes = raw_line + b"\n"
-        if not data.endswith(b"\n") and raw_line == data.rsplit(b"\n", 1)[-1] and not data.endswith(b"\n"):
-            break  # partial trailing line, not yet flushed with a newline -- wait for next poll
+def ps(host: str, script: str, timeout: int = 90) -> str:
+    r = subprocess.run([str(RL / "winps.sh"), host], input=script, capture_output=True, text=True,
+                       timeout=timeout)
+    return r.stdout.replace("\r", "")
+
+
+POLL_PS = r"""
+$root = '__REPO__\Tools\rl'
+function Tail($p, [long]$off, [long]$cap) {
+  if (-not (Test-Path $p)) { return "0|0|" }
+  $fs = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite')
+  try {
+    $len = $fs.Length; if ($off -gt $len) { $off = 0 }
+    $n = [Math]::Min($cap, $len - $off); $buf = New-Object byte[] $n
+    [void]$fs.Seek($off, 'Begin'); $got = 0
+    while ($got -lt $n) { $k = $fs.Read($buf, $got, $n - $got); if ($k -le 0) { break }; $got += $k }
+    return "$len|$($off + $got)|" + [Convert]::ToBase64String($buf, 0, $got)
+  } finally { $fs.Close() }
+}
+$a = Get-Content C:\ogrl\active_profile.json -Raw -ErrorAction SilentlyContinue
+"@@ACTIVE " + ($a -replace "`r?`n", ' ')
+"@@RUNS " + ((Get-ChildItem "$root\runs" -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 12 | % Name) -join ',')
+$run = '__RUN__'
+if ($run -eq '') { if ($a) { $run = ($a | ConvertFrom-Json).run_id } }
+"@@RUN " + $run
+if ($run -ne '') {
+  "@@METRICS " + (Tail "$root\runs\$run\metrics.jsonl" __OFF_M__ __CAP__)
+  "@@EPISODES " + (Tail "$root\runs\$run\episodes.jsonl" __OFF_E__ __CAP__)
+  $known = '__BENCHES__'.Split(',')
+  Get-ChildItem "$root\runs\$run\eval\periodic_*_greedy.json" -ErrorAction SilentlyContinue | % {
+    if ($known -notcontains $_.Name) {
+      $j = Get-Content $_.FullName -Raw | ConvertFrom-Json; $o = $j.bands[0].policy.outcomes
+      "@@BENCH " + $_.Name + " " + $j.global_step + " " + $o.won + " " + $o.lost + " " + $o.timeout + " " + $j.level
+    } }
+  "@@SNAPS " + ((Get-ChildItem "$root\ppo\checkpoints\snapshots\$($run)_*.pt" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | % { $_.Name + ':' + $_.Length }) -join ',')
+  "@@LOG " + ((Get-Content "C:\ogrl\$run.log" -Tail 6 -ErrorAction SilentlyContinue) -join ' || ')
+}
+"@@ENGINES " + @(Get-Process Overgrowth -ErrorAction SilentlyContinue).Count
+"@@TRAINER " + @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -like '*train_vec.py*' }).Count
+"@@END"
+"""
+
+
+# ---------------------------------------------------------------- per-run aggregate state
+
+def new_run_state(run: str) -> dict:
+    return {"run": run, "off_m": 0, "off_e": 0, "rest_m": "", "rest_e": "", "size_m": 0, "size_e": 0,
+            "bins": {},            # str(bin) -> {"1": [won, n, timeouts], ...} full difficulty only
+            "bins_low": 0,         # episodes below full difficulty (reported, not charted)
+            "recent": [],          # last 3000 full-difficulty episodes: [step, opp, outcome]
+            "metrics": [],         # thinned: [step, t, sps, entropy, summary_sat, summary_gp]
+            "last_metric": None, "benches": {}, "first_step": None, "last_episode_t": None}
+
+
+def state_path(run: str) -> Path:
+    return CACHE / f"run_{re.sub(r'[^A-Za-z0-9_.-]', '_', run)}.json"
+
+
+def load_run_state(run: str) -> dict:
+    p = state_path(run)
+    if p.exists():
         try:
-            lines.append(json.loads(raw_line))
-            new_offset += len(line_bytes)
-        except json.JSONDecodeError:
-            break
-    return new_offset, lines
+            return json.loads(p.read_text())
+        except Exception:
+            pass
+    return new_run_state(run)
 
 
-def _list_runs(runs_root: Path) -> list[dict]:
-    out = []
-    if not runs_root.exists():
+def save_run_state(st: dict) -> None:
+    CACHE.mkdir(parents=True, exist_ok=True)
+    tmp = state_path(st["run"]).with_suffix(".tmp")
+    tmp.write_text(json.dumps(st))
+    os.replace(tmp, state_path(st["run"]))
+
+
+def ingest_episodes(st: dict, text: str) -> None:
+    data = st["rest_e"] + text
+    lines = data.split("\n")
+    st["rest_e"] = lines.pop()                       # partial last line waits for the next poll
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            e = json.loads(line)
+        except Exception:
+            continue
+        step = int(e.get("global_step", 0))
+        if st["first_step"] is None:
+            st["first_step"] = step
+        st["last_episode_t"] = e.get("t", st["last_episode_t"])
+        if float(e.get("d", 0) or 0) < FULL_D:
+            st["bins_low"] += 1
+            continue
+        opp = str(int(e.get("opponents", 1) or 1))
+        b = st["bins"].setdefault(str(step // BIN), {})
+        cell = b.setdefault(opp, [0, 0, 0])
+        cell[1] += 1
+        if e.get("outcome") == "won":
+            cell[0] += 1
+        elif e.get("outcome") == "timeout":
+            cell[2] += 1
+        st["recent"].append([step, int(opp), e.get("outcome")])
+    st["recent"] = st["recent"][-3000:]
+
+
+def ingest_metrics(st: dict, text: str) -> None:
+    data = st["rest_m"] + text
+    lines = data.split("\n")
+    st["rest_m"] = lines.pop()
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            m = json.loads(line)
+        except Exception:
+            continue
+        if "global_step" not in m:
+            continue
+        perf = m.get("perf") or {}
+        nh = (m.get("net_health") or {}).get("summary") or {}
+        row = [m["global_step"], m.get("t"), perf.get("steps_per_second_cycle"),
+               (m.get("ppo") or {}).get("entropy"), nh.get("saturated"), nh.get("grad_pass")]
+        st["last_metric"] = row
+        if not st["metrics"] or row[0] - st["metrics"][-1][0] >= 200_000:
+            st["metrics"].append(row)
+
+
+# ---------------------------------------------------------------- poller
+
+class Poller(threading.Thread):
+    daemon = True
+
+    def __init__(self):
+        super().__init__()
+        self.lock = threading.Lock()
+        self.view_run = ""                 # "" = follow the active run
+        self.runs: dict[str, dict] = {}
+        self.info = {"host": None, "connected": False, "active": None, "runs": [], "engines": None,
+                     "trainer_procs": None, "snaps": [], "log": [], "last_poll": None, "error": None,
+                     "run": None}
+        self.wake = threading.Event()
+
+    def run(self):
+        while True:
+            backfilling = False
+            try:
+                backfilling = self.poll_once()
+            except Exception as exc:
+                with self.lock:
+                    self.info["error"] = repr(exc)[:300]
+                    self.info["connected"] = False
+            self.wake.wait(3 if backfilling else POLL_SECONDS)
+            self.wake.clear()
+
+    def poll_once(self) -> bool:
+        host = self.info["host"] or pick_host()
+        if host is None:
+            with self.lock:
+                self.info.update(connected=False, error="trainer unreachable on LAN and Tailscale")
+            return False
+        follow = not self.view_run
+        assumed = self.view_run or self.info.get("run")
+        st = None
+        if assumed:
+            st = self.runs.get(assumed) or load_run_state(assumed)
+            self.runs[assumed] = st
+        script = (POLL_PS.replace("__REPO__", TRAINER_REPO).replace("__RUN__", "" if follow else self.view_run)
+                  .replace("__OFF_M__", str(st["off_m"] if st else 0))
+                  .replace("__OFF_E__", str(st["off_e"] if st else 0))
+                  .replace("__CAP__", str(CHUNK if st else 0))
+                  .replace("__BENCHES__", ",".join(st["benches"]) if st else ""))
+        out = ps(host, script)
+        if "@@END" not in out:
+            self.info["host"] = None          # re-pick next time (LAN vs Tailscale may have changed)
+            raise RuntimeError("no answer from trainer: " + out.strip()[-200:])
+        sections = {}
+        benches = []
+        for line in out.split("\n"):
+            if line.startswith("@@BENCH "):
+                benches.append(line[8:].split(" "))
+            elif line.startswith("@@"):
+                k, _, v = line[2:].partition(" ")
+                sections[k] = v.strip()
+        actual = sections.get("RUN", "")
+        if not actual:
+            with self.lock:
+                self.info.update(host=host, connected=True, error="no active run on the trainer")
+            return False
+        if st is None or actual != st["run"]:
+            # the offsets sent were for another run (first contact, or the trainer switched profile):
+            # adopt the actual run and poll again straight away with its own cached offsets
+            with self.lock:
+                self.info.update(host=host, connected=True, run=actual)
+            self.runs[actual] = self.runs.get(actual) or load_run_state(actual)
+            return True
+        self.runs[actual] = st
+        more = False
+        for key, off, ingest in (("METRICS", "off_m", ingest_metrics), ("EPISODES", "off_e", ingest_episodes)):
+            v = sections.get(key, "0|0|")
+            size, new_off, b64 = v.split("|", 2)
+            size, new_off = int(size), int(new_off)
+            if new_off < st[off]:             # file was replaced/truncated: start over
+                fresh = new_run_state(actual)
+                fresh["benches"] = st["benches"]
+                st.update(fresh)
+            if b64:
+                ingest(st, base64.b64decode(b64).decode("utf-8", "replace"))
+            st[off] = new_off
+            st["size_m" if key == "METRICS" else "size_e"] = size
+            more = more or new_off < size
+        for name, step, won, lost, to, level in benches:
+            st["benches"][name] = [int(step), int(won), int(lost), int(to), level]
+        save_run_state(st)
+        snaps = []
+        for item in filter(None, sections.get("SNAPS", "").split(",")):
+            name, _, size = item.rpartition(":")
+            m = re.search(r"_(\d+)\.pt$", name)
+            snaps.append({"name": name, "size": int(size), "step": int(m.group(1)) if m else None})
+        try:
+            active = json.loads(sections.get("ACTIVE") or "null")
+        except Exception:
+            active = None
+        with self.lock:
+            self.info.update(host=host, connected=True, error=None, active=active, run=actual,
+                             runs=[r for r in sections.get("RUNS", "").split(",") if r],
+                             engines=int(sections.get("ENGINES") or 0),
+                             trainer_procs=int(sections.get("TRAINER") or 0),
+                             snaps=snaps, log=[x for x in sections.get("LOG", "").split(" || ") if x],
+                             last_poll=time.time())
+        return more
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            info = dict(self.info)
+        run = self.view_run or info.get("run")
+        st = self.runs.get(run) if run else None
+        return summarize(info, st)
+
+
+def summarize(info: dict, st: dict | None) -> dict:
+    out = {"trainer": {k: info.get(k) for k in ("host", "connected", "engines", "trainer_procs", "error",
+                                                 "last_poll", "runs", "log")},
+           "active": info.get("active"), "snaps": info.get("snaps", []), "run": None}
+    if not st:
         return out
-    for run_dir in sorted(runs_root.iterdir()):
-        if not run_dir.is_dir():
-            continue
-        manifest_path = run_dir / "run.json"
-        if not manifest_path.exists():
-            continue
-        try:
-            manifest = json.loads(manifest_path.read_text())
-        except (json.JSONDecodeError, OSError):
-            continue
-        metrics_path = run_dir / "metrics.jsonl"
-        last_metric = None
-        mtime = 0.0
-        if metrics_path.exists():
-            mtime = metrics_path.stat().st_mtime
-            try:
-                with open(metrics_path, "rb") as f:
-                    f.seek(0, 2)
-                    size = f.tell()
-                    chunk = min(size, 8192)
-                    f.seek(size - chunk)
-                    tail = f.read().decode("utf-8", errors="ignore")
-                    lines = [l for l in tail.splitlines() if l.strip()]
-                    if lines:
-                        last_metric = json.loads(lines[-1])
-            except (OSError, json.JSONDecodeError):
-                pass
-        live = manifest.get("status") == "running" and (time.time() - mtime) < 120
-        stale = manifest.get("status") == "running" and (time.time() - mtime) >= 120
-        # OGRL-20260816-024: the pause DID work the first time it was tried,
-        # but nothing in the UI showed it -- "live" only reflects "process
-        # running and recently touched metrics.jsonl," which stays true while
-        # paused too (the trainer is deliberately idle in a sleep loop, not
-        # crashed). Surface the actual current command so the front end can
-        # show a real PAUSED state instead of silently doing nothing visible.
-        control_command = None
-        control_path = run_dir / "control.json"
-        if control_path.exists():
-            try:
-                control_command = json.loads(control_path.read_text()).get("command")
-            except (OSError, json.JSONDecodeError):
-                pass
-        out.append({
-            "run_id": run_dir.name, "manifest": manifest, "last_metric": last_metric,
-            "live": live, "stale": stale, "control_command": control_command,
-        })
-    out.sort(key=lambda r: r["manifest"].get("started_at") or "", reverse=True)
+    lm = st.get("last_metric")
+    recent = st["recent"]
+    last_step = lm[0] if lm else None
+    window = [r for r in recent if last_step and r[0] >= last_step - BIN] or recent[-600:]
+    rates = {}
+    for opp in (1, 2, 3):
+        rows = [r for r in window if r[1] == opp]
+        if rows:
+            rates[str(opp)] = {"won": sum(r[2] == "won" for r in rows), "n": len(rows),
+                               "timeouts": sum(r[2] == "timeout" for r in rows)}
+    chart = []
+    for b in sorted(st["bins"], key=int):
+        cells = st["bins"][b]
+        chart.append({"step": (int(b) + 1) * BIN,
+                      **{o: (round(c[0] / c[1], 3) if c[1] >= 30 else None) for o, c in cells.items()}})
+    if chart and last_step and chart[-1]["step"] > last_step:
+        chart[-1]["partial"] = True                       # the current bin is still filling
+    restarts = [l for l in info.get("log", []) if "exited" in l]
+    out["run"] = {"run": st["run"], "step": last_step, "metric_t": lm[1] if lm else None,
+                  "sps": lm[2] if lm else None, "entropy": lm[3] if lm else None,
+                  "summary_sat": lm[4] if lm else None, "summary_gp": lm[5] if lm else None,
+                  "rates": rates, "window_steps": BIN, "chart": chart,
+                  "low_difficulty_episodes": st["bins_low"],
+                  "benches": sorted(st["benches"].values()),
+                  "backfill": {"metrics": [st["off_m"], st["size_m"]], "episodes": [st["off_e"], st["size_e"]]},
+                  "restarts": restarts}
     return out
 
 
+# ---------------------------------------------------------------- watching a checkpoint on the Mac
+
+class Watcher:
+    def __init__(self, poller: Poller):
+        self.poller = poller
+        self.proc = None
+        self.status = {"state": "idle", "message": "", "checkpoint": None, "results": [], "log_tail": []}
+        self.lock = threading.Lock()
+        self.log_path = CACHE / "watch.log"
+
+    @staticmethod
+    def drive_ok() -> tuple[bool, str]:
+        data = paths.data_dir()
+        if not (data / "Sounds" / "voice" / "phonemes.txt").exists():
+            return False, ("Game data not found -- the external 1TB drive is not connected "
+                           f"({data} points to it). Plug it in to watch fights on this Mac.")
+        return True, ""
+
+    def set(self, **kw):
+        with self.lock:
+            self.status.update(kw)
+
+    def fetch(self, host: str, run: str, which: str) -> Path:
+        CKPT_CACHE.mkdir(parents=True, exist_ok=True)
+        if which == "live":
+            remote_tmp = r"C:\ogrl\dashboard_live_copy.pt"
+            ps(host, f"Copy-Item -Force '{TRAINER_REPO}\\Tools\\rl\\ppo\\checkpoints\\{run}.pt' '{remote_tmp}'; 'ok'")
+            local = CKPT_CACHE / f"{run}_live_{time.strftime('%Y%m%d_%H%M%S')}.pt"
+            src = "C:/ogrl/dashboard_live_copy.pt"
+        else:
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+\.pt", which):
+                raise ValueError("bad checkpoint name")
+            local = CKPT_CACHE / which
+            if local.exists():
+                return local
+            src = f"{TRAINER_REPO}/Tools/rl/ppo/checkpoints/snapshots/{which}".replace("\\", "/")
+        tmp = local.with_suffix(".part")
+        r = subprocess.run(["scp", "-q", f"{host}:{src}", str(tmp)], capture_output=True, text=True, timeout=300)
+        if r.returncode != 0:
+            raise RuntimeError("copy failed: " + r.stderr.strip()[-200:])
+        os.replace(tmp, local)
+        return local
+
+    def start(self, req: dict) -> dict:
+        with self.lock:
+            if self.proc and self.proc.poll() is None:
+                return {"ok": False, "error": "a watch is already running"}
+        ok, why = self.drive_ok()
+        if not ok:
+            return {"ok": False, "error": why}
+        host = self.poller.info.get("host") or pick_host()
+        run = self.poller.view_run or self.poller.info.get("run")
+        level = req.get("map", "t_held_203")
+        if level not in MAPS_TRAIN + MAPS_HELD:
+            return {"ok": False, "error": "unknown map"}
+        opp = int(req.get("opponents", 3))
+        eps = max(1, min(20, int(req.get("episodes", 5))))
+        which = req.get("checkpoint", "live")
+        threading.Thread(target=self._run, args=(host, run, which, level, opp, eps, bool(req.get("sampled"))),
+                         daemon=True).start()
+        return {"ok": True}
+
+    def _run(self, host, run, which, level, opp, eps, sampled):
+        try:
+            self.set(state="copying", message=f"copying {'the live checkpoint' if which == 'live' else which}",
+                     results=[], log_tail=[], checkpoint=which)
+            ck = self.fetch(host, run, which)
+            cmd = [sys.executable, "-u", str(RL / "ppo" / "watch.py"), "--checkpoint", str(ck), "--controls",
+                   "v6-omni", "--level", f"arenas/{level}.xml", "--opponents", str(opp), "--difficulty", "1.0",
+                   "--episodes", str(eps), "--auto-camera", "--no-ghost"] + (["--sampled"] if sampled else [])
+            self.set(state="running", message=f"{ck.name} on {level}, 1v{opp}, {eps} fights", checkpoint=ck.name)
+            with open(self.log_path, "w") as log:
+                self.proc = subprocess.Popen(cmd, cwd=str(REPO), stdout=log, stderr=subprocess.STDOUT)
+                while self.proc.poll() is None:
+                    time.sleep(1)
+                    self._read_log()
+            self._read_log()
+            rc = self.proc.returncode
+            self.set(state="done" if rc == 0 else "failed",
+                     message="finished" if rc == 0 else f"watch.py exited {rc} (see last lines)")
+        except Exception as exc:
+            self.set(state="failed", message=repr(exc)[:300])
+
+    def _read_log(self):
+        try:
+            lines = self.log_path.read_text(errors="replace").splitlines()
+        except Exception:
+            return
+        res = []
+        for l in lines:
+            m = re.match(r"episode (\d+): steps=(\d+) real_seconds=([\d.]+).*(WON|LOST|timed out)$", l.strip())
+            if m:
+                res.append({"episode": int(m.group(1)), "steps": int(m.group(2)), "outcome": m.group(4)})
+        self.set(results=res, log_tail=lines[-6:])
+
+    def stop(self) -> dict:
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            return {"ok": True}
+        return {"ok": False, "error": "nothing running"}
+
+    def snapshot(self) -> dict:
+        ok, why = self.drive_ok()
+        with self.lock:
+            return {**self.status, "drive_ok": ok, "drive_message": why,
+                    "maps": {"train": MAPS_TRAIN, "held": MAPS_HELD}}
+
+
+# ---------------------------------------------------------------- http
+
+POLLER = Poller()
+WATCHER = Watcher(POLLER)
+
+
 class Handler(BaseHTTPRequestHandler):
-    runs_root: Path = None  # set by main()
-    repo_root: Path = None
+    def log_message(self, *_a):
+        pass
 
-    def log_message(self, fmt, *args):
-        pass  # keep stdout quiet -- this runs indefinitely alongside training
-
-    def _send_json(self, obj, status=200):
-        body = json.dumps(_sanitize_json(obj)).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+    def _send(self, code: int, body: bytes, ctype: str):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_error_json(self, status, message):
-        self._send_json({"error": message}, status=status)
-
-    def _send_raw(self, body: bytes, content_type: str, status=200):
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+    def _json(self, obj, code=200):
+        self._send(code, json.dumps(obj).encode(), "application/json")
 
     def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-        query = parse_qs(parsed.query)
-
-        if path == "/" or path == "":
-            return self._serve_static("index.html")
-        if path.startswith("/static/"):
-            return self._serve_static(path[len("/static/"):])
-
-        if path == "/api/runs":
-            return self._send_json({"runs": _list_runs(self.runs_root)})
-
-        if path == "/api/status":
-            runs = _list_runs(self.runs_root)
-            live_runs = [r["run_id"] for r in runs if r["live"]]
-            return self._send_json({"live_runs": live_runs, "cpu_busy": len(live_runs) > 0})
-
-        if path == "/api/checkpoint-catalog":
-            return self._send_json({"checkpoints": _checkpoint_catalog()})
-
-        if path == "/api/duel-levels":
-            return self._send_json({"levels": _duel_levels()})
-
-        if path == "/api/matches":
-            with _match_lock:
-                jobs = list(_match_jobs.items())
-            return self._send_json({"matches": [_match_snapshot(job_id, job) for job_id, job in jobs]})
-
-        if path.startswith("/api/matches/"):
-            job_id = path[len("/api/matches/"):]
-            with _match_lock:
-                job = _match_jobs.get(job_id)
-            if job is None:
-                match_dir = _match_dir(job_id)
-                if match_dir is None or not match_dir.exists():
-                    return self._send_error_json(404, "unknown match")
-                return self._send_json(_match_snapshot(job_id))
-            return self._send_json(_match_snapshot(job_id, job))
-
-        parts = [p for p in path.split("/") if p]
-        # /api/runs/{id}, /api/runs/{id}/metrics, /api/runs/{id}/episodes, /api/runs/{id}/events
-        if len(parts) >= 3 and parts[0] == "api" and parts[1] == "runs":
-            run_id = parts[2]
-            run_dir = _safe_run_dir(self.runs_root, run_id)
-            if run_dir is None or not run_dir.exists():
-                return self._send_error_json(404, f"unknown run_id: {run_id}")
-            sub = parts[3] if len(parts) > 3 else None
-            if sub is None:
-                manifest_path = run_dir / "run.json"
-                if not manifest_path.exists():
-                    return self._send_error_json(404, "run.json missing")
-                return self._send_json(json.loads(manifest_path.read_text()))
-            if sub == "move-stats":
-                # Ground-truth move distribution from Tools/rl/move_stats.py,
-                # which reads aschar.as's own GetAttackPath resolution
-                # (rl_log_attacks). Not inferred from the action vector --
-                # earlier context-based estimates of the move mix, and of how
-                # often the agent hits a downed opponent, were both wrong.
-                f = run_dir / "eval" / "move_stats.json"
-                if not f.exists():
-                    return self._send_json({"history": []})
-                try:
-                    return self._send_json(json.loads(f.read_text()))
-                except Exception:
-                    return self._send_json({"history": []})
-            if sub == "metrics":
-                offset = int(query.get("offset", ["0"])[0])
-                new_offset, lines = _read_jsonl_tail(run_dir / "metrics.jsonl", offset)
-                return self._send_json({"offset": new_offset, "lines": lines})
-            if sub == "episodes":
-                offset = int(query.get("offset", ["0"])[0])
-                new_offset, lines = _read_jsonl_tail(run_dir / "episodes.jsonl", offset)
-                return self._send_json({"offset": new_offset, "lines": lines})
-            if sub == "events":
-                events_path = run_dir / "events.jsonl"
-                events = []
-                if events_path.exists():
-                    for line in events_path.read_text().splitlines():
-                        if line.strip():
-                            try:
-                                events.append(json.loads(line))
-                            except json.JSONDecodeError:
-                                pass
-                return self._send_json({"events": events})
-            if sub == "reward":
-                manifest_path = run_dir / "run.json"
-                manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
-                profile = manifest.get("reward_profile", "default")
-                values = _resolve_reward_config(profile)
-                fields = []
-                for name, info in REWARD_FIELD_INFO.items():
-                    fields.append({"name": name, "value": values.get(name), **info})
-                return self._send_json({"profile": profile, "fields": fields})
-            if sub == "eval":
-                # /api/runs/{id}/eval -> list summaries; /api/runs/{id}/eval/{global_step} -> full file.
-                rest = parts[4] if len(parts) > 4 else None
-                if rest is None:
-                    return self._send_json({"evals": _list_eval_summaries(run_dir)})
-                try:
-                    global_step = int(rest)
-                except ValueError:
-                    return self._send_error_json(400, "global_step must be an integer")
-                eval_path = run_dir / "eval" / f"{global_step}.json"
-                if not eval_path.exists():
-                    return self._send_error_json(404, f"no eval result at global_step={global_step}")
-                try:
-                    return self._send_json(json.loads(eval_path.read_text()))
-                except (OSError, json.JSONDecodeError) as exc:
-                    return self._send_error_json(500, f"failed to read eval result: {exc}")
-            if sub == "tapes":
-                # /api/runs/{id}/tapes -> list meta; /api/runs/{id}/tapes/{name} -> raw jsonl stream.
-                rest = parts[4] if len(parts) > 4 else None
-                if rest is None:
-                    return self._send_json({"tapes": _list_tapes(run_dir)})
-                if not _safe_filename_component(rest):
-                    return self._send_error_json(400, "invalid tape name")
-                tape_path = run_dir / "tapes" / f"{rest}.jsonl"
-                if not tape_path.exists():
-                    return self._send_error_json(404, f"unknown tape: {rest}")
-                try:
-                    body = tape_path.read_bytes()
-                except OSError as exc:
-                    return self._send_error_json(500, f"failed to read tape: {exc}")
-                return self._send_raw(body, "application/x-ndjson; charset=utf-8")
-            if sub == "replays":
-                # /api/runs/{id}/replays -> summaries; /.../{name} -> a
-                # bounded decoded view for the state-playback UI.
-                rest = parts[4] if len(parts) > 4 else None
-                if rest is None:
-                    return self._send_json({"replays": _list_replays(run_dir)})
-                replay_path = _resolve_replay_path(run_dir, rest)
-                if replay_path is None:
-                    return self._send_error_json(404, f"unknown replay: {rest}")
-                try:
-                    reader = ReplayReader(replay_path)
-                    summary = reader.summary()
-                    summary["decisions"] = _replay_jsonable(reader.records("DECISION")[:20000])
-                    summary["visual_states"] = _replay_jsonable(reader.records("VISUAL")[:20000])
-                    summary["events"] = _replay_jsonable(reader.records("EVENT")[:20000])
-                    summary["reset"] = _replay_jsonable(reader.records("RESET")[:4])
-                    return self._send_json(summary)
-                except (OSError, ValueError, json.JSONDecodeError) as exc:
-                    return self._send_error_json(422, f"replay is unreadable: {exc}")
-            return self._send_error_json(404, f"unknown sub-resource: {sub}")
-
-        if path == "/api/checkpoints":
-            return self._send_json({"checkpoints": _checkpoint_catalog()})
-
-        if path.startswith("/api/replay/"):
-            job_id = path[len("/api/replay/"):]
-            with _replay_lock:
-                job = _replay_jobs.get(job_id)
-            if job is None:
-                return self._send_error_json(404, "unknown replay job")
-            log_tail = ""
-            log_path = Path(job["log_path"])
-            if log_path.exists():
-                log_tail = log_path.read_text(errors="ignore")[-4000:]
-            result = None
-            report_path = Path(job.get("report_path", "")) if job.get("report_path") else None
-            if report_path and report_path.exists():
-                try:
-                    raw_report = report_path.read_text().strip()
-                    result = json.loads(raw_report) if raw_report else {"verification": "engine_report_missing"}
-                except (OSError, json.JSONDecodeError):
-                    result = {"verification": "report_unreadable"}
-            return self._send_json({"job_id": job_id, "status": job["status"], "log_tail": log_tail, "result": result})
-
-        return self._send_error_json(404, "not found")
+        if self.path in ("/", "/index.html"):
+            self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+        elif self.path == "/api/state":
+            self._json({**POLLER.snapshot(), "watch": WATCHER.snapshot(), "now": time.time(),
+                        "view_run": POLLER.view_run})
+        else:
+            self._send(404, b"not found", "text/plain")
 
     def do_POST(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-        length = int(self.headers.get("Content-Length", 0))
-        body_raw = self.rfile.read(length) if length else b"{}"
+        n = int(self.headers.get("Content-Length") or 0)
         try:
-            payload = json.loads(body_raw) if body_raw else {}
-        except json.JSONDecodeError:
-            return self._send_error_json(400, "invalid JSON body")
-
-        parts = [p for p in path.split("/") if p]
-        if len(parts) == 4 and parts[0] == "api" and parts[1] == "runs" and parts[3] == "control":
-            run_id = parts[2]
-            run_dir = _safe_run_dir(self.runs_root, run_id)
-            if run_dir is None or not run_dir.exists():
-                return self._send_error_json(404, f"unknown run_id: {run_id}")
-            command = payload.get("command")
-            if command not in (None, "pause", "stop"):
-                return self._send_error_json(400, f"invalid command: {command!r} (must be pause, stop, or null)")
-            control_path = run_dir / "control.json"
-            tmp = control_path.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps({"command": command, "t": time.time()}))
-            import os
-            os.replace(tmp, control_path)
-            return self._send_json({"ok": True, "command": command})
-
-        if len(parts) == 4 and parts[0] == "api" and parts[1] == "runs" and parts[3] == "replay-controls":
-            run_id = parts[2]
-            run_dir = _safe_run_dir(self.runs_root, run_id)
-            if run_dir is None or not run_dir.exists():
-                return self._send_error_json(404, f"unknown run_id: {run_id}")
-            command = payload.get("command")
-            allowed = {"capture_next", "capture_next_loss", "capture_next_n", None}
-            if command not in allowed:
-                return self._send_error_json(400, "invalid replay capture command")
-            count = int(payload.get("count", 1)) if command == "capture_next_n" else 1
-            if count < 1 or count > 20:
-                return self._send_error_json(400, "capture count must be between 1 and 20")
-            control_path = run_dir / "replay-control.json"
-            tmp = control_path.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps({"command": command, "count": count, "t": time.time()}))
-            import os
-            os.replace(tmp, control_path)
-            return self._send_json({"ok": True, "command": command, "count": count})
-
-        if len(parts) == 6 and parts[0] == "api" and parts[1] == "runs" and parts[3] == "replays" and parts[5] == "pin":
-            run_id, name = parts[2], parts[4]
-            run_dir = _safe_run_dir(self.runs_root, run_id)
-            replay_path = _resolve_replay_path(run_dir, name) if run_dir and run_dir.exists() else None
-            if replay_path is None:
-                return self._send_error_json(404, "unknown replay")
-            sidecar = replay_path.with_suffix(".meta.json")
-            meta = {}
-            if sidecar.exists():
-                try:
-                    meta = json.loads(sidecar.read_text())
-                except (OSError, json.JSONDecodeError):
-                    pass
-            meta["pinned"] = bool(payload.get("pinned", True))
-            tmp = sidecar.with_suffix(sidecar.suffix + ".tmp")
-            tmp.write_text(json.dumps(meta, indent=2) + "\n")
-            import os
-            os.replace(tmp, sidecar)
-            return self._send_json({"ok": True, "pinned": meta["pinned"]})
-
-        if len(parts) == 4 and parts[0] == "api" and parts[1] == "runs" and parts[3] == "events":
-            run_id = parts[2]
-            run_dir = _safe_run_dir(self.runs_root, run_id)
-            if run_dir is None or not run_dir.exists():
-                return self._send_error_json(404, f"unknown run_id: {run_id}")
-            record = {"t": time.time(), "kind": payload.get("kind", "note"),
-                      "title": payload.get("title", ""), "body": payload.get("body", "")}
-            with open(run_dir / "events.jsonl", "a") as f:
-                f.write(json.dumps(record) + "\n")
-            return self._send_json({"ok": True})
-
-        if path == "/api/matches":
-            return self._handle_match(payload)
-
-        if path == "/api/replay":
-            return self._handle_replay(payload)
-
-        return self._send_error_json(404, "not found")
-
-    def do_DELETE(self):
-        parsed = urlparse(self.path)
-        parts = [p for p in parsed.path.split("/") if p]
-        if len(parts) == 3 and parts[0] == "api" and parts[1] == "replay":
-            job_id = parts[2]
-            with _replay_lock:
-                job = _replay_jobs.get(job_id)
-            if job is None:
-                return self._send_error_json(404, "unknown replay job")
-            proc = job.get("process")
-            if proc is not None and proc.poll() is None:
-                proc.terminate()
-            return self._send_json({"ok": True})
-        if len(parts) == 3 and parts[0] == "api" and parts[1] == "matches":
-            job_id = parts[2]
-            with _match_lock:
-                job = _match_jobs.get(job_id)
-            if job is None:
-                return self._send_error_json(404, "unknown match")
-            proc = job.get("process")
-            if proc is not None and proc.poll() is None:
-                try:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                except (OSError, ProcessLookupError):
-                    proc.terminate()
-            with _match_lock:
-                job["status"] = "stopping"
-            return self._send_json({"ok": True, "match_id": job_id})
-        return self._send_error_json(404, "not found")
-
-    def _handle_match(self, payload: dict):
-        """Validate a catalog ID, then launch the dedicated match supervisor."""
-        checkpoint_id = payload.get("checkpoint_id")
-        if not isinstance(checkpoint_id, str) or not _safe_filename_component(checkpoint_id) or not checkpoint_id.endswith(".pt"):
-            return self._send_error_json(400, "choose a checkpoint from the catalog")
-        catalog = {item["id"]: item for item in _checkpoint_catalog()}
-        checkpoint = catalog.get(checkpoint_id)
-        if checkpoint is None:
-            return self._send_error_json(404, "unknown checkpoint")
-        if checkpoint.get("status") != "ready":
-            return self._send_error_json(409, checkpoint.get("reason", "checkpoint is not compatible"))
-
-        mode = payload.get("policy_mode", "deterministic")
-        if mode not in ("deterministic", "sampled"):
-            return self._send_error_json(400, "invalid policy mode")
-        # Duel level. Defaults to oval for backwards compatibility, but a
-        # corpus-trained checkpoint should be fought on a map it actually
-        # trained on -- see play_match.py's --level help.
-        level = payload.get("level") or "arenas/oval_arena_human_duel.xml"
-        if not re.fullmatch(r"arenas/[A-Za-z0-9_.-]+\.xml", level):
-            return self._send_error_json(400, "invalid level")
-
-        with _match_lock:
-            active_matches = [
-                match_id for match_id, job in _match_jobs.items()
-                if job.get("process") is not None and job["process"].poll() is None
-            ]
-        if active_matches:
-            return self._send_error_json(409, "a checkpoint match is already running")
-
-        live = [r["run_id"] for r in _list_runs(self.runs_root) if r["live"]]
-        if live and not payload.get("force"):
-            return self._send_error_json(409, f"training is live ({', '.join(live)}) -- stop it or pass force:true")
-
-        match_id = f"match-{int(time.time() * 1000)}"
-        match_dir = self.runs_root / "_matches" / match_id
-        match_dir.mkdir(parents=True, exist_ok=False)
-        log_path = match_dir / "match.log"
-        status_path = match_dir / "status.json"
-        session_dir = match_dir / "session"
-        argv = [sys.executable, str(self.repo_root / "Tools/rl/play_match.py"),
-                "--checkpoint", str(self.repo_root / "Tools/rl/ppo/checkpoints" / checkpoint_id),
-                "--checkpoint-id", checkpoint_id,
-                "--repo-root", str(self.repo_root),
-                "--status-path", str(status_path),
-                "--session-dir", str(session_dir),
-                "--match-id", match_id,
-                "--policy-mode", mode,
-                "--level", level]
-        try:
-            log_file = open(log_path, "w")
-            proc = subprocess.Popen(argv, cwd=self.repo_root, stdout=log_file, stderr=subprocess.STDOUT,
-                                    start_new_session=True)
-        except OSError as exc:
-            try:
-                log_file.close()
-            except UnboundLocalError:
-                pass
-            return self._send_error_json(500, f"failed to launch match: {exc}")
-        job = {"process": proc, "log_path": str(log_path), "status": "running", "checkpoint_id": checkpoint_id}
-        with _match_lock:
-            _match_jobs[match_id] = job
-
-        def _watch_match_exit():
-            code = proc.wait()
-            try:
-                log_file.close()
-            except OSError:
-                pass
-            with _match_lock:
-                if match_id in _match_jobs:
-                    _match_jobs[match_id]["status"] = "exited"
-                    _match_jobs[match_id]["exit_code"] = code
-
-        threading.Thread(target=_watch_match_exit, daemon=True).start()
-        return self._send_json({"match_id": match_id, "status": "running", "checkpoint": checkpoint})
-
-    def _handle_replay(self, payload: dict):
-        # Refuse while a run is live unless the caller explicitly forces it --
-        # a rendered engine window at 1x speed visibly slows a live training
-        # run on a fanless machine, so this must be an opt-in, not a default.
-        live = [r["run_id"] for r in _list_runs(self.runs_root) if r["live"]]
-        if live and not payload.get("force"):
-            return self._send_error_json(409, f"training is live ({', '.join(live)}) -- pass force:true to replay anyway")
-
-        kind = payload.get("kind")
-        job_id = f"{kind}-{int(time.time()*1000)}"
-        log_dir = self.runs_root / "_replays"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / f"{job_id}.log"
-        report_path = ""
-
-        if kind == "watch":
-            checkpoint = payload.get("checkpoint")
-            if not checkpoint:
-                return self._send_error_json(400, "watch replay requires 'checkpoint'")
-            argv = [sys.executable, str(self.repo_root / "Tools/rl/ppo/watch.py"),
-                    "--checkpoint", checkpoint, "--episodes", str(payload.get("episodes", 2))]
-            # OGRL-20260817-028 Sec8.1/Sec8.6: watch.py's --from-run reads
-            # --level/--frame-stack/--act-period straight from that run's own
-            # run.json via run_config.py, instead of this server guessing at
-            # (or worse, hardcoding) the checkpoint's actual training config.
-            run_id_for_watch = payload.get("run_id")
-            if run_id_for_watch:
-                run_dir_for_watch = _safe_run_dir(self.runs_root, run_id_for_watch)
-                if run_dir_for_watch is not None and run_dir_for_watch.exists():
-                    argv += ["--from-run", run_id_for_watch, "--runs-root", str(self.runs_root)]
-        elif kind == "ghost":
-            csv_path = payload.get("csv")
-            if not csv_path:
-                return self._send_error_json(400, "ghost replay requires 'csv'")
-            argv = [sys.executable, str(self.repo_root / "Tools/rl/replay_ghost.py"), csv_path]
-        elif kind == "tape":
-            # Replay a recorded tape (tape.py) rendered live in the engine,
-            # via the same RLAction::LoadScript scripted-input mechanism
-            # replay_ghost.py already uses for watch.py's ghosts -- see this
-            # dashboard's static/app.js Tapes tab ("Replay in engine" button).
-            run_id_for_tape = payload.get("run_id")
-            tape_name = payload.get("tape_name")
-            if not run_id_for_tape or not tape_name:
-                return self._send_error_json(400, "tape replay requires 'run_id' and 'tape_name'")
-            run_dir_for_tape = _safe_run_dir(self.runs_root, run_id_for_tape)
-            if run_dir_for_tape is None or not run_dir_for_tape.exists():
-                return self._send_error_json(404, f"unknown run_id: {run_id_for_tape}")
-            if not _safe_filename_component(tape_name):
-                return self._send_error_json(400, "invalid tape name")
-            tape_jsonl = run_dir_for_tape / "tapes" / f"{tape_name}.jsonl"
-            tape_meta_path = run_dir_for_tape / "tapes" / f"{tape_name}.meta.json"
-            if not tape_jsonl.exists():
-                return self._send_error_json(404, f"unknown tape: {tape_name}")
-            try:
-                tape_meta = json.loads(tape_meta_path.read_text()) if tape_meta_path.exists() else {}
-            except (OSError, json.JSONDecodeError):
-                tape_meta = {}
-            manifest_path = run_dir_for_tape / "run.json"
-            manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
-            level = (manifest.get("env") or {}).get("level") or "arenas/oval_arena_1v1_unarmed.xml"
-            sys.path.insert(0, str(self.repo_root / "Tools/rl"))
-            from tape import jsonl_to_ghost_csv
-            ghost_csv = log_dir / f"{job_id}.csv"
-            try:
-                n_rows = jsonl_to_ghost_csv(tape_jsonl, ghost_csv)
-            except Exception as exc:  # noqa: BLE001 -- report, don't crash the server over one bad tape
-                return self._send_error_json(500, f"failed to convert tape to ghost CSV: {exc}")
-            if n_rows == 0:
-                return self._send_error_json(400, "tape has zero decisions")
-            # OGRL-20260817-030: seed + difficulty now actually reproduce the
-            # tape's original opponent (see replay_ghost.py's module
-            # docstring and RLReplaySeed). opponents/species/weapons aren't
-            # stored per-tape (constant for Stage A at the time this was
-            # written -- tape.py doesn't record them), so they're pulled from
-            # the run's own manifest instead; if a future stage varies them
-            # per-episode, tape.py's meta.json needs to start storing them too.
-            algo = manifest.get("algo") or {}
-            # OGRL-20260817-031: --act-period must match what the tape was
-            # actually recorded at or playback speed/length is wrong (see
-            # replay_ghost.py's module docstring) -- pulled from the run's
-            # own manifest, same source env.py itself trains against.
-            act_period = (manifest.get("env") or {}).get("act_period", 1)
-            argv = [sys.executable, str(self.repo_root / "Tools/rl/replay_ghost.py"), str(ghost_csv),
-                    "--level", level, "--seed", str(tape_meta.get("seed", 1)), "--act-period", str(act_period)]
-            if tape_meta.get("difficulty") is not None:
-                argv += ["--difficulty", str(tape_meta["difficulty"])]
-            if algo.get("opponents") is not None:
-                argv += ["--opponents", str(algo["opponents"])]
-            if algo.get("weapons_prob") is not None:
-                argv += ["--weapons", str(algo["weapons_prob"])]
-            if algo.get("species_mode") is not None:
-                argv += ["--species", str(algo["species_mode"])]
-        elif kind == "native":
-            run_id_for_replay = payload.get("run_id")
-            replay_name = payload.get("replay_name")
-            run_dir = _safe_run_dir(self.runs_root, run_id_for_replay) if run_id_for_replay else None
-            replay_path = _resolve_replay_path(run_dir, replay_name) if run_dir and run_dir.exists() else None
-            if replay_path is None:
-                return self._send_error_json(404, "unknown native replay")
-            try:
-                replay_reader = ReplayReader(replay_path)
-                replay_summary = replay_reader.summary()
-                replay_manifest = replay_reader.manifest
-            except (OSError, ValueError, json.JSONDecodeError) as exc:
-                return self._send_error_json(422, f"native replay is unreadable: {exc}")
-            if not replay_reader.complete or not replay_reader.records("TICK"):
-                return self._send_error_json(409, "this episode has no complete native 120 Hz trace")
-            if replay_manifest.get("verification") not in ("native_state_trace", "exact_simulation_verified"):
-                return self._send_error_json(409, "this episode is recorded-state only and cannot launch an exact engine replay")
-            run_manifest = json.loads((run_dir / "run.json").read_text())
-            env_manifest = run_manifest.get("env") or {}
-            algo = run_manifest.get("algo") or {}
-            seed = replay_manifest.get("seed")
-            if seed is None:
-                return self._send_error_json(409, "native replay has no episode seed")
-            report_path = log_dir / f"{job_id}.report.json"
-            argv = [sys.executable, str(self.repo_root / "Tools/rl/replay_native.py"),
-                    "--repo-root", str(self.repo_root), "--replay", str(replay_path),
-                    "--level", str(env_manifest.get("level") or algo.get("level") or "arenas/oval_arena_1v1_unarmed.xml"),
-                    "--seed", str(seed), "--report", str(report_path),
-                    "--binary-path", str(self.repo_root / "BuildArm64/Overgrowth.app/Contents/MacOS/Overgrowth")]
-            if replay_manifest.get("difficulty") is not None:
-                argv += ["--difficulty", str(replay_manifest["difficulty"])]
-            native_reset = replay_manifest.get("native_reset") or {}
-            if native_reset.get("reset_mode") is not None:
-                argv += ["--reset-mode", str(native_reset["reset_mode"])]
-            if replay_manifest.get("native_controlled_character_id") is not None:
-                argv += ["--controlled-character-id", str(replay_manifest["native_controlled_character_id"])]
-            for key, flag in (("opponents", "--opponents"), ("weapons_prob", "--weapons"), ("species_mode", "--species")):
-                if algo.get(key) is not None:
-                    argv += [flag, str(algo[key])]
+            body = json.loads(self.rfile.read(n) or b"{}")
+        except Exception:
+            body = {}
+        if self.path == "/api/watch":
+            self._json(WATCHER.start(body))
+        elif self.path == "/api/watch/stop":
+            self._json(WATCHER.stop())
+        elif self.path == "/api/run":
+            r = str(body.get("run", ""))
+            if r and not re.fullmatch(r"[A-Za-z0-9_.-]+", r):
+                return self._json({"ok": False, "error": "bad run name"})
+            POLLER.view_run = r
+            POLLER.wake.set()
+            self._json({"ok": True})
+        elif self.path == "/api/refresh":
+            POLLER.wake.set()
+            self._json({"ok": True})
         else:
-            return self._send_error_json(400, f"unknown replay kind: {kind!r}")
-
-        try:
-            log_file = open(log_path, "w")
-            proc = subprocess.Popen(argv, cwd=self.repo_root, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
-        except OSError as exc:
-            return self._send_error_json(500, f"failed to launch replay: {exc}")
-
-        with _replay_lock:
-            _replay_jobs[job_id] = {"process": proc, "log_path": str(log_path), "status": "running",
-                                    "report_path": str(report_path)}
-
-        def _watch_exit():
-            proc.wait()
-            with _replay_lock:
-                if job_id in _replay_jobs:
-                    _replay_jobs[job_id]["status"] = "exited"
-        threading.Thread(target=_watch_exit, daemon=True).start()
-
-        return self._send_json({"job_id": job_id, "status": "running"})
-
-    def _serve_static(self, rel_path: str):
-        if rel_path == "":
-            rel_path = "index.html"
-        candidate = (STATIC_DIR / rel_path).resolve()
-        try:
-            candidate.relative_to(STATIC_DIR.resolve())
-        except ValueError:
-            return self._send_error_json(403, "forbidden")
-        if not candidate.is_file():
-            return self._send_error_json(404, "not found")
-        mime = MIME_TYPES.get(candidate.suffix, "application/octet-stream")
-        body = candidate.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", mime)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+            self._send(404, b"not found", "text/plain")
 
 
-def main():
+def main() -> int:
     import argparse
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--runs-root", default=None)
-    p.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[3]))
-    p.add_argument("--port", type=int, default=8420)
-    p.add_argument("--open", action="store_true")
-    args = p.parse_args()
-
-    repo_root = Path(args.repo_root).resolve()
-    runs_root = Path(args.runs_root).resolve() if args.runs_root else repo_root / "Tools/rl/runs"
-    runs_root.mkdir(parents=True, exist_ok=True)
-
-    Handler.runs_root = runs_root
-    Handler.repo_root = repo_root
-
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    url = f"http://127.0.0.1:{args.port}/"
-    print(f"dashboard serving {runs_root} at {url}")
-    print("read-only w.r.t. training except control.json (pause/stop) -- see telemetry.py's module docstring")
-    if args.open:
-        import webbrowser
-        webbrowser.open(url)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--port", type=int, default=8770)
+    a = ap.parse_args()
+    CACHE.mkdir(parents=True, exist_ok=True)
+    POLLER.start()
+    srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    print(f"dashboard on http://127.0.0.1:{a.port}  (Ctrl-C to stop)", flush=True)
     try:
-        server.serve_forever()
+        srv.serve_forever()
     except KeyboardInterrupt:
         pass
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overgrowth training</title>
+<style>
+  :root { --text: #111; --muted: #6b6b6b; --line: #e3e3e3; --bad: #b42318; --ok: #1a7f37; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--text);
+         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+           border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; }
+  h2 { font-size: 13px; font-weight: 600; margin: 28px 0 8px; text-transform: none; }
+  .muted { color: var(--muted); }
+  .bad { color: var(--bad); }
+  .ok { color: var(--ok); }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: baseline; margin-top: 14px; }
+  .kv span { display: block; }
+  .kv .v { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .kv .k { color: var(--muted); font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  td, th { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); font-weight: normal; }
+  th { color: var(--muted); font-size: 12px; }
+  select, input, button { font: inherit; color: var(--text); }
+  select, input[type=number] { border: 1px solid #c9c9c9; border-radius: 3px; padding: 4px 6px; background: #fff; }
+  button { border: 1px solid var(--text); background: #fff; border-radius: 3px; padding: 5px 14px; cursor: pointer; }
+  button:disabled { border-color: #c9c9c9; color: #a0a0a0; cursor: default; }
+  .form { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; }
+  .form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  .form label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 14px; }
+  .note { margin-top: 10px; }
+  svg { display: block; width: 100%; height: auto; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin: 0 4px 0 12px; }
+  a { color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Overgrowth training</h1>
+    <div class="muted" id="conn">connecting…</div>
+  </header>
+
+  <div class="row" id="runrow">
+    <label class="muted">run <select id="runsel"></select></label>
+    <span id="status"></span>
+  </div>
+  <div class="muted" id="purpose" style="margin-top:4px"></div>
+
+  <div class="row" id="numbers"></div>
+
+  <h2>Win rate at difficulty 1.0, per million steps</h2>
+  <div id="chart"></div>
+  <div class="legend"><i style="border-color:#111"></i>1 vs 3<i style="border-color:#8a8a8a"></i>1 vs 2<i style="border-color:#c8c8c8"></i>1 vs 1
+    <span id="chartnote"></span></div>
+
+  <h2>Quick checks <span class="muted" style="font-weight:normal">— 200 fights, 1 vs 3, one training map, best move only</span></h2>
+  <table id="benches"><tr><th>steps</th><th>won</th><th>lost</th><th>nobody down</th></tr></table>
+
+  <h2>Watch a checkpoint on this Mac</h2>
+  <div class="form">
+    <label>checkpoint <select id="ck"></select></label>
+    <label>map <select id="map"></select></label>
+    <label>enemies <select id="opp"><option>1</option><option>2</option><option selected>3</option></select></label>
+    <label>fights <input id="eps" type="number" min="1" max="20" value="5" style="width:64px"></label>
+    <label class="inline"><input id="sampled" type="checkbox"> play with training randomness</label>
+    <button id="go">Watch</button>
+    <button id="stop">Stop</button>
+  </div>
+  <div class="note" id="watchnote"></div>
+  <table id="watchres" style="margin-top:8px;max-width:420px"></table>
+
+  <h2>Trainer</h2>
+  <div id="trainer" class="muted"></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let state = null, ckChoice = null;
+
+function ago(t, now) {
+  if (!t) return "—";
+  const s = Math.max(0, Math.round(now - t));
+  if (s < 90) return s + " s ago";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  return (s / 3600).toFixed(1) + " h ago";
+}
+function M(step) { return step == null ? "—" : (step / 1e6).toFixed(1) + "M"; }
+function pct(won, n) { return n ? Math.round(100 * won / n) + "%" : "—"; }
+
+function render() {
+  const s = state, now = s.now, t = s.trainer, r = s.run;
+  $("conn").innerHTML = t.connected
+    ? `trainer via ${t.host} · updated ${ago(t.last_poll, now)} · <a href="#" id="refresh">refresh</a>`
+    : `<span class="bad">trainer not reachable</span>${t.error ? " — " + t.error : ""}`;
+  const rf = $("refresh"); if (rf) rf.onclick = (e) => { e.preventDefault(); fetch("/api/refresh", {method: "POST"}); };
+
+  // run selector
+  const sel = $("runsel"), runs = t.runs || [];
+  const cur = r ? r.run : "";
+  if (sel.dataset.sig !== runs.join(",") + "|" + cur) {
+    sel.innerHTML = `<option value="">active run${s.active ? " (" + s.active.run_id + ")" : ""}</option>` +
+      runs.map(x => `<option value="${x}">${x}</option>`).join("");
+    sel.dataset.sig = runs.join(",") + "|" + cur;
+  }
+  if (document.activeElement !== sel) sel.value = s.view_run || "";
+  $("purpose").textContent = s.active && r && s.active.run_id === r.run ? (s.active.profile ? "profile " + s.active.profile + " · since " + s.active.since : "") : "";
+
+  if (!r) { $("status").textContent = "loading run…"; return; }
+  const age = r.metric_t ? now - r.metric_t : null;
+  let st;
+  if (r.run !== (s.active && s.active.run_id)) st = `<span class="muted">not the active run</span>`;
+  else if (age != null && age < 600 && t.trainer_procs > 0) st = `<span class="ok">training</span>`;
+  else if (t.trainer_procs === 0) st = `<span class="bad">not training</span>`;
+  else st = `<span class="bad">no new data for ${ago(r.metric_t, now).replace(" ago", "")}</span>`;
+  $("status").innerHTML = st;
+
+  const nums = [["steps", M(r.step)], ["steps / s", r.sps ? Math.round(r.sps) : "—"],
+                ["engines", t.engines ?? "—"]];
+  for (const o of ["1", "2", "3"]) {
+    const c = r.rates[o];
+    nums.push([`1 vs ${o}, last 1M steps`, c ? `${pct(c.won, c.n)}` : "—", c ? `${c.won}/${c.n}` : ""]);
+  }
+  $("numbers").innerHTML = nums.map(([k, v, sub]) =>
+    `<div class="kv"><span class="v">${v}</span><span class="k">${k}${sub ? " · " + sub : ""}</span></div>`).join("");
+
+  drawChart(r.chart);
+  const bf = r.backfill;
+  const loading = bf && (bf.episodes[0] < bf.episodes[1]);
+  $("chartnote").textContent = (loading ? ` · loading history ${Math.round(100 * bf.episodes[0] / bf.episodes[1])}%` : "") +
+    (r.low_difficulty_episodes ? ` · ${r.low_difficulty_episodes} fights below difficulty 1.0 not shown` : "");
+
+  $("benches").innerHTML = `<tr><th>steps</th><th>won</th><th>lost</th><th>nobody down</th></tr>` +
+    (r.benches.length ? r.benches.slice().reverse().map(b =>
+      `<tr><td>${M(b[0])}</td><td>${b[1]}</td><td>${b[2]}</td><td>${b[3]}</td></tr>`).join("")
+      : `<tr><td class="muted" colspan="4">none yet (one every 5M steps)</td></tr>`);
+
+  // watch form
+  const ck = $("ck");
+  const snaps = (s.snaps || []).slice().reverse();
+  const opts = [["live", "current (copy of the live checkpoint)"]].concat(snaps.map(x => [x.name, M(x.step) + " snapshot"]));
+  const sig = opts.map(o => o[0]).join(",");
+  if (ck.dataset.sig !== sig) {
+    const keep = ckChoice || ck.value || "live";
+    ck.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+    ck.value = opts.some(o => o[0] === keep) ? keep : "live";
+    ck.dataset.sig = sig;
+  }
+  const w = s.watch, mp = $("map");
+  if (!mp.dataset.done) {
+    mp.innerHTML = `<optgroup label="never trained on">${w.maps.held.map(m => `<option>${m}</option>`).join("")}</optgroup>` +
+      `<optgroup label="training maps">${w.maps.train.map(m => `<option>${m}</option>`).join("")}</optgroup>`;
+    mp.dataset.done = 1;
+  }
+  const busy = w.state === "copying" || w.state === "running";
+  $("go").disabled = busy || !w.drive_ok;
+  $("stop").disabled = w.state !== "running";
+  let note = "";
+  if (!w.drive_ok) note = `<span class="bad">${w.drive_message}</span>`;
+  else if (w.state === "copying") note = w.message + "…";
+  else if (w.state === "running") note = "playing: " + w.message + " — the game window is open";
+  else if (w.state === "failed") note = `<span class="bad">${w.message}</span>` +
+    (w.log_tail.length ? `<pre class="muted" style="white-space:pre-wrap;font-size:12px">${w.log_tail.join("\n")}</pre>` : "");
+  else if (w.state === "done") note = "finished: " + w.message;
+  $("watchnote").innerHTML = note;
+  const res = w.results || [];
+  $("watchres").innerHTML = res.length ? res.map(x =>
+    `<tr><td>fight ${x.episode + 1}</td><td>${x.outcome === "WON" ? "won" : x.outcome === "LOST" ? "lost" : "nobody down in 40 s"}</td><td class="muted">${(x.steps / 30).toFixed(0)} s game time</td></tr>`).join("") +
+    `<tr><td class="muted">total</td><td>${res.filter(x => x.outcome === "WON").length} of ${res.length} won</td><td></td></tr>` : "";
+
+  // trainer footer
+  const lines = [];
+  if (r.summary_sat != null) lines.push(`enemy-summary layer: ${Math.round(100 * r.summary_sat)}% pinned, learning signal ${Math.round(100 * r.summary_gp)}%`);
+  if (r.restarts.length) lines.push("last restarts: " + r.restarts.slice(-3).map(x => x.replace(/^\[([^\]]+)\].*exited (\d+).*/, "$1 (exit $2)")).join(", "));
+  $("trainer").innerHTML = lines.map(l => `<div>${l}</div>`).join("");
+}
+
+function drawChart(chart) {
+  const W = 880, H = 220, L = 34, R = 8, T = 8, B = 24;
+  if (!chart.length) { $("chart").innerHTML = `<div class="muted">no full-difficulty fights yet</div>`; return; }
+  const x0 = chart[0].step - 1e6, x1 = chart[chart.length - 1].step;
+  const X = (s) => L + (W - L - R) * (s - x0) / Math.max(1, x1 - x0);
+  const Y = (v) => T + (H - T - B) * (1 - v);
+  let g = "";
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+    g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="#eee"/>` +
+         `<text x="${L - 6}" y="${Y(v) + 4}" font-size="11" fill="#6b6b6b" text-anchor="end">${v * 100}%</text>`;
+  }
+  const span = x1 - x0, step = span > 40e6 ? 10e6 : span > 15e6 ? 5e6 : span > 6e6 ? 2e6 : 1e6;
+  for (let s = Math.ceil(x0 / step) * step; s <= x1; s += step) {
+    g += `<text x="${X(s)}" y="${H - 6}" font-size="11" fill="#6b6b6b" text-anchor="middle">${(s / 1e6).toFixed(0)}M</text>`;
+  }
+  const series = [["1", "#c8c8c8"], ["2", "#8a8a8a"], ["3", "#111"]];
+  for (const [o, col] of series) {
+    let d = "", pen = false;
+    for (const p of chart) {
+      const v = p[o];
+      if (v == null || p.partial) { pen = false; continue; }
+      d += (pen ? "L" : "M") + X(p.step).toFixed(1) + " " + Y(v).toFixed(1) + " ";
+      pen = true;
+    }
+    if (d) g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${o === "3" ? 2 : 1.5}"/>`;
+  }
+  $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="win rate per million steps">${g}</svg>`;
+}
+
+async function tick() {
+  try {
+    state = await (await fetch("/api/state")).json();
+    render();
+  } catch (e) { $("conn").innerHTML = `<span class="bad">dashboard server not responding</span>`; }
+}
+
+$("runsel").onchange = async (e) => {
+  await fetch("/api/run", {method: "POST", body: JSON.stringify({run: e.target.value})});
+  setTimeout(tick, 1500);
+};
+$("ck").onchange = (e) => { ckChoice = e.target.value; };
+$("go").onclick = async () => {
+  const body = {checkpoint: $("ck").value, map: $("map").value, opponents: +$("opp").value,
+                episodes: +$("eps").value, sampled: $("sampled").checked};
+  const r = await (await fetch("/api/watch", {method: "POST", body: JSON.stringify(body)})).json();
+  if (!r.ok) $("watchnote").innerHTML = `<span class="bad">${r.error}</span>`;
+  setTimeout(tick, 500);
+};
+$("stop").onclick = async () => { await fetch("/api/watch/stop", {method: "POST"}); setTimeout(tick, 500); };
+
+tick();
+setInterval(tick, 5000);
+</script>
+</body>
+</html>

@@ -93,3 +93,6 @@ research-artifacts/**/write_dirs
 # friends). Multi-megabyte raw JSONL, regenerable by re-running the equivalence
 # harness; the summary JSON/MD next to them is tracked and is the evidence.
 research-artifacts/**/digest-*.jsonl
+
+# dashboard (2026-10-07): local cache of run aggregates and copied checkpoints
+Tools/rl/dashboard/cache/

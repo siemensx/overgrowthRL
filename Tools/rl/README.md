@@ -65,7 +65,7 @@ inflates the stick's sigma (OGRL-20261002-017); keep it at 0.003 or fix the esti
 | maps | `gen_arena_map.py` (no overwrite guard — never reuse a live map name; `--horde N` adds 1v4..1vN groups), `gen_horde_maps.sh`, `gen_1v1_scenario.py`, `gen_human_duel_scenario.py`, `validate_maps.py`, `fork_workshop_level.py` |
 | behaviour probes | `probe_feint.py probe_button_edges.py probe_self_motion.py probe_self_identity.py probe_damage_context.py probe_ko_accounting.py probe_throws.py action_profile.py move_stats.py kill_attribution.py measure_visibility.py visibility_outcome.py greedy_ab.py action_mode_probe.py diagnose_checkpoint.py` |
 | scripted baselines | `engine_ai_baseline.py` (privileged), `observation_oracle_bot.py` (**left/right mirrored, results invalid until fixed**) |
-| watch / play | `play_match.py play_1v3_human.py play_match_forever.sh record_watch.py render_smoke.sh replay_*.py dashboard/` |
+| watch / play | `dashboard/server.py` (Mac: `python3 Tools/rl/dashboard/server.py`, http://127.0.0.1:8770 -- trainer status, win rate at d=1.0, quick checks, Watch button), `ppo/watch.py play_match.py play_1v3_human.py play_match_forever.sh record_watch.py render_smoke.sh replay_*.py` |
 | throughput | `throughput_sweep.py concurrency_sweep.py bench_levels.py bench_opts.py compare_engine_builds.py validate_soft_reset.py shm_smoketest.py` |
 | ops | `build_engine.sh winps.sh remote/` (`sync_artifacts.sh <run>` defaults to `trainer-lan:C:/ogrl/overgrowthRL_clean`) |
 | tests | `tests/` — run each file directly (`cd tests && python3 test_x.py`); no pytest on the Mac |
