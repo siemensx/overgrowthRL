@@ -7,7 +7,7 @@ it; `remote/switch_profile.sh` switches the Windows trainer from one profile to 
 
 ```bash
 Tools/rl/remote/switch_profile.sh --status                       # what is training now
-Tools/rl/remote/switch_profile.sh run39_personas_blind --dry-run # every step, nothing changed
+Tools/rl/remote/switch_profile.sh run38_d1 --dry-run # every step, nothing changed
 Tools/rl/remote/switch_profile.sh run39_personas_blind           # do it
 Tools/rl/remote/switch_profile.sh run38_attn_last                # go back: resumes run38 where it stopped
 Tools/rl/remote/switch_profile.sh --stop                         # stop gracefully, start nothing
@@ -25,7 +25,7 @@ which live in the purchased Steam tree and are copied with an MD5 check).
 | `run39_personas_blind` | fork of run38 | 50% of fights vs patient / passive / berserker / expert / mixed opponents; 30% with the AI's intent fields hidden | does it learn to start fights against opponents that wait (it times out against them and against a standing human)? |
 | `run40_horde_armed` | fork of run38 | 12 horde maps, opponents unlock up to 1v7, armed ladder from B1 | how outnumbered and how armed can the enemies get before it stops winning? |
 | `run41_everything` | fork of run38 | run39 + run40 together | only after each axis has been shown learnable on its own |
-| `run42_hard_fights` | fork of run38 | only `--d-min 1.0`: every fight at difficulty 1.0, as decided 2026-09-09 (run38's launcher used 0.0 by mistake; 7.8% of its fights are in the benchmark's cell) | does training where the benchmark is break the 1v3 plateau? |
+| `run38_d1` | fork of run38 | only `--d-min 1.0`: every fight at difficulty 1.0, as decided 2026-09-09 (run38's launcher used 0.0 by mistake; 7.8% of its fights are in the benchmark's cell) | does training where the benchmark is break the 1v3 plateau? |
 
 A fork freezes a copy of the parent's checkpoint as `<run_id>_seed.pt` at its first launch (after the
 parent has been stopped), so the parent can later be resumed unchanged.

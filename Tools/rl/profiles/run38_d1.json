@@ -1,0 +1,15 @@
+{
+  "_doc": "OGRL-20261007-011/012. run38 continued with ONE change: every training fight at difficulty 1.0 (--d-min 1.0 --d-max-start 1.0). Everything else is run38's setup (same maps, learner, floors, seed). Why: run38's launcher copied --d-min 0.0 (undoing the 2026-09-09 decision) and its difficulty gate starved at 0.95, so run38 never trained at 1.0 -- the difficulty of the benchmark and of a human. Forks from a frozen copy of run38's checkpoint (run38_d1_seed.pt); run38 itself can be resumed unchanged.",
+  "base": "_base_v6_attn.json",
+  "run_id": "run38_d1",
+  "seed": 38,
+  "shm_tag": "r38d",
+  "seed_from": "run38_attn_last.pt",
+  "purpose": "OGRL-20261007-012 run38_d1: run38 continued at difficulty 1.0 only",
+  "args": [
+    "--d-min",
+    "1.0",
+    "--d-max-start",
+    "1.0"
+  ]
+}
