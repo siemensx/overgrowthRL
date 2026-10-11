@@ -61,6 +61,11 @@ def slab(lvl: Level, x0, z0, x1, z1, h_low, h_high, floor_top, width, kind="deck
     cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
     cy = floor_top + (h_low + h_high) / 2 - thick * y[1]
     oriented_box(lvl, (cx - thick * y[0], cy, cz - thick * y[2]), (length / 2, thick, width / 2), (u, y, w), kind)
+    if kind != "floor":
+        # exact horizontal outline for spawn placement (the AABB recorded in lvl.rects is far larger for diagonal
+        # slabs); spawns are tested against this, the validator against the walls and plateau boxes
+        lvl.rects.pop()
+        SLABS.append((cx, cz, dx / run, dz / run, run / 2, width / 2))
 
 
 def ridge(lvl: Level, cx, cz, length, height, slope_deg, angle, floor_top):
@@ -75,6 +80,16 @@ def ridge(lvl: Level, cx, cz, length, height, slope_deg, angle, floor_top):
 
 
 GROUND = {"tilt": 0.0, "dir": 0.0}
+SLABS: list = []          # exact outlines of tilted slabs: (cx, cz, ux, uz, half_run, half_width)
+
+
+def on_slab(x, z, margin):
+    for cx, cz, ux, uz, hr, hw in SLABS:
+        a = (x - cx) * ux + (z - cz) * uz
+        b = -(x - cx) * uz + (z - cz) * ux
+        if abs(a) <= hr + margin and abs(b) <= hw + margin:
+            return True
+    return False
 
 
 def g(x, z):
@@ -88,6 +103,7 @@ def build(lvl: Level, rng: random.Random, floor_top: float, layout: str, half: f
     Terrain pieces are tagged "wall" for the validator (they are meant to touch each other); spawns are still
     checked against every footprint."""
     feats = {"rim": 0, "terrace": 0, "hills": 0, "ridges": 0}
+    SLABS.clear()
     GROUND["tilt"] = math.radians(rng.uniform(2.0, 3.5))
     GROUND["dir"] = rng.uniform(0, 2 * math.pi)
     feats["tilt_deg"] = round(math.degrees(GROUND["tilt"]), 1)
@@ -122,26 +138,8 @@ def build(lvl: Level, rng: random.Random, floor_top: float, layout: str, half: f
         x0, z0, x1, z1 = sx_ * (half - 4.0), sz_ * (half - 4.0), sx_ * (half - 1.0), sz_ * (half - 1.0)
         slab(lvl, x0, z0, x1, z1, g(x0, z0), g(x1, z1) + 1.6, floor_top, 3.0, kind="wall")
     inner = half - max(rim_runs) - 1.0
-    # spawns first: features must leave them on open ground
-    ax, az = rng.uniform(-0.15, 0.15) * inner, rng.uniform(-0.15, 0.15) * inner
-    reach = inner - max(abs(ax), abs(az)) - 0.5
-    r = rng.uniform(min(6.0, reach - 1.0), max(min(9.0, reach - 1.0), 6.0))
-    base = rng.uniform(0, 2 * math.pi)
-
-    def ring(n):
-        if layout == "front":
-            angs = [base + (-0.8 + 1.6 * k / max(1, n - 1) if n > 1 else 0.0) for k in range(n)]
-        elif layout == "surround":
-            angs = [base + 2 * math.pi * k / n for k in range(n)]
-        else:
-            angs = [base + (0 if k % 2 == 0 else math.pi) + 0.35 * (k // 2) * (1 if k % 2 == 0 else -1)
-                    for k in range(n)]
-        return [(ax + math.cos(a) * (r + (1.5 if k >= 4 and r + 1.5 <= reach else 0.0)),
-                 az + math.sin(a) * (r + (1.5 if k >= 4 and r + 1.5 <= reach else 0.0))) for k, a in enumerate(angs)]
-
-    groups = {0: 1, 3: 2, 4: 3}
-    hostile = {gt: ring(n) for gt, n in groups.items()}
-    spawn_ko = [_rect(x, z, 1.4, 1.4) for pts in hostile.values() for x, z in pts] + [_rect(ax, az, 1.6, 1.6)]
+    # spawns are placed AFTER the terrain (see place_spawns); keep a central clearing so open ground remains
+    spawn_ko = [_rect(0.0, 0.0, 3.0, 3.0)]
     terrain = []                                          # footprints of terrace / hills / ridges
 
     def free(rect):
@@ -219,7 +217,88 @@ def build(lvl: Level, rng: random.Random, floor_top: float, layout: str, half: f
         ridge(lvl, cx, cz, length, height, slope, angle, floor_top)
         terrain.append(foot)
         feats["ridges"] += 1
-    return (ax, az), hostile, feats
+    hostile = place_spawns(lvl, rng, half, inner, floor_top)
+    feats["arrangements"] = {n: len(v) for n, v in hostile.items()}
+    return hostile, feats
+
+ARRANGEMENTS = ("front", "surround", "staggered", "behind", "pincer", "scattered")
+BASE_GT = {1: 0, 2: 3, 3: 4}            # game_type of the base group per opponent count; variants at +100*v
+
+
+def place_spawns(lvl: Level, rng: random.Random, half: float, inner: float, floor_top: float) -> dict:
+    """OGRL-20261010-010: six start arrangements per opponent count (1-3), one drawn per round by the level script:
+      front      enemies in an arc ahead of the agent, 6-9 m
+      surround   evenly around the agent, 4-6 m
+      staggered  one behind another along a line, ~4 / 8.5 / 13 m -- they arrive one at a time
+      behind     an arc behind the agent's facing, 5-8 m
+      pincer     agent near the rim, enemies from both sides along it, 6-9 m
+      scattered  anywhere 5-14 m away, at least 3 m apart
+    The agent's facing is random. Every point is on open ground (validator margin 1.2 m off every footprint) and a
+    group's start heights differ by < 0.95 m (the validator's 1.0 m rule against storey-separated starts)."""
+    lim = half - 1.6
+
+    def ok(x, z):
+        return (abs(x) < lim and abs(z) < lim and not _hits(_rect(x, z, 1.25, 1.25), lvl.rects)
+                and not on_slab(x, z, 0.6))
+
+    def agent_spot(lay):
+        for _ in range(400):
+            if lay == "pincer":
+                side = rng.randrange(4)
+                a = side * math.pi / 2
+                d = inner - rng.uniform(0.5, 2.5)
+                t = rng.uniform(-inner * 0.6, inner * 0.6)
+                x, z = math.cos(a) * d - math.sin(a) * t, math.sin(a) * d + math.cos(a) * t
+                face = a + math.pi                                    # back to the rim
+            else:
+                x, z = rng.uniform(-inner * 0.6, inner * 0.6), rng.uniform(-inner * 0.6, inner * 0.6)
+                face = rng.uniform(0, 2 * math.pi)
+            if ok(x, z):
+                return x, z, face
+        return None
+
+    def hostiles(lay, n, ax, az, face):
+        if lay == "front":
+            angs = [face + (-0.8 + 1.6 * k / max(1, n - 1) if n > 1 else rng.uniform(-0.3, 0.3)) for k in range(n)]
+            dists = [rng.uniform(6, 9) for _ in range(n)]
+        elif lay == "surround":
+            off = rng.uniform(0, 2 * math.pi)
+            angs = [off + 2 * math.pi * k / max(n, 2) for k in range(n)]
+            dists = [rng.uniform(4, 6) for _ in range(n)]
+        elif lay == "staggered":
+            d0 = face + rng.uniform(-1.0, 1.0)
+            angs = [d0 + rng.uniform(-0.25, 0.25) for _ in range(n)]
+            dists = [4.0 + 4.5 * k + rng.uniform(-0.5, 0.5) for k in range(n)]
+        elif lay == "behind":
+            angs = [face + math.pi + (-0.6 + 1.2 * k / max(1, n - 1) if n > 1 else 0.0) for k in range(n)]
+            dists = [rng.uniform(5, 8) for _ in range(n)]
+        elif lay == "pincer":
+            angs = [face + (math.pi / 2 if k % 2 == 0 else -math.pi / 2) + rng.uniform(-0.3, 0.3) for k in range(n)]
+            dists = [rng.uniform(6, 9) for _ in range(n)]
+        else:
+            angs = [rng.uniform(0, 2 * math.pi) for _ in range(n)]
+            dists = [rng.uniform(5, 14) for _ in range(n)]
+        return [(ax + math.cos(a) * d, az + math.sin(a) * d) for a, d in zip(angs, dists)]
+
+    out = {n: [] for n in BASE_GT}
+    for n in BASE_GT:
+        for lay in ARRANGEMENTS:
+            for _ in range(300):
+                spot = agent_spot(lay)
+                if spot is None:
+                    break
+                ax, az, face = spot
+                pts = hostiles(lay, n, ax, az, face)
+                if not all(ok(x, z) for x, z in pts):
+                    continue
+                if any(math.hypot(p[0] - q[0], p[1] - q[1]) < 2.5 for i_, p in enumerate(pts) for q in pts[i_ + 1:]):
+                    continue
+                hs = [g(ax, az)] + [g(x, z) for x, z in pts]
+                if max(hs) - min(hs) > 0.95:
+                    continue
+                out[n].append((lay, (ax, az, face), pts))
+                break
+    return out
 
 
 def main() -> int:
@@ -241,17 +320,21 @@ def main() -> int:
     half = rng.uniform(13.0, 16.0)
     floor_top = 500.0
     lvl = Level(a.name, a.script, terrain=False, cam=(0.0, floor_top + 25.0, -half - 20.0))
-    (ax, az), hostile, feats = build(lvl, rng, floor_top, layout, half)
-    for gt, pts in hostile.items():
-        lvl.spawn(ax, floor_top + g(ax, az) + 0.7, az, 0.0, gt, 0)
-        for x, z in pts:
-            lvl.spawn(x, floor_top + g(x, z) + 0.7, z, math.atan2(ax - x, az - z), gt, 1)
+    hostile, feats = build(lvl, rng, floor_top, layout, half)
+    for n, variants in hostile.items():
+        if not variants:
+            print(f"  REFUSING: no valid start arrangement for 1v{n}")
+            return 2
+        for v, (lay, (ax, az, face), pts) in enumerate(variants):
+            gt = BASE_GT[n] + 100 * v
+            lvl.spawn(ax, floor_top + g(ax, az) + 0.7, az, face, gt, 0)
+            for x, z in pts:
+                lvl.spawn(x, floor_top + g(x, z) + 0.7, z, math.atan2(ax - x, az - z), gt, 1)
     report = validate_level(lvl, half, 1)
     for line in report["lines"]:
         print(f"  {line}")
-    print(f"  layout {layout}, half-size {half:.1f} m, terrain {feats}, "
-          f"enemy distance {min(math.hypot(x - ax, z - az) for x, z in hostile[4]):.1f}-"
-          f"{max(math.hypot(x - ax, z - az) for x, z in hostile[4]):.1f} m (1v3)")
+    print(f"  half-size {half:.1f} m, terrain {feats}, 1v3 arrangements "
+          f"{[v[0] for v in hostile[3]]}")
     if report["errors"]:
         for e in report["errors"]:
             print(f"  REFUSING: {e}")

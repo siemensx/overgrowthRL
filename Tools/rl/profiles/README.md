@@ -27,6 +27,7 @@ which live in the purchased Steam tree and are copied with an MD5 check).
 | `run41_everything` | fork of run38 | run39 + run40 together | only after each axis has been shown learnable on its own |
 | `run38_d1` | fork of run38 | only `--d-min 1.0`: every fight at difficulty 1.0, as decided 2026-09-09 (run38's launcher used 0.0 by mistake; 7.8% of its fights are in the benchmark's cell) | does training where the benchmark is break the 1v3 plateau? |
 | `run38_d1_wd` | fork of run38_d1 | run38_d1 + weight decay (0.01; 0.05 on the attention summary) | does stopping weight growth undo the saturating summary / narrowing trunk, and does 1v3 follow? |
+| `run39_terrain` | fork of run39 | run39 on 24 terrain-style maps (t_nat3_701..724) with 6 random start arrangements per fight size | does the agent learn to fight up close, on slopes, from any direction? |
 
 A fork freezes a copy of the parent's checkpoint as `<run_id>_seed.pt` at its first launch (after the
 parent has been stopped), so the parent can later be resumed unchanged.

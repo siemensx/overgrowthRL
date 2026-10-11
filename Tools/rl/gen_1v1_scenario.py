@@ -338,6 +338,25 @@ void ApplyRLPersona(ScriptParams@ params, float difficulty){
         game_type_int--;
         CollectCharacterSpawns(game_type_int, character_spawns);
     }
+    // OGRL-20261010-010: spawn arrangement variants. A level may define alternative groups for the same fight at
+    // game_type + 100*v (v = 1..9); one of the arrangements present (including the base group) is drawn per
+    // round. Levels without variants are unchanged.
+    if(character_spawns.size() > 0){
+        array<int> variants = {0};
+        for(int v = 1; v <= 9; ++v){
+            array<SpawnPoint> probe;
+            CollectCharacterSpawns(game_type_int + 100 * v, probe);
+            if(probe.size() > 0){
+                variants.insertLast(v);
+            }
+        }
+        int pick = variants[rand() % variants.length()];
+        if(pick != 0){
+            character_spawns.resize(0);
+            CollectCharacterSpawns(game_type_int + 100 * pick, character_spawns);
+            game_type_int = game_type_int + 100 * pick;
+        }
+    }
     // Levels predating the multi-opponent groups (oval, every stock arena)
     // do not define them. Fall back to the 1v1 pair rather than spawn nobody.
     if(character_spawns.size() == 0 && game_type_int != 0){

@@ -1,0 +1,29 @@
+{
+  "_doc": "OGRL-20261010-012. run39 continued on the terrain-style maps (user review 2026-10-10: the t_train maps were too big -- enemies spawned 27 m away on average, up to 63 m -- with the agent waiting for them, scattered boxes no real map has, and one fixed start arrangement per map). Same learner and fight mix as run39 (personas 50%, hidden intent 30%, hop-aware 40%, difficulty 1.0, weight decay); only the maps change: 24 maps t_nat3_701..724 from gen_natural_map.py (tilted hillside floor, uneven sloped rim, terrace with wide ramps, hills, rolling ridges; 6 start arrangements per fight size drawn per round: front, surround, staggered, behind, pincer, scattered). t_nat3_held_801..804 are never trained on. Measured with run38_d1_wd@215M (60 fights): first contact 1.2 s vs 4.0 s on t_train, no timeouts, 32/60 won.",
+  "base": "_base_v6_attn.json",
+  "run_id": "run39_terrain",
+  "seed": 39,
+  "shm_tag": "r39t",
+  "seed_from": "run39_personas_blind.pt",
+  "requires_scenario": "100 * pick",
+  "purpose": "OGRL-20261010-012 run39_terrain: run39 continued on 24 terrain maps with random start arrangements",
+  "args": [
+    "--d-min",
+    "1.0",
+    "--d-max-start",
+    "1.0",
+    "--weight-decay",
+    "0.01",
+    "--weight-decay-summary",
+    "0.05",
+    "--health-every",
+    "5",
+    "--persona-mix",
+    "patient=0.15,passive=0.1,berserker=0.05,expert=0.1,mixed=0.1",
+    "--hide-intent-prob",
+    "0.3",
+    "--hop-aware-prob",
+    "0.4"
+  ],
+  "levels": "arenas/t_nat3_{701..724}.xml"
+}

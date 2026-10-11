@@ -1119,6 +1119,9 @@ def main():
                         "level": infos[i].get("level"),
                         **({"ground_only": ended_ground, "rule_hidden": bool(ended_scenario.get("rule_hidden"))}
                            if "ground_only" in ended_scenario else {}),
+                        # OGRL-20261010-011: per-fight opponent conditions, so a dashboard can split win rates by
+                        # opponent count x persona x hidden intent x hop-aware (the pooled table hid the effects)
+                        **{k: ended_scenario[k] for k in ("persona", "hide_intent", "hop_aware") if k in ended_scenario},
                     })
                     if tape_recorder is not None:
                         sampled_worker0 = (i == 0 and args.tape_every > 0 and update % args.tape_every == 0)

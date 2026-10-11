@@ -162,8 +162,10 @@ def ingest_episodes(st: dict, text: str) -> None:
             cell[0] += 1
         elif e.get("outcome") == "timeout":
             cell[2] += 1
-        st["recent"].append([step, int(opp), e.get("outcome")])
-    st["recent"] = st["recent"][-3000:]
+        st["recent"].append([step, int(opp), e.get("outcome"), int(e.get("persona", 0) or 0),
+                             bool(e.get("hide_intent")), bool(e.get("hop_aware")),
+                             "persona" in e or "hide_intent" in e or "hop_aware" in e])
+    st["recent"] = st["recent"][-6000:]
 
 
 def ingest_metrics(st: dict, text: str) -> None:
@@ -326,6 +328,23 @@ def summarize(info: dict, st: dict | None) -> dict:
     if chart and last_step and chart[-1]["step"] > last_step:
         chart[-1]["partial"] = True                       # the current bin is still filling
     restarts = [l for l in info.get("log", []) if "exited" in l]
+    # OGRL-20261010-011: win rate per opponent count for each condition, changing ONE thing from the normal fight
+    # (normal persona, intent shown, normal hop reaction) -- the pooled persona table mixed them all together.
+    PERSONA_NAMES = ["normal", "patient", "passive", "berserker", "expert", "mixed"]
+    tagged = [r for r in recent if len(r) >= 7 and r[6]]
+    grid = []
+    if tagged:
+        conds = [("normal fight", lambda r: r[3] == 0 and not r[4] and not r[5]),
+                 ("hop-aware enemies", lambda r: r[3] == 0 and not r[4] and r[5]),
+                 ("AI intent hidden", lambda r: r[3] == 0 and r[4] and not r[5])]
+        conds += [(f"{PERSONA_NAMES[k]} opponents", (lambda k: lambda r: r[3] == k and not r[4] and not r[5])(k))
+                  for k in range(1, 6)]
+        for name, f in conds:
+            row = {"condition": name}
+            for opp in (1, 2, 3):
+                sub = [r for r in tagged if r[1] == opp and f(r)]
+                row[str(opp)] = {"won": sum(r[2] == "won" for r in sub), "n": len(sub)}
+            grid.append(row)
     out["run"] = {"run": st["run"], "step": last_step, "metric_t": lm[1] if lm else None,
                   "sps": lm[2] if lm else None, "entropy": lm[3] if lm else None,
                   "summary_sat": lm[4] if lm else None, "summary_gp": lm[5] if lm else None,
@@ -333,7 +352,7 @@ def summarize(info: dict, st: dict | None) -> dict:
                   "low_difficulty_episodes": st["bins_low"],
                   "benches": sorted(st["benches"].values()),
                   "backfill": {"metrics": [st["off_m"], st["size_m"]], "episodes": [st["off_e"], st["size_e"]]},
-                  "restarts": restarts, "mix": st.get("mix")}
+                  "restarts": restarts, "mix": st.get("mix"), "mix_grid": grid}
     return out
 
 
