@@ -141,7 +141,11 @@ run "register + start OGRL_Train -> win_train.bat $PROFILE" <<EOF
 Get-ScheduledTask | Where-Object { \$_.TaskName -like 'OGRL_Train_*' -and \$_.State -ne 'Disabled' } | ForEach-Object { Disable-ScheduledTask -TaskName \$_.TaskName | Out-Null; "disabled " + \$_.TaskName }
 \$a = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c $REPO\Tools\rl\win_train.bat $PROFILE"
 \$s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
-Register-ScheduledTask -TaskName OGRL_Train -Action \$a -Settings \$s -RunLevel Limited -Force | Out-Null
+# restart after a reboot: the host auto-logs-on as pavlov (Winlogon AutoAdminLogon=1), so an at-logon trigger brings
+# training back; --stop disables the task, so a stopped run stays stopped (OGRL-20261010-018)
+\$tr = New-ScheduledTaskTrigger -AtLogOn -User "\$env:COMPUTERNAME\\pavlov"
+\$tr.Delay = 'PT3M'
+Register-ScheduledTask -TaskName OGRL_Train -Action \$a -Settings \$s -Trigger \$tr -RunLevel Limited -Force | Out-Null
 Start-ScheduledTask -TaskName OGRL_Train
 "OGRL_Train: " + (Get-ScheduledTask -TaskName OGRL_Train).State
 EOF
