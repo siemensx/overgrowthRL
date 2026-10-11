@@ -217,6 +217,10 @@ def parse_args():
                          "default is the measured crossover point, not the deepest pool tested. Re-sweep if n_envs "
                          "changes; the optimum is n_envs-relative, not an absolute constant. 0 reproduces the "
                          "original fully-synchronous reset behavior.")
+    p.add_argument("--timeout-penalty", type=float, default=None,
+                   help="override the reward profile's terminal timeout loss (win_v2: 14, vs 12 for being knocked "
+                        "out). OGRL-20261010-014: 22%% of run39_terrain fights timed out, 41%% against the patient "
+                        "persona -- waiting cost only 2 more than losing.")
     p.add_argument("--reward-profile", choices=["default", "run8", "win", "win_notimeout", "win_v2"], default="default",
                     help="'default' reproduces runs 1-7's RewardConfig exactly, for comparability. 'run8' "
                          "(OGRL-20260816-023) uses reward.run8_reward_config() -- symmetric +/-10 terminal outcome, "
@@ -541,7 +545,7 @@ def main():
                 "env": {"level": args.levels or args.level, "n_envs": args.n_envs, "max_episode_steps": args.max_episode_steps,
                 "frame_stack": args.frame_stack, "act_period": args.act_period, "k_standby": args.k_standby},
         "algo": {k: v for k, v in vars(args).items() if k not in ("entropy_coef_start",)},
-        "reward_profile": args.reward_profile,
+        "reward_profile": args.reward_profile, "timeout_penalty_override": args.timeout_penalty,
         "entropy_random_reference": entropy_random_reference,
         "parent": {"run_id": None, "checkpoint": args.resume_from, "global_step": initial_global_step if resumed_checkpoint else None},
     }
@@ -565,6 +569,10 @@ def main():
                           else win_notimeout_reward_config() if args.reward_profile == "win_notimeout"
                           else win_v2_reward_config() if args.reward_profile == "win_v2"
                           else None)
+    if args.timeout_penalty is not None:
+        if reward_base_config is None:
+            raise SystemExit("--timeout-penalty needs a --reward-profile with a base config (e.g. win_v2)")
+        reward_base_config = dataclasses.replace(reward_base_config, timeout_penalty=float(args.timeout_penalty))
     curriculum_kwargs = {"stall_intro_step": initial_global_step, "base_config": reward_base_config}
     if args.reward_profile == "run8":
         curriculum_kwargs["bootstrap_closing_weight"] = 0.0

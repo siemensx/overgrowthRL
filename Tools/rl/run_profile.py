@@ -117,6 +117,10 @@ def preflight(prof: dict, make_seed: bool) -> list[str]:
         if not script.exists() or prof["requires_scenario"] not in script.read_text(errors="replace"):
             problems.append(f"level script {script} predates '{prof['requires_scenario']}': run "
                             "Tools/rl/gen_1v1_scenario.py on this host")
+    for rel, needle in prof.get("requires_text", []):          # [repo-relative file, text it must contain]
+        f = REPO / rel
+        if not f.exists() or needle not in f.read_text(errors="replace"):
+            problems.append(f"{f} does not contain {needle!r}: this checkout predates the profile")
     if os.environ.get("OGRL_BINARY") or IS_WINDOWS:
         binary = Path(os.environ.get("OGRL_BINARY", WIN_BINARY))
         if not binary.exists():

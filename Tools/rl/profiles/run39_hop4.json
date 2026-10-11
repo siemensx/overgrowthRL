@@ -1,0 +1,37 @@
+{
+  "_doc": "OGRL-20261010-013/014. run39_terrain continued with two changes. (1) Hop-aware enemies use rl_hop_rule 4 (enemycontrol.as default): they ignore a hop and react only once the airborne agent starts an attack. The old rule still answered 51-67% of hops; rule 4 answers 0-4%, and real jump kicks land less often than against stock enemies, so it removes the hop trick without handing out free kicks. Measured on three checkpoints: 1v3 wins vs hop-aware enemies drop from 38/75 (stock enemies) to 4/75, 1v1 from 72/75 to 41/75 -- most of the 1v3 skill was the hop trick. (2) Timeout loss 14 -> 20 (being knocked out costs 12): 22% of run39_terrain fights timed out, 44% against the patient persona; waiting out the clock cost only 2 more than losing.",
+  "base": "_base_v6_attn.json",
+  "run_id": "run39_hop4",
+  "seed": 39,
+  "shm_tag": "r39h",
+  "seed_from": "run39_terrain.pt",
+  "requires_scenario": "100 * pick",
+  "requires_text": [
+    [
+      "Data/Scripts/enemycontrol.as",
+      "GetConfigValueInt(\"rl_hop_rule\") : 4"
+    ]
+  ],
+  "purpose": "OGRL-20261010-014 run39_hop4: run39_terrain + hop-aware rule 4 (attack-only) + timeout loss 20",
+  "args": [
+    "--d-min",
+    "1.0",
+    "--d-max-start",
+    "1.0",
+    "--weight-decay",
+    "0.01",
+    "--weight-decay-summary",
+    "0.05",
+    "--health-every",
+    "5",
+    "--persona-mix",
+    "patient=0.15,passive=0.1,berserker=0.05,expert=0.1,mixed=0.1",
+    "--hide-intent-prob",
+    "0.3",
+    "--hop-aware-prob",
+    "0.4",
+    "--timeout-penalty",
+    "20"
+  ],
+  "levels": "arenas/t_nat3_{701..724}.xml"
+}

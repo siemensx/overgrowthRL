@@ -51,6 +51,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=["running_kick", "standing_kick", "hop"], required=True)
     ap.add_argument("--hop-aware", action="store_true")
+    ap.add_argument("--hop-rule", type=int, default=0, help="rl_hop_rule for hop-aware enemies (0 = script default)")
     ap.add_argument("--episodes", type=int, default=8)
     ap.add_argument("--level", default="arenas/t_held_203.xml")
     ap.add_argument("--seed", type=int, default=983000)
@@ -58,7 +59,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     env = OvergrowthEnv(repo_root=str(HERE.parents[1]), level=a.level, shm_name=f"/ogsk{os.getpid() % 10000}",
-                        seed=a.seed, act_period=4, frame_stack=4, extra_config_lines=V6_OMNI)
+                        seed=a.seed, act_period=4, frame_stack=4, extra_config_lines=V6_OMNI + ([f"rl_hop_rule: {a.hop_rule}"] if a.hop_rule else []))
     ef = L.entity_slice(0).stop - L.entity_slice(0).start
     attempts, decisions, enemy_attack_starts, hopper_hit, approach_ok = [], 0, 0, 0, []
     try:
@@ -135,7 +136,7 @@ def main() -> int:
         env.close()
     n = len(attempts)
     minutes = decisions / 30 / 60
-    out = {"mode": a.mode, "hop_aware": a.hop_aware, "episodes": a.episodes, "attempts": n,
+    out = {"mode": a.mode, "hop_aware": a.hop_aware, "hop_rule": a.hop_rule, "episodes": a.episodes, "attempts": n,
            "enemy_avoided_share": round(sum(x["avoid"] for x in attempts) / n, 3) if n else None,
            "hit_share": round(sum(x["hit"] for x in attempts) / n, 3) if n else None,
            "enemy_attack_starts_per_min_within_3m": round(enemy_attack_starts / minutes, 1) if minutes else None,

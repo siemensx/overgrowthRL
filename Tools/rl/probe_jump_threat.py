@@ -48,11 +48,12 @@ def main() -> int:
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=981000)
     ap.add_argument("--hop-aware", action="store_true")
+    ap.add_argument("--hop-rule", type=int, default=0, help="rl_hop_rule for hop-aware enemies (0 = script default)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     ck, pol, nrm = load(a.checkpoint)
     env = OvergrowthEnv(repo_root=str(HERE.parents[1]), level=a.level, shm_name=f"/ogjt{os.getpid() % 10000}",
-                        seed=a.seed, act_period=4, frame_stack=4, extra_config_lines=V6_OMNI)
+                        seed=a.seed, act_period=4, frame_stack=4, extra_config_lines=V6_OMNI + ([f"rl_hop_rule: {a.hop_rule}"] if a.hop_rule else []))
     ef = L.entity_slice(0).stop - L.entity_slice(0).start
     jumps, wins = [], 0
     try:
@@ -118,7 +119,7 @@ def main() -> int:
     def frac(xs, f):
         return round(sum(1 for x in xs if f(x)) / len(xs), 3) if xs else None
 
-    summary = {"checkpoint": Path(a.checkpoint).name, "hop_aware": a.hop_aware, "opponents": a.opponents,
+    summary = {"checkpoint": Path(a.checkpoint).name, "hop_aware": a.hop_aware, "hop_rule": a.hop_rule, "opponents": a.opponents,
                "episodes": a.episodes, "wins": wins, "jumps": len(jumps), "hops": len(hops),
                "jump_attacks": len(attacks),
                "jump_attack_hit_rate": frac(attacks, lambda j: j["hit"]),

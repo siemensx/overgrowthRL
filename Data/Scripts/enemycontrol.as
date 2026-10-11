@@ -152,9 +152,22 @@ bool RLHopAware() {
     return params.HasParam("RL Hop Aware") && params.GetInt("RL Hop Aware") == 1;
 }
 
+// rl_hop_rule (config, OGRL-20261010-013) selects the take-off read; 0/unset = 4.
+//   2  v2 above: mutual closing speed counts, so an enemy that runs INTO a hopping target reacts to it.
+//   3  only the jumper's OWN horizontal speed toward me counts (a leap at me), not my own run-in.
+//   4  no take-off read at all: react only once the airborne target starts an attack. Default since
+//      OGRL-20261010-013: across three checkpoints (run38_d1_wd 95M/215M, run39_terrain 222M; 1v1 and 1v3) it
+//      answers 0-4% of hops (v2: 51-67%, v3: 24-58%) and the agent's real jump kicks land LESS often than
+//      against stock enemies (pooled 77/227 vs 148/257), so it does not hand out free kicks. No thresholds
+//      fitted to any policy's jumps.
+int g_rl_hop_rule = GetConfigValueInt("rl_hop_rule") > 0 ? GetConfigValueInt("rl_hop_rule") : 4;
+
 bool RLJumpThreat(MovementObject@ target) {
     if(target.GetIntVar("state") == _attack_state) {
         return true;
+    }
+    if(g_rl_hop_rule == 4) {
+        return false;
     }
     if(rl_airborne_since >= 0.0f && time - rl_airborne_since > 0.2f) {
         return false;                      // past the take-off read: only a real attack counts now
@@ -165,7 +178,7 @@ bool RLJumpThreat(MovementObject@ target) {
     if(d > 4.0f) {
         return false;
     }
-    vec3 rv = target.velocity - this_mo.velocity;
+    vec3 rv = g_rl_hop_rule == 3 ? target.velocity : target.velocity - this_mo.velocity;
     rv.y = 0.0f;
     float approach = (d > 0.01f) ? dot(rv, rel) / d : 0.0f;   // > 0: the target is closing in on me
     if(approach >= 3.0f) {
