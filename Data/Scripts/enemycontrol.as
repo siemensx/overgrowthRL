@@ -133,6 +133,49 @@ int notice_target_aggression_id = 0.0f;
 float target_attack_range = 0.0f;
 float strafe_vel = 0.0f;
 bool might_avoid_jump_kick = false;
+
+// OGRL-20261010-005: hop-aware enemies. The stock AI treats ANY airborne target as an incoming jump kick: it drops
+// its attack plan and dodges or backs off, and re-plans on landing. An RL agent learned to hop every ~2 s to keep
+// every enemy dodging (88-95% of nearby enemies in _avoid_jump_kick while it is airborne vs 1-3% on the ground).
+// A human opponent does not react to hops at all. With the "RL Hop Aware" param (set per enemy by the level
+// script, gen_1v1_scenario.py step 3c) the enemy reacts only when the airborne target is a credible kick:
+//   within 4 m AND (closing at >= 3 m/s, OR within 2 m with upward speed >= 4)  -- judged only in the first 0.2 s
+//   after take-off (reading the jump, as a person would), OR the target starts its attack while airborne (any time).
+// Thresholds from 320 recorded take-offs against stock enemies (probe_jump_threat.py): at take-off this flags 94% of
+// the jump kicks that went on to hit and 24-32% of hops. Latched until the target lands. v2 2026-10-10: the
+// take-off judgement was first applied for the whole airborne time, so enemies running into a hopping target in
+// 1v3 still reacted to 75% of hops.
+bool rl_jump_threat = false;
+float rl_airborne_since = -1.0f;   // time the current hop/jump left the ground (-1 = target on the ground)
+
+bool RLHopAware() {
+    return params.HasParam("RL Hop Aware") && params.GetInt("RL Hop Aware") == 1;
+}
+
+bool RLJumpThreat(MovementObject@ target) {
+    if(target.GetIntVar("state") == _attack_state) {
+        return true;
+    }
+    if(rl_airborne_since >= 0.0f && time - rl_airborne_since > 0.2f) {
+        return false;                      // past the take-off read: only a real attack counts now
+    }
+    vec3 rel = this_mo.position - target.position;
+    rel.y = 0.0f;
+    float d = length(rel);
+    if(d > 4.0f) {
+        return false;
+    }
+    vec3 rv = target.velocity - this_mo.velocity;
+    rv.y = 0.0f;
+    float approach = (d > 0.01f) ? dot(rv, rel) / d : 0.0f;   // > 0: the target is closing in on me
+    if(approach >= 3.0f) {
+        return true;
+    }
+    if(d <= 2.0f && target.velocity.y >= 4.0f) {
+        return true;
+    }
+    return false;
+}
 bool will_avoid_jump_kick = false;
 bool will_counter_jump_kick = false;
 bool wants_to_roll = false;
@@ -2327,7 +2370,24 @@ void UpdateBrain(const Timestep &in ts) {
             target_goal = _defend;
         }
 
-        if(!target.GetBoolVar("on_ground") && species != _wolf && target.GetIntVar("state") != _ragdoll_state) {
+        bool rl_target_airborne = !target.GetBoolVar("on_ground") && species != _wolf && target.GetIntVar("state") != _ragdoll_state;
+        // OGRL-20261010-005 hop-aware enemies: react to an airborne target only once it is a credible jump kick
+        // (RLJumpThreat), latched until it lands. Stock behaviour when the "RL Hop Aware" param is absent.
+        bool rl_react_airborne = rl_target_airborne;
+        if(RLHopAware()) {
+            if(!rl_target_airborne) {
+                rl_jump_threat = false;
+                rl_airborne_since = -1.0f;
+            } else if(!rl_jump_threat) {
+                if(rl_airborne_since < 0.0f) {
+                    rl_airborne_since = time;
+                }
+                rl_jump_threat = RLJumpThreat(target);
+            }
+            rl_react_airborne = rl_target_airborne && (rl_jump_threat || target.QueryIntFunction("int IsOnLedge()") == 1);
+        }
+
+        if(rl_react_airborne) {
             if(target.QueryIntFunction("int IsOnLedge()") == 1) {
                 target_goal = _knock_off_ledge;
             } else if((group_leader == -1 && followers.size() == 0) || game_difficulty > 0.25f) {

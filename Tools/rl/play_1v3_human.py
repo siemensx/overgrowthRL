@@ -37,6 +37,7 @@ def main() -> int:
     ap.add_argument("--level", default="arenas/t_train_101.xml")
     ap.add_argument("--opponents", type=int, default=3, choices=range(1, 8),
                     help="4..7 need a horde map (t_horde_*); other maps fall back to 1v3")
+    ap.add_argument("--hop-aware", action="store_true", help="enemies ignore hops, dodge only real jump kicks")
     ap.add_argument("--persona", default="stock",
                     help="opponent persona: stock, patient, passive, berserker, expert, mixed (env.PERSONAS)")
     ap.add_argument("--difficulty", type=float, default=1.0)
@@ -53,6 +54,7 @@ def main() -> int:
     persona = PERSONAS.index(args.persona)
     config = "\n".join([
         f"rl_human_persona: {persona}",
+        f"rl_human_hop_aware: {1 if args.hop_aware else 0}",
         f"rl_human_difficulty: {min(max(args.difficulty, 0.0), 1.0):g}",
         f"rl_human_opponents: {args.opponents}",
         "blood: 0",                  # same NaN-decal mitigation env.py uses for rendered sessions

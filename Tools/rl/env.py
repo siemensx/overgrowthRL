@@ -609,6 +609,7 @@ class OvergrowthEnv:
         rule_hidden: bool = False,
         persona: int = 0,
         hide_intent: bool = False,
+        hop_aware: bool = False,
     ) -> np.ndarray:
         """Reset the requested scenario, including on a fresh engine.
 
@@ -621,6 +622,8 @@ class OvergrowthEnv:
         persona (OGRL-20261007-002): opponent temperament, 0 = stock. Packed into the species word as
         species + 16*persona (the level script splits it), so it needs no engine change; see
         gen_1v1_scenario.py step 3b and PERSONAS below.
+        hop_aware (OGRL-20261010-005): enemies react to the agent being airborne only when it is a credible jump
+        kick (gen_1v1_scenario.py step 3c / enemycontrol.as RLHopThreat), not to every hop.
         hide_intent (OGRL-20261007-002): zero the scripted AI's privileged intent fields (entity
         fields E_INTENT, i.e. targets_me .. sub-goal one-hot) in every frame of this episode, so
         the policy must read the fight from bodies alone -- as it must against a human.
@@ -636,7 +639,8 @@ class OvergrowthEnv:
         reset_start = time.perf_counter()
         if not 0 <= int(persona) < len(PERSONAS):
             raise ValueError(f"persona {persona} not in 0..{len(PERSONAS) - 1}")
-        species = int(species) + 16 * int(persona)
+        # species word: bits 0-3 species, 4-7 persona, bit 8 hop-aware enemies (OGRL-20261010-005)
+        species = int(species) + 16 * int(persona) + 256 * int(bool(hop_aware))
         obs = self._shm.reset(reset_seed, soft=soft, difficulty=difficulty, opponents=opponents, weapons=weapons, species=species,
                           armed_count=armed_count, weapon_type=weapon_type, throw_aggression=throw_aggression)
         self.last_reset_seconds = time.perf_counter() - reset_start  # OGRL-20260817-028 Sec8.2: perf.reset_seconds source

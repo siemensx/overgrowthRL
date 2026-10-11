@@ -403,6 +403,7 @@ class VecOvergrowthEnv:
             rule_hidden=bool(scenario.get("rule_hidden", False)),
             persona=int(scenario.get("persona", 0) or 0),            # OGRL-20261007-002
             hide_intent=bool(scenario.get("hide_intent", False)),
+            hop_aware=bool(scenario.get("hop_aware", False)),     # OGRL-20261010-005
         )
         with self._perf_lock:
             self._reset_seconds_accum += env.last_reset_seconds
@@ -491,7 +492,8 @@ class VecOvergrowthEnv:
                                  ground_only=scenario.get("ground_only"),
                                  rule_hidden=bool(scenario.get("rule_hidden", False)),
                                  persona=int(scenario.get("persona", 0) or 0),
-                                 hide_intent=bool(scenario.get("hide_intent", False)))
+                                 hide_intent=bool(scenario.get("hide_intent", False)),
+                                 hop_aware=bool(scenario.get("hop_aware", False)))
                 scenario = dict(scenario)
                 scenario["soft_reset"] = soft
             else:

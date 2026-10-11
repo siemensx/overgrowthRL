@@ -33,7 +33,7 @@ sys.path.insert(0, str(HERE))
 
 from canonical_eval import CONTROLS, CHUNK, wilson, _run_chunk, run_all_chunks  # noqa: E402
 
-SUITE_VERSION = "r1-2026-10-07"
+SUITE_VERSION = "r2-2026-10-10"   # r2 = r1 + the "hopaware" group appended (r1 cells and seeds unchanged)
 SEED0 = 8_000_000
 EPISODES = 40
 HELD = "t_held_203"
@@ -59,6 +59,12 @@ def cells() -> list[dict]:
     for opp in (4, 5, 7):
         add("horde", f"horde 1v{opp}", HORDE, opp, [])
     add("horde", "horde 1v5, 3 armed", HORDE, 5, ["--armed-count", "3", "--throw-aggression", "4.0"])
+    # r2 (OGRL-20261010-005): enemies that ignore hops and dodge only credible jump kicks, alone and combined
+    # with hidden intent -- the closest this suite gets to a human opponent's information and reactions.
+    for opp in (1, 3):
+        add("hopaware", f"hop-aware 1v{opp}", HELD, opp, ["--hop-aware"])
+    for opp in (1, 3):
+        add("hopaware", f"hop-aware + intent hidden 1v{opp}", HELD, opp, ["--hop-aware", "--hide-intent"])
     for i, c in enumerate(out):
         c["idx"] = i
         c["seed_base"] = SEED0 + 1000 * i
@@ -90,7 +96,7 @@ def main() -> int:
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--parallel", type=int, default=6)
     ap.add_argument("--episodes", type=int, default=EPISODES)
-    ap.add_argument("--groups", default="personas,blind,armed,horde",
+    ap.add_argument("--groups", default="personas,blind,armed,horde,hopaware",
                     help="comma list of cell groups to run (a subset is labelled DIAGNOSTIC)")
     ap.add_argument("--list", action="store_true", help="print the cells and exit")
     a = ap.parse_args()
@@ -108,7 +114,7 @@ def main() -> int:
     run_all_chunks(a.checkpoint, todo, flags, out_dir, a.episodes, tag, a.parallel,
                    name=lambda c, k: chunk_path(out_dir, tag, c, k), extra_of=lambda c: c["extra"])
     res = [run_cell(a.checkpoint, c, flags, out_dir, a.episodes, tag) for c in todo]
-    full = set(groups) >= {"personas", "blind", "armed", "horde"} and a.episodes == EPISODES
+    full = set(groups) >= {"personas", "blind", "armed", "horde", "hopaware"} and a.episodes == EPISODES
     summary = {"suite": SUITE_VERSION + ("" if full else "-DIAGNOSTIC"), "checkpoint": a.checkpoint,
                "controls": a.controls, "config_lines": flags, "episodes_per_cell": a.episodes,
                "seconds": round(time.time() - t0), "cells": []}

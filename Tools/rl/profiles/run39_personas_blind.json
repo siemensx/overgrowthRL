@@ -1,12 +1,28 @@
 {
-  "_doc": "OGRL-20261007-005 (switched off until the user turns it on). Forks run38 at switch time. Same maps, same learner; 50% of fights are against a non-stock persona (patient/passive/berserker/expert/mixed) and 30% of fights hide the AI's intent fields. Question: does run38's win rate against patient and passive opponents (robust suite r1, where it times out) rise without losing suite v2? Expect suite v2 1v3 to dip first (fewer stock fights), robust r1 personas + blind cells to rise.",
+  "_doc": "OGRL-20261010-007 (user decision 2026-10-10). Forks run38_d1_wd (the best agent: difficulty 1.0 + weight decay) at switch time and keeps both. Adds the three things that take away its crutches against the scripted AI: opponent personas (50% of fights: patient/passive/berserker/expert/mixed), hidden AI intent (30%), and hop-aware enemies (40%) that ignore small hops and dodge only credible jump kicks (enemycontrol.as RLJumpThreat; validated OGRL-20261010-005/006). Each is drawn independently per episode. Question: do robust r2 cells (personas 1v3, intent hidden, hop-aware) rise without losing suite v2 1v3? Expect suite v2 to dip first.",
   "base": "_base_v6_attn.json",
   "run_id": "run39_personas_blind",
   "seed": 39,
   "shm_tag": "r39",
-  "seed_from": "run38_attn_last.pt",
-  "requires_scenario": "rl_persona",
-  "purpose": "OGRL-20261007-005 run39: run38 fork + opponent personas (50%) + hidden AI intent (30%)",
-  "args": ["--persona-mix", "patient=0.15,passive=0.1,berserker=0.05,expert=0.1,mixed=0.1",
-           "--hide-intent-prob", "0.3"]
+  "seed_from": "run38_d1_wd.pt",
+  "requires_scenario": "rl_hop_aware",
+  "purpose": "OGRL-20261010-007 run39: run38_d1_wd fork + personas 50% + hidden intent 30% + hop-aware enemies 40%",
+  "args": [
+    "--d-min",
+    "1.0",
+    "--d-max-start",
+    "1.0",
+    "--weight-decay",
+    "0.01",
+    "--weight-decay-summary",
+    "0.05",
+    "--health-every",
+    "5",
+    "--persona-mix",
+    "patient=0.15,passive=0.1,berserker=0.05,expert=0.1,mixed=0.1",
+    "--hide-intent-prob",
+    "0.3",
+    "--hop-aware-prob",
+    "0.4"
+  ]
 }

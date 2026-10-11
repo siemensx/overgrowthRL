@@ -368,6 +368,7 @@ class ScenarioSampler:
     # and only when enabled, so a run without them consumes the RNG exactly as before.
     persona_mix: tuple = ()         # ((persona_index, weight), ...); () = always stock (0). See env.PERSONAS
     hide_intent_prob: float = 0.0   # P(an episode zeroes the AI-intent entity fields)
+    hop_aware_prob: float = 0.0     # OGRL-20261010-005: P(an episode's hostiles ignore hops, dodge only real jump kicks)
     _persona_recent: deque = field(default_factory=lambda: deque(maxlen=100_000), repr=False)  # (persona, hidden, opponents, won)
     _ms_stage: int = field(default=0, repr=False)
     _ms_stage_start: object = field(default=None, repr=False)   # global_step the current stage began
@@ -426,6 +427,7 @@ class ScenarioSampler:
                 ids, weights = zip(*self.persona_mix)
                 persona = int(self._rng.choices(ids, weights=weights, k=1)[0])
             hide_intent = self.hide_intent_prob > 0.0 and self._rng.random() < self.hide_intent_prob
+            hop_aware = self.hop_aware_prob > 0.0 and self._rng.random() < self.hop_aware_prob
             label, armed, weap, throw_aggr, species, min_opp = ARMED_STAGES[
                 min(self._armed_stage, len(ARMED_STAGES) - 1)]
             # A stage that needs 2+ hostiles must not be sampled as a 1v1; the
@@ -444,12 +446,14 @@ class ScenarioSampler:
             **({"ground_only": ground_only, "rule_hidden": rule_hidden} if ground_only is not None else {}),
             **({"persona": persona} if self.persona_mix else {}),
             **({"hide_intent": hide_intent} if self.hide_intent_prob > 0.0 else {}),
+            **({"hop_aware": hop_aware} if self.hop_aware_prob > 0.0 else {}),
         }
 
-    def record_persona_outcome(self, persona: int, hide_intent: bool, opponents: int, won: bool) -> None:
+    def record_persona_outcome(self, persona: int, hide_intent: bool, opponents: int, won: bool,
+                               hop_aware: bool = False) -> None:
         """Bookkeeping only (OGRL-20261007-002): nothing gates on personas yet."""
         with self._lock:
-            self._persona_recent.append((int(persona), bool(hide_intent), int(opponents), bool(won)))
+            self._persona_recent.append((int(persona), bool(hide_intent), int(opponents), bool(won), bool(hop_aware)))
 
     def persona_win_rates(self, window: int = 3000) -> dict:
         """{"patient": {"n": .., "win": ..}, ..., "intent_hidden": {...}, "intent_shown": {...}}."""
@@ -457,12 +461,17 @@ class ScenarioSampler:
         with self._lock:
             recent = list(self._persona_recent)[-window:]
         out = {}
+        recent = [r if len(r) == 5 else (*r, False) for r in recent]
         for i, name in enumerate(PERSONAS):
-            sub = [w for p, _h, _o, w in recent if p == i]
+            sub = [w for p, _h, _o, w, _a in recent if p == i]
             if sub:
                 out[name] = {"n": len(sub), "win": round(sum(sub) / len(sub), 4)}
         for key, flag in (("intent_hidden", True), ("intent_shown", False)):
-            sub = [w for _p, h, _o, w in recent if h == flag]
+            sub = [w for _p, h, _o, w, _a in recent if h == flag]
+            if sub:
+                out[key] = {"n": len(sub), "win": round(sum(sub) / len(sub), 4)}
+        for key, flag in (("hop_aware", True), ("stock_hop_reaction", False)):
+            sub = [w for _p, _h, _o, w, a in recent if a == flag]
             if sub:
                 out[key] = {"n": len(sub), "win": round(sum(sub) / len(sub), 4)}
         return out

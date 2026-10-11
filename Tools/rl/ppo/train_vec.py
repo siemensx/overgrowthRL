@@ -179,6 +179,9 @@ def parse_args():
     p.add_argument("--hide-intent-prob", type=float, default=0.0,
                     help="OGRL-20261007-002: probability an episode zeroes the AI-intent entity fields "
                          "(obs_schema E_INTENT), so the policy cannot rely on knowing what the AI decided.")
+    p.add_argument("--hop-aware-prob", type=float, default=0.0,
+                    help="OGRL-20261010-005: probability an episode's hostiles are hop-aware (react only to a credible "
+                         "jump kick, not every hop; enemycontrol.as RLJumpThreat). Needs the level script >= rl_hop_aware.")
     p.add_argument("--move-school", action="store_true",
                     help="OGRL-20261004-010: staged ground-only episodes (no air attacks; rule visible in the "
                          "observation) per curriculum.MOVE_SCHOOL_STAGES, advancing automatically. "
@@ -626,6 +629,7 @@ def main():
                             else MOVE_SCHOOL_STAGES) if args.move_school else (),
         persona_mix=parse_persona_mix(args.persona_mix),
         hide_intent_prob=args.hide_intent_prob,
+        hop_aware_prob=args.hop_aware_prob,
     )
     if args.move_school and "rl_no_feint: 1" not in args.engine_config_line:
         raise SystemExit("--move-school needs --engine-config-line 'rl_no_feint: 1': the rule flag lives in the "
@@ -1082,10 +1086,11 @@ def main():
                     ended_seed = infos[i].get("seed")
                     ended_difficulty = ended_scenario.get("difficulty")
                     ended_ground = bool(ended_scenario.get("ground_only"))
-                    if "persona" in ended_scenario or "hide_intent" in ended_scenario:
+                    if "persona" in ended_scenario or "hide_intent" in ended_scenario or "hop_aware" in ended_scenario:
                         sampler.record_persona_outcome(ended_scenario.get("persona", 0) or 0,
                                                        bool(ended_scenario.get("hide_intent")),
-                                                       ended_scenario.get("opponents", 1) or 1, won)
+                                                       ended_scenario.get("opponents", 1) or 1, won,
+                                                       hop_aware=bool(ended_scenario.get("hop_aware")))
                     if ended_ground:
                         # Move school: a ground-only fight is not evidence for any gate that certifies
                         # normal fights (difficulty, opponent count, armed ladder) -- its own window only.
@@ -1461,7 +1466,8 @@ def main():
                 "armed_stage": sampler.armed_stage_index,
                 "armed_stage_label": sampler.armed_stage_label,
                 "personas": (sampler.persona_win_rates()
-                             if (args.persona_mix or args.hide_intent_prob > 0) else None),  # OGRL-20261007-002
+                             if (args.persona_mix or args.hide_intent_prob > 0 or args.hop_aware_prob > 0)
+                             else None),  # OGRL-20261007-002 / -20261010-005
                 "move_school": None if not args.move_school else {
                     **sampler.move_school_snapshot(),
                     "ground_outcomes": dict(ground_outcomes_this_update),

@@ -67,6 +67,8 @@ float rl_throw_aggression = 1.0f;  // multiplier on WantsToThrowItem's hardcoded
 int rl_persona = 0;        // OGRL-20261007-002 opponent persona, packed into set_rl_species as species + 16*persona
                             // (no engine rebuild): 0 = stock, 1 = patient counter-fighter, 2 = passive,
                             // 3 = berserker, 4 = expert, 5 = mixed (each hostile rolls 1..4). See ApplyRLPersona.
+int rl_hop_aware = 0;      // OGRL-20261010-005: species word bit 8 -- hostiles react to an airborne agent only when
+                            // it is a credible jump kick (enemycontrol.as RLJumpThreat), not to every hop
 ''', 1)
 
     # 2. ReceiveMessage: new set_rl_* tokens, right before set_all_hostile.
@@ -89,7 +91,8 @@ int rl_persona = 0;        // OGRL-20261007-002 opponent persona, packed into se
         // OGRL-20261007-002: the low 4 bits are the species axis, the rest the opponent persona.
         int species_word = atoi(token_iter.GetToken(msg));
         rl_species = species_word % 16;
-        rl_persona = species_word / 16;
+        rl_persona = (species_word / 16) % 16;
+        rl_hop_aware = (species_word / 256) % 2;
     } else if(token == "set_rl_armed_count"){
         token_iter.FindNextToken(msg);
         rl_armed_count = atoi(token_iter.GetToken(msg));
@@ -178,7 +181,8 @@ void ApplyRLPersona(ScriptParams@ params, float difficulty){
 }
 
 ''' + anchor_ce, 1)
-    out = out.replace(anchor_p, anchor_p + "    if(rl_persona > 0){ ApplyRLPersona(params, difficulty); }\n", 1)
+    out = out.replace(anchor_p, anchor_p + "    if(rl_persona > 0){ ApplyRLPersona(params, difficulty); }\n"
+                      "    if(rl_hop_aware != 0){ params.SetInt(\"RL Hop Aware\", 1); }   // step 3c, OGRL-20261010-005\n", 1)
 
     # 4. SetUpLevel: force game_type_int=0 (the OGRL-20260816-023 1v1 fork
     #    itself) + a comment on why rl_opponents isn't wired to it yet.
@@ -453,9 +457,12 @@ void SetUpLevel(""", 1)
     if(GetConfigValueInt("rl_human_persona") > 0){
         rl_persona = GetConfigValueInt("rl_human_persona");
     }
-    if(rl_difficulty >= 0.0f || rl_opponents != 1 || rl_persona != 0){
+    if(GetConfigValueInt("rl_human_hop_aware") > 0){
+        rl_hop_aware = 1;
+    }
+    if(rl_difficulty >= 0.0f || rl_opponents != 1 || rl_persona != 0 || rl_hop_aware != 0){
         Log(info, "RL: human-play overrides -> rl_difficulty=" + rl_difficulty + " rl_opponents=" + rl_opponents
-            + " rl_persona=" + rl_persona);
+            + " rl_persona=" + rl_persona + " rl_hop_aware=" + rl_hop_aware);
     }
     SetUpLevel(curr_difficulty);
 """, 1)

@@ -53,6 +53,26 @@ def test_sampler_mix_and_armed_floor():
     assert "passive" in s.persona_win_rates()
 
 
+def test_hop_aware_sampling_and_word():
+    """OGRL-20261010-005: hop-aware drawn per episode only when enabled; packed as species word bit 8."""
+    s = ScenarioSampler(rng_seed=2, hop_aware_prob=0.4, persona_mix=parse_persona_mix("expert=0.2"))
+    eps = [s.sample_episode() for _ in range(4000)]
+    share = sum(e["hop_aware"] for e in eps) / len(eps)
+    assert 0.36 < share < 0.44
+    assert "hop_aware" not in ScenarioSampler(rng_seed=2).sample_episode()
+    s.record_persona_outcome(4, False, 3, True, hop_aware=True)
+    assert s.persona_win_rates()["hop_aware"]["n"] == 1
+    word = lambda species, persona, hop: int(species) + 16 * int(persona) + 256 * int(bool(hop))
+    w = word(6, 5, True)
+    assert (w % 16, (w // 16) % 16, (w // 256) % 2) == (6, 5, 1)
+    out = gen.transform_script((gen.paths.data_dir() / "Scripts" / "arena_level.as").read_text(encoding="utf-8")) \
+        if (gen.paths.data_dir() / "Scripts" / "arena_level.as").exists() else None
+    if out:
+        assert "rl_hop_aware = (species_word / 256) % 2;" in out and 'params.SetInt("RL Hop Aware", 1)' in out
+    enemy = (HERE.parents[2] / "Data" / "Scripts" / "enemycontrol.as").read_text()
+    assert "bool RLJumpThreat(MovementObject@ target)" in enemy and 'params.HasParam("RL Hop Aware")' in enemy
+
+
 def test_intent_mask():
     env = OvergrowthEnv.__new__(OvergrowthEnv)
     env.layout, env.hide_intent = L, True
@@ -76,7 +96,7 @@ def test_generated_script():
         print("  (skipped: no installed stock arena_level.as)")
         return
     out = gen.transform_script(stock.read_text(encoding="utf-8"))
-    assert "rl_persona = species_word / 16;" in out and "rl_species = species_word % 16;" in out
+    assert "rl_persona = (species_word / 16) % 16;" in out and "rl_species = species_word % 16;" in out
     assert "if(rl_persona > 0){ ApplyRLPersona(params, difficulty); }" in out
     assert "game_type_int = (rl_opponents > 7 ? 7 : rl_opponents) + 1;" in out
     assert 'GetConfigValueInt("rl_human_persona")' in out
