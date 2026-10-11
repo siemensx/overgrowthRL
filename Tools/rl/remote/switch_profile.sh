@@ -122,7 +122,7 @@ for l in $missing; do
 done
 req=$(python3 -c "import json;print(json.load(open('$HERE/profiles/$PROFILE.json')).get('requires_scenario') or '')")
 if [ -n "$req" ]; then
-  has=$(printf '%s\n' "Select-String -Path '$DATA_WIN\\Scripts\\arena_level_1v1_unarmed.as' -Pattern '$req' -Quiet" | ps1 | tail -1)
+  has=$(printf '%s\n' "Select-String -Path '$DATA_WIN\\Scripts\\arena_level_1v1_unarmed.as' -Pattern '$req' -SimpleMatch -Quiet" | ps1 | tail -1)
   if [ "$has" != "True" ]; then
     echo "level script predates $req -- regenerating it on the trainer (backward compatible: persona 0 = old opponent)"
     run "gen_1v1_scenario.py on the trainer" <<EOF
