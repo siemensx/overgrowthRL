@@ -47,7 +47,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Tools/rl
-from env import OvergrowthEnv, ACTION_DIM
+from env import OvergrowthEnv, ACTION_DIM, PERSONAS
 from shm_env import ShmWaitTimeout
 from obs_schema import DEFAULT_LAYOUT
 from run_config import load_run_env_config
@@ -124,6 +124,12 @@ def parse_args():
                         "See curriculum.ARMED_STAGES / Tools/rl/CURRICULUM.md")
     p.add_argument("--jumpkick-wariness", type=int, default=0,
                help="seed every bot's got_hit_by_leg_cannon_count at spawn; each point adds 0.25 to its jump-kick avoidance probability (enemycontrol.as ResetMind). 0 = stock.")
+    p.add_argument("--persona", default="stock",
+                   help="opponent type, as in training (env.PERSONAS): stock, patient, passive, berserker, expert, mixed")
+    p.add_argument("--hop-aware", action="store_true",
+                   help="hop-aware enemies: ignore hops, react only once the agent starts an attack in the air")
+    p.add_argument("--hide-intent", action="store_true",
+                   help="hide the AI's intent fields from the agent, as in hidden-intent training fights")
     p.add_argument("--opponents", type=int, default=1, help="1, 2 or 3 -- needs a level with the generator's game_type 3/4 spawn groups (the t_train_* arenas have them; oval falls back to 1v1)")
     p.add_argument("--difficulty", type=float, default=None, help="0..1 opponent skill; default: whatever the level script picks")
     p.add_argument("--auto-camera", action="store_true",
@@ -250,6 +256,8 @@ def main():
     obs_normalizer = ObservationNormalizer(layout, frame_stack=args.frame_stack)
     obs_normalizer.load_state_dict(checkpoint["obs_normalizer"])
     print(f"loaded checkpoint from global_step={checkpoint['global_step']}")
+    print(f"setup: 1v{args.opponents}, enemy type {args.persona}, hop-aware {'yes' if args.hop_aware else 'no'}, "
+          f"AI intent {'hidden' if args.hide_intent else 'shown'}, level {args.level}", flush=True)
 
     ghost_dir = Path(args.ghost_dir) if args.ghost_dir else Path(args.checkpoint).parent / "ghosts"
     ghost_dir.mkdir(parents=True, exist_ok=True)
@@ -273,6 +281,12 @@ def main():
                   "throw_aggression": args.throw_aggression}
             if args.ground_only:
                 kw["ground_only"] = True
+            if args.persona not in ("stock", "0"):
+                kw["persona"] = int(args.persona) if args.persona.isdigit() else PERSONAS.index(args.persona)
+            if args.hop_aware:
+                kw["hop_aware"] = True
+            if args.hide_intent:
+                kw["hide_intent"] = True
             if args.difficulty is not None:
                 kw["difficulty"] = args.difficulty
             append_episode_event(args.episode_events, "start", episode, args.seed + episode,
