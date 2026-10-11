@@ -58,9 +58,10 @@
 
   <div class="row" id="numbers"></div>
 
-  <h2>Win rate at difficulty 1.0, per million steps</h2>
+  <h2 id="charttitle">Win rate at difficulty 1.0, per million steps</h2>
   <div id="chart"></div>
   <div class="legend"><i style="border-color:#111"></i>1 vs 3<i style="border-color:#8a8a8a"></i>1 vs 2<i style="border-color:#c8c8c8"></i>1 vs 1
+    <span id="pooledlegend"><i style="border-color:#bbb;border-top-style:dashed"></i>all fights pooled (same colours, dashed)</span>
     <span id="chartnote"></span></div>
 
   <h2>Quick checks <span class="muted" style="font-weight:normal">— 200 fights, 1 vs 3, one training map, best move only</span></h2>
@@ -153,12 +154,18 @@ function render() {
                 ["engines", t.engines ?? "—"]];
   for (const o of ["1", "2", "3"]) {
     const c = r.rates[o];
-    nums.push([`1 vs ${o}, last 1M steps`, c ? `${pct(c.won, c.n)}` : "—", c ? `${c.won}/${c.n}` : ""]);
+    if (c && c.normal) nums.push([`1 vs ${o} normal fights, last 1M steps`, pct(c.normal[0], c.normal[1]),
+                                  `${c.normal[0]}/${c.normal[1]} · all fights ${pct(c.won, c.n)}`]);
+    else nums.push([`1 vs ${o}, last 1M steps`, c ? `${pct(c.won, c.n)}` : "—", c ? `${c.won}/${c.n}` : ""]);
   }
   $("numbers").innerHTML = nums.map(([k, v, sub]) =>
     `<div class="kv"><span class="v">${v}</span><span class="k">${k}${sub ? " · " + sub : ""}</span></div>`).join("");
 
-  drawChart(r.chart, r.boundaries);
+  drawChart(r.chart, r.boundaries, r.chart_normal_only);
+  $("charttitle").innerHTML = r.chart_normal_only
+    ? `Win rate in normal fights, difficulty 1.0, per million steps <span class="muted" style="font-weight:normal">— normal enemies, normal hop reaction, AI intent shown; the other conditions are in the table below</span>`
+    : "Win rate at difficulty 1.0, per million steps (all fights pooled)";
+  $("pooledlegend").style.display = r.chart_normal_only ? "" : "none";
   const bf = r.backfill;
   const loading = bf && (bf.episodes[0] < bf.episodes[1]);
   $("chartnote").textContent = (loading ? ` · loading history ${Math.round(100 * bf.episodes[0] / bf.episodes[1])}%` : "") +
@@ -307,7 +314,7 @@ function condChart(hist, bounds) {
     ` · each point is at least ${MIN} fights; hollow = still filling; hover a point for counts</div>`;
 }
 
-function drawChart(chart, bounds) {
+function drawChart(chart, bounds, normalOnly) {
   const W = 880, H = 220, L = 34, R = 8, T = 8, B = 24;
   if (!chart.length) { $("chart").innerHTML = `<div class="muted">no full-difficulty fights yet</div>`; return; }
   const x0 = chart[0].step - 1e6, x1 = chart[chart.length - 1].step;
@@ -324,13 +331,25 @@ function drawChart(chart, bounds) {
   }
   g += boundaryMarks(bounds, X, x0, x1, T, H - B);
   const series = [["1", "#c8c8c8"], ["2", "#8a8a8a"], ["3", "#111"]];
+  if (normalOnly) for (const [o, col] of series) {          // pooled, faint and dashed, underneath
+    let d = "", pen = false;
+    for (const p of chart) {
+      const v = p["p" + o];
+      if (v == null || p.partial) { pen = false; continue; }
+      d += (pen ? "L" : "M") + X(p.step).toFixed(1) + " " + Y(v).toFixed(1) + " ";
+      pen = true;
+    }
+    if (d) g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>`;
+  }
   for (const [o, col] of series) {
     let d = "", pen = false, dots = "";
     for (const p of chart) {
       const v = p[o];
       if (v == null || p.partial) { pen = false; continue; }
       d += (pen ? "L" : "M") + X(p.step).toFixed(1) + " " + Y(v).toFixed(1) + " ";
-      dots += `<circle cx="${X(p.step).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="2.2" fill="${col}"><title>1 vs ${o} at ${M(p.step)}: ${Math.round(100 * v)}%</title></circle>`;
+      const nn = p["n" + o], pv = p["p" + o];
+      dots += `<circle cx="${X(p.step).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="2.6" fill="${col}"><title>1 vs ${o}, ${M(p.step - 1e6)}–${M(p.step)}: ` +
+        `${nn ? nn[0] + " of " + nn[1] + " won" : Math.round(100 * v) + "%"}${normalOnly && pv != null ? ` (all fights pooled: ${Math.round(100 * pv)}%)` : ""}</title></circle>`;
       pen = true;
     }
     if (d) g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${o === "3" ? 2 : 1.5}"/>` + dots;

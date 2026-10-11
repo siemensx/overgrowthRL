@@ -401,7 +401,11 @@ class Poller(threading.Thread):
             info = dict(self.info)
         run = self.view_run or info.get("run")
         st = self.runs.get(run) if run else None
-        anc = [self.runs[a] for a in (lineage(run) if run else []) if a in self.runs]
+        anc = []
+        for a in (lineage(run) if run else []):
+            if a not in self.runs:
+                self.runs[a] = load_run_state(a)       # cached on disk; the poller tops it up if unfinished
+            anc.append(self.runs[a])
         return summarize(info, st, anc)
 
 
@@ -431,17 +435,29 @@ def summarize(info: dict, st: dict | None, ancestors: list | None = None) -> dic
     rates = {}
     for opp in (1, 2, 3):
         rows = [r for r in window if r[1] == opp]
+        norm = [r for r in rows if len(r) >= 7 and r[6] and condition_of(r[3], r[4], r[5]) == "normal fight"]
         if rows:
             rates[str(opp)] = {"won": sum(r[2] == "won" for r in rows), "n": len(rows),
-                               "timeouts": sum(r[2] == "timeout" for r in rows)}
+                               "timeouts": sum(r[2] == "timeout" for r in rows),
+                               "normal": [sum(r[2] == "won" for r in norm), len(norm)] if norm else None}
     line_states = list(reversed(ancestors or [])) + [st]          # oldest first
     bins_all = merge_bins(line_states, "bins")
     boundaries = [[x["first_step"], x["run"]] for x in line_states if x.get("first_step") is not None]
+    # Headline = NORMAL fights only (normal enemies, normal hop reaction, intent shown): the pooled rate moves
+    # whenever the fight mix changes (OGRL-20261010-016: run39_hop4's new hop rule alone dropped pooled 1v3
+    # ~25% -> 13%). Pooled stays as p1..p3 for context. Runs without condition flags fall back to pooled.
+    normal_bins = merge_bins([{"b": x.get("cond_bins", {}).get("normal fight", {})} for x in line_states], "b")
     chart = []
-    for b in sorted(bins_all, key=int):
-        cells = bins_all[b]
-        chart.append({"step": (int(b) + 1) * BIN,
-                      **{o: (round(c[0] / c[1], 3) if c[1] >= 30 else None) for o, c in cells.items()}})
+    for b in sorted(set(bins_all) | set(normal_bins), key=int):
+        pooled, normal = bins_all.get(b, {}), normal_bins.get(b, {})
+        main = normal if normal_bins else pooled
+        point = {"step": (int(b) + 1) * BIN}
+        for o in ("1", "2", "3"):
+            c, pc = main.get(o), pooled.get(o)
+            point[o] = round(c[0] / c[1], 3) if c and c[1] >= 20 else None
+            point["n" + o] = [c[0], c[1]] if c else None
+            point["p" + o] = round(pc[0] / pc[1], 3) if pc and pc[1] >= 30 else None
+        chart.append(point)
     if chart and last_step and chart[-1]["step"] > last_step:
         chart[-1]["partial"] = True                       # the current bin is still filling
     restarts = [l for l in info.get("log", []) if "exited" in l]
@@ -467,7 +483,8 @@ def summarize(info: dict, st: dict | None, ancestors: list | None = None) -> dic
                   "low_difficulty_episodes": st["bins_low"],
                   "benches": sorted(st["benches"].values()),
                   "backfill": {"metrics": [st["off_m"], st["size_m"]], "episodes": [st["off_e"], st["size_e"]]},
-                  "restarts": restarts, "mix": st.get("mix"), "mix_grid": grid, "boundaries": boundaries}
+                  "restarts": restarts, "mix": st.get("mix"), "mix_grid": grid, "boundaries": boundaries,
+                  "chart_normal_only": bool(normal_bins)}
     return out
 
 
