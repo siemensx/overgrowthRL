@@ -184,6 +184,8 @@ def ingest_metrics(st: dict, text: str) -> None:
         row = [m["global_step"], m.get("t"), perf.get("steps_per_second_cycle"),
                (m.get("ppo") or {}).get("entropy"), nh.get("saturated"), nh.get("grad_pass")]
         st["last_metric"] = row
+        if m.get("personas"):
+            st["mix"] = m["personas"]
         if not st["metrics"] or row[0] - st["metrics"][-1][0] >= 200_000:
             st["metrics"].append(row)
 
@@ -331,7 +333,7 @@ def summarize(info: dict, st: dict | None) -> dict:
                   "low_difficulty_episodes": st["bins_low"],
                   "benches": sorted(st["benches"].values()),
                   "backfill": {"metrics": [st["off_m"], st["size_m"]], "episodes": [st["off_e"], st["size_e"]]},
-                  "restarts": restarts}
+                  "restarts": restarts, "mix": st.get("mix")}
     return out
 
 
@@ -382,6 +384,8 @@ class Watcher:
         with self.lock:
             if self.proc and self.proc.poll() is None:
                 return {"ok": False, "error": "a watch is already running"}
+        if "BENCH" in globals() and BENCH.busy():
+            return {"ok": False, "error": "a benchmark is running on this Mac; wait for it to finish"}
         ok, why = self.drive_ok()
         if not ok:
             return {"ok": False, "error": why}
@@ -443,10 +447,141 @@ class Watcher:
                     "maps": {"train": MAPS_TRAIN, "held": MAPS_HELD}}
 
 
+# ---------------------------------------------------------------- benchmark on the Mac
+
+BENCH_FILE = CACHE / "benchmarks.json"
+UNSEEN = ["t_horde_301", "t_horde_302", "t_horde_303", "t_horde_held_401"]
+
+
+class Benchmarker:
+    """One click: suite-v2 1v3 cells (3 training maps + t_held_203) plus four maps no run trains on, 100 greedy
+    fights each = 800 fights, on the Mac, fixed seeds (comparable across checkpoints and with OGRL-20261010-001).
+    ~20-25 min at 8 engines. Results are kept in cache/benchmarks.json."""
+
+    def __init__(self, watcher: "Watcher"):
+        self.watcher = watcher
+        self.lock = threading.Lock()
+        self.status = {"state": "idle", "message": "", "done": 0, "total": 0}
+
+    def results(self) -> list:
+        try:
+            return json.loads(BENCH_FILE.read_text())
+        except Exception:
+            return []
+
+    def busy(self) -> bool:
+        return self.status["state"] in ("copying", "running")
+
+    def start(self, req: dict) -> dict:
+        if self.busy() or self.watcher.status["state"] in ("copying", "running"):
+            return {"ok": False, "error": "a benchmark or a watch is already running on this Mac"}
+        ok, why = self.watcher.drive_ok()
+        if not ok:
+            return {"ok": False, "error": why}
+        threading.Thread(target=self._run, args=(req.get("checkpoint", "live"),), daemon=True).start()
+        return {"ok": True}
+
+    def _run(self, which: str):
+        try:
+            import canonical_eval as ce
+            host = self.watcher.poller.info.get("host") or pick_host()
+            run = self.watcher.poller.view_run or self.watcher.poller.info.get("run")
+            with self.lock:
+                self.status.update(state="copying", message=f"copying {which}", done=0, total=0)
+            ck = self.watcher.fetch(host, run, which)
+            cells = [c for c in ce.cells() if c["opp"] == 3] + [
+                {"idx": 100 + i, "map": m, "opp": 3, "split": "unseen", "seed_base": 7_500_000 + 1000 * i}
+                for i, m in enumerate(UNSEEN)]
+            out = CACHE / "bench" / ck.stem
+            out.mkdir(parents=True, exist_ok=True)
+            total = len(cells) * (100 // ce.CHUNK)
+            with self.lock:
+                self.status.update(state="running", message=f"{ck.name}: 800 fights", total=total)
+            done_box = {"stop": False}
+
+            def progress():
+                while not done_box["stop"]:
+                    n = len(list(out.glob("*_s0*.json")))
+                    with self.lock:
+                        self.status["done"] = n
+                    time.sleep(5)
+            threading.Thread(target=progress, daemon=True).start()
+            ce.run_all_chunks(str(ck), cells, ce.CONTROLS["v6-omni"], out, 100, ck.stem, 8)
+            res = [ce.run_cell(str(ck), c, ce.CONTROLS["v6-omni"], out, 100, ck.stem) for c in cells]
+            done_box["stop"] = True
+            import torch
+            step = int(torch.load(str(ck), map_location="cpu", weights_only=False).get("global_step", -1))
+            entry = {"checkpoint": ck.name, "step": step, "time": time.strftime("%Y-%m-%d %H:%M"),
+                     "train": sum(r["won"] for r in res if r["split"] == "train"),
+                     "held": sum(r["won"] for r in res if r["split"] == "held"),
+                     "unseen": sum(r["won"] for r in res if r["split"] == "unseen"),
+                     "timeouts": sum(r["outcomes"]["timeout"] for r in res)}
+            allres = [r for r in self.results() if r.get("checkpoint") != ck.name] + [entry]
+            BENCH_FILE.write_text(json.dumps(sorted(allres, key=lambda r: r["step"]), indent=1))
+            with self.lock:
+                self.status.update(state="done", message=f"{ck.name}: done", done=total)
+        except Exception as exc:
+            with self.lock:
+                self.status.update(state="failed", message=repr(exc)[:300])
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            return {**self.status, "results": self.results()}
+
+
+# ---------------------------------------------------------------- switching the trainer's profile
+
+class Switcher:
+    """Runs remote/switch_profile.sh <profile> (graceful stop, code update, maps/script, preflight, start)."""
+
+    def __init__(self, poller: Poller):
+        self.poller = poller
+        self.proc = None
+        self.log_path = CACHE / "switch.log"
+        self.target = None
+
+    @staticmethod
+    def profiles() -> list:
+        out = []
+        for f in sorted((RL / "profiles").glob("run*.json")):
+            try:
+                d = json.loads(f.read_text())
+                out.append({"name": f.stem, "purpose": d.get("purpose", "")})
+            except Exception:
+                pass
+        return out
+
+    def start(self, req: dict) -> dict:
+        if self.proc and self.proc.poll() is None:
+            return {"ok": False, "error": "a switch is already running"}
+        name = str(req.get("profile", ""))
+        if name not in [p["name"] for p in self.profiles()]:
+            return {"ok": False, "error": "unknown profile"}
+        env = dict(os.environ)
+        env["HOST"] = self.poller.info.get("host") or pick_host() or "trainer-lan"
+        self.target = name
+        self.proc = subprocess.Popen([str(RL / "remote" / "switch_profile.sh"), name], cwd=str(REPO),
+                                     stdout=open(self.log_path, "w"), stderr=subprocess.STDOUT, env=env)
+        return {"ok": True}
+
+    def snapshot(self) -> dict:
+        state = "idle"
+        if self.proc is not None:
+            rc = self.proc.poll()
+            state = "running" if rc is None else ("done" if rc == 0 else f"failed (exit {rc})")
+        try:
+            tail = self.log_path.read_text(errors="replace").splitlines()[-8:] if self.proc else []
+        except Exception:
+            tail = []
+        return {"state": state, "target": self.target, "log_tail": tail, "profiles": self.profiles()}
+
+
 # ---------------------------------------------------------------- http
 
 POLLER = Poller()
 WATCHER = Watcher(POLLER)
+BENCH = Benchmarker(WATCHER)
+SWITCH = Switcher(POLLER)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -469,7 +604,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/api/state":
             self._json({**POLLER.snapshot(), "watch": WATCHER.snapshot(), "now": time.time(),
-                        "view_run": POLLER.view_run})
+                        "view_run": POLLER.view_run, "bench": BENCH.snapshot(), "switch": SWITCH.snapshot()})
         else:
             self._send(404, b"not found", "text/plain")
 
@@ -481,6 +616,10 @@ class Handler(BaseHTTPRequestHandler):
             body = {}
         if self.path == "/api/watch":
             self._json(WATCHER.start(body))
+        elif self.path == "/api/bench":
+            self._json(BENCH.start(body))
+        elif self.path == "/api/switch":
+            self._json(SWITCH.start(body))
         elif self.path == "/api/watch/stop":
             self._json(WATCHER.stop())
         elif self.path == "/api/run":

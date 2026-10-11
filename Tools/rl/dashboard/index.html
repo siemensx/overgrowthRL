@@ -61,6 +61,19 @@
   <h2>Quick checks <span class="muted" style="font-weight:normal">— 200 fights, 1 vs 3, one training map, best move only</span></h2>
   <table id="benches"><tr><th>steps</th><th>won</th><th>lost</th><th>nobody down</th></tr></table>
 
+  <div id="mixwrap" style="display:none">
+    <h2>Training fights by opponent <span class="muted" style="font-weight:normal">— last 3,000 fights, training randomness on</span></h2>
+    <table id="mix" style="max-width:520px"></table>
+  </div>
+
+  <h2>Benchmark on this Mac <span class="muted" style="font-weight:normal">— 1 vs 3, 100 fights per map, same fights every time (~25 min)</span></h2>
+  <table id="benchres"><tr><th>steps</th><th>training maps (of 300)</th><th>never-trained map (of 100)</th><th>4 unseen maps (of 400)</th></tr></table>
+  <div class="form" style="margin-top:10px">
+    <label>checkpoint <select id="benchck"></select></label>
+    <button id="benchgo">Run benchmark</button>
+  </div>
+  <div class="note" id="benchnote"></div>
+
   <h2>Watch a checkpoint on this Mac</h2>
   <div class="form">
     <label>checkpoint <select id="ck"></select></label>
@@ -76,11 +89,16 @@
 
   <h2>Trainer</h2>
   <div id="trainer" class="muted"></div>
+  <div class="form" style="margin-top:12px">
+    <label>switch the trainer to <select id="prof"></select></label>
+    <button id="switchgo">Switch</button>
+  </div>
+  <div class="note" id="switchnote"></div>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let state = null, ckChoice = null;
+let state = null, ckChoice = null, showAllBenches = false;
 
 function ago(t, now) {
   if (!t) return "—";
@@ -134,10 +152,13 @@ function render() {
   $("chartnote").textContent = (loading ? ` · loading history ${Math.round(100 * bf.episodes[0] / bf.episodes[1])}%` : "") +
     (r.low_difficulty_episodes ? ` · ${r.low_difficulty_episodes} fights below difficulty 1.0 not shown` : "");
 
+  const allB = r.benches.slice().reverse(), shownB = showAllBenches ? allB : allB.slice(0, 8);
   $("benches").innerHTML = `<tr><th>steps</th><th>won</th><th>lost</th><th>nobody down</th></tr>` +
-    (r.benches.length ? r.benches.slice().reverse().map(b =>
-      `<tr><td>${M(b[0])}</td><td>${b[1]}</td><td>${b[2]}</td><td>${b[3]}</td></tr>`).join("")
-      : `<tr><td class="muted" colspan="4">none yet (one every 5M steps)</td></tr>`);
+    (shownB.length ? shownB.map(b => { const n = b[1] + b[2] + b[3];
+      return `<tr><td>${M(b[0])}</td><td>${b[1]}${n !== 200 ? ` <span class="muted">of ${n}</span>` : ""}</td><td>${b[2]}</td><td>${b[3]}</td></tr>`; }).join("")
+      : `<tr><td class="muted" colspan="4">none yet (one every 5M steps)</td></tr>`) +
+    (allB.length > 8 ? `<tr><td colspan="4"><a href="#" id="morebench">${showAllBenches ? "show fewer" : "show all " + allB.length}</a></td></tr>` : "");
+  const mb = $("morebench"); if (mb) mb.onclick = (e) => { e.preventDefault(); showAllBenches = !showAllBenches; render(); };
 
   // watch form
   const ck = $("ck");
@@ -171,6 +192,43 @@ function render() {
   $("watchres").innerHTML = res.length ? res.map(x =>
     `<tr><td>fight ${x.episode + 1}</td><td>${x.outcome === "WON" ? "won" : x.outcome === "LOST" ? "lost" : "nobody down in 40 s"}</td><td class="muted">${(x.steps / 30).toFixed(0)} s game time</td></tr>`).join("") +
     `<tr><td class="muted">total</td><td>${res.filter(x => x.outcome === "WON").length} of ${res.length} won</td><td></td></tr>` : "";
+
+  // training mix (run39-style runs)
+  const mix = r.mix;
+  $("mixwrap").style.display = mix ? "" : "none";
+  if (mix) {
+    const label = {stock: "normal opponent", patient: "patient", passive: "passive", berserker: "berserker",
+      expert: "expert", mixed: "mixed", intent_hidden: "AI intent hidden", intent_shown: "AI intent shown",
+      hop_aware: "hop-aware enemies", stock_hop_reaction: "normal hop reaction"};
+    $("mix").innerHTML = `<tr><th></th><th>won</th><th>fights</th></tr>` + Object.entries(mix).map(([k, v]) =>
+      `<tr><td>${label[k] || k}</td><td>${Math.round(100 * v.win)}%</td><td class="muted">${v.n}</td></tr>`).join("");
+  }
+
+  // benchmarks
+  const b = s.bench;
+  $("benchres").innerHTML = `<tr><th>steps</th><th>training maps (of 300)</th><th>never-trained map (of 100)</th><th>4 unseen maps (of 400)</th></tr>` +
+    (b.results.length ? b.results.slice().reverse().map(x => `<tr><td>${M(x.step)}</td><td>${x.train}</td><td>${x.held}</td><td>${x.unseen}</td></tr>`).join("")
+     : `<tr><td class="muted" colspan="4">none yet</td></tr>`);
+  const bck = $("benchck");
+  if (bck.dataset.sig !== ck.dataset.sig) { bck.innerHTML = ck.innerHTML; bck.dataset.sig = ck.dataset.sig; }
+  const bbusy = b.state === "copying" || b.state === "running";
+  $("benchgo").disabled = bbusy || busy || !w.drive_ok;
+  $("benchnote").innerHTML = b.state === "running" ? `running ${b.message} — ${b.done} of ${b.total} batches` :
+    b.state === "copying" ? b.message + "…" : b.state === "failed" ? `<span class="bad">${b.message}</span>` :
+    b.state === "done" ? b.message : "";
+
+  // profile switch
+  const sw = s.switch, pf = $("prof");
+  const psig = sw.profiles.map(x => x.name).join(",");
+  if (pf.dataset.sig !== psig) {
+    pf.innerHTML = sw.profiles.map(x => `<option value="${x.name}" title="${x.purpose.replace(/"/g, "")}">${x.name}</option>`).join("");
+    pf.dataset.sig = psig;
+    if (s.active) pf.value = s.active.profile;
+  }
+  $("switchgo").disabled = sw.state === "running";
+  $("switchnote").innerHTML = sw.state === "idle" ? "" :
+    `<div>${sw.state === "running" ? "switching to " + sw.target + "…" : sw.state === "done" ? "switched to " + sw.target : `<span class="bad">switch ${sw.state}</span>`}</div>` +
+    (sw.log_tail.length ? `<pre class="muted" style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${sw.log_tail.join("\n")}</pre>` : "");
 
   // trainer footer
   const lines = [];
@@ -228,6 +286,20 @@ $("go").onclick = async () => {
   setTimeout(tick, 500);
 };
 $("stop").onclick = async () => { await fetch("/api/watch/stop", {method: "POST"}); setTimeout(tick, 500); };
+$("benchgo").onclick = async () => {
+  const r = await (await fetch("/api/bench", {method: "POST", body: JSON.stringify({checkpoint: $("benchck").value})})).json();
+  if (!r.ok) $("benchnote").innerHTML = `<span class="bad">${r.error}</span>`;
+  setTimeout(tick, 500);
+};
+$("switchgo").onclick = async () => {
+  const name = $("prof").value;
+  if (s_active() === name) { $("switchnote").textContent = name + " is already running"; return; }
+  if (!confirm(`Stop the current run gracefully and start ${name} on the trainer?`)) return;
+  const r = await (await fetch("/api/switch", {method: "POST", body: JSON.stringify({profile: name})})).json();
+  if (!r.ok) $("switchnote").innerHTML = `<span class="bad">${r.error}</span>`;
+  setTimeout(tick, 500);
+};
+function s_active() { return state && state.active ? state.active.profile : null; }
 
 tick();
 setInterval(tick, 5000);
