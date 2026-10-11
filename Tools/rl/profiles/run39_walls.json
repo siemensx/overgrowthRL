@@ -1,0 +1,37 @@
+{
+  "_doc": "OGRL-20261010-017. run39_hop4 continued on t_nat4_701..724: the same 24 terrain maps (same seeds, same terrain and start arrangements) with the boundary walls raised so their top is >= 7 m above the highest bank beside them (was 0.7-1.2 m; a held jump reaches 3.8 m). On t_nat3, run39_hop4@223.5M (greedy, 1v3, 8 maps x 5 fights) left the map in 13/40 fights vs normal enemies and 5/40 vs hop-aware ones, winning none of them; on t_nat4 0/80, wins unchanged (16->15, 1->1). No reward change: an escape already ended as a loss or timeout. Everything else as run39_hop4.",
+  "base": "_base_v6_attn.json",
+  "run_id": "run39_walls",
+  "seed": 39,
+  "shm_tag": "r39w",
+  "seed_from": "run39_hop4.pt",
+  "requires_scenario": "100 * pick",
+  "requires_text": [
+    [
+      "Data/Scripts/enemycontrol.as",
+      "GetConfigValueInt(\"rl_hop_rule\") : 4"
+    ]
+  ],
+  "purpose": "OGRL-20261010-017 run39_walls: run39_hop4 on the same terrain maps with raised boundary walls (t_nat4)",
+  "args": [
+    "--d-min",
+    "1.0",
+    "--d-max-start",
+    "1.0",
+    "--weight-decay",
+    "0.01",
+    "--weight-decay-summary",
+    "0.05",
+    "--health-every",
+    "5",
+    "--persona-mix",
+    "patient=0.15,passive=0.1,berserker=0.05,expert=0.1,mixed=0.1",
+    "--hide-intent-prob",
+    "0.3",
+    "--hop-aware-prob",
+    "0.4",
+    "--timeout-penalty",
+    "20"
+  ],
+  "levels": "arenas/t_nat4_{701..724}.xml"
+}

@@ -29,6 +29,7 @@ which live in the purchased Steam tree and are copied with an MD5 check).
 | `run38_d1_wd` | fork of run38_d1 | run38_d1 + weight decay (0.01; 0.05 on the attention summary) | does stopping weight growth undo the saturating summary / narrowing trunk, and does 1v3 follow? |
 | `run39_terrain` | fork of run39 | run39 on 24 terrain-style maps (t_nat3_701..724) with 6 random start arrangements per fight size | does the agent learn to fight up close, on slopes, from any direction? |
 | `run39_hop4` | fork of run39_terrain | hop-aware enemies ignore hops and react only to a started kick (rl_hop_rule 4); timeout loss 20 instead of 14 | does the agent find real 1v3 skill once the hop trick stops working, and stop waiting out patient opponents? |
+| `run39_walls` | fork of run39_hop4 | same 24 terrain maps with boundary walls raised to >= 7 m above the banks (t_nat4); the old walls were hopped over in ~1 of 3 normal 1v3 fights | no fights lost to leaving the map |
 
 A fork freezes a copy of the parent's checkpoint as `<run_id>_seed.pt` at its first launch (after the
 parent has been stopped), so the parent can later be resumed unchanged.

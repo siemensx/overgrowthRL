@@ -193,7 +193,7 @@ function render() {
   const w = s.watch, mp = $("map");
   if (!mp.dataset.done) {
     const og = (label, list) => `<optgroup label="${label}">${list.map(m => `<option>${m}</option>`).join("")}</optgroup>`;
-    mp.innerHTML = og("terrain maps, never trained on", w.maps.nat_held) + og("terrain maps, trained on (run39_terrain on)", w.maps.nat) +
+    mp.innerHTML = og("terrain maps, never trained on", w.maps.nat_held) + og("terrain maps, trained on (run39_walls on)", w.maps.nat) +
       og("old maps, never trained on", w.maps.held) + og("old maps (runs before run39_terrain)", w.maps.train);
     mp.dataset.done = 1;
   }

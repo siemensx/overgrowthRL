@@ -44,8 +44,8 @@ BIN = 1_000_000              # steps per chart point
 FULL_D = 0.95                # "full difficulty" for win rates
 MAPS_TRAIN = [f"t_train_{i}" for i in range(101, 125)]
 MAPS_HELD = ["t_held_203"]
-MAPS_NAT = [f"t_nat3_{i}" for i in range(701, 725)]          # run39_terrain onwards
-MAPS_NAT_HELD = [f"t_nat3_held_{i}" for i in range(801, 805)]
+MAPS_NAT = [f"t_nat4_{i}" for i in range(701, 725)]          # run39_walls onwards (t_nat3 + raised walls)
+MAPS_NAT_HELD = [f"t_nat4_held_{i}" for i in range(801, 805)]
 PERSONA_NAMES = ["normal", "patient", "passive", "berserker", "expert", "mixed"]
 COND_ORDER = ["normal fight", "hop-aware enemies", "AI intent hidden"] + [f"{n} opponents" for n in PERSONA_NAMES[1:]]
 
@@ -542,7 +542,7 @@ class Watcher:
             return {"ok": False, "error": why}
         host = self.poller.info.get("host") or pick_host()
         run = self.poller.view_run or self.poller.info.get("run")
-        level = req.get("map", "t_nat3_held_801")
+        level = req.get("map", "t_nat4_held_801")
         if level not in MAPS_TRAIN + MAPS_HELD + MAPS_NAT + MAPS_NAT_HELD:
             return {"ok": False, "error": "unknown map"}
         opp = int(req.get("opponents", 3))

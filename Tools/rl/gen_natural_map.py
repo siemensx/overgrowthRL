@@ -116,7 +116,11 @@ def build(lvl: Level, rng: random.Random, floor_top: float, layout: str, half: f
     span = half * 1.45                                  # covers the square court at any heading
     oriented_box(lvl, (-yv[0] * 1.0, floor_top - yv[1] * 1.0, -yv[2] * 1.0), (span, 1.0, span), (u, yv, w), kind="floor")
     lvl.rects.pop()                                      # the floor is not an obstacle
-    wall_h = 3.0 + 2 * math.tan(GROUND["tilt"]) * half
+    # OGRL-20261010-017: the rim banks (up to 2.2 m) and terraces (up to 2.0 m) run right up to the boundary wall, so
+    # the old 3 m wall cleared them by only 0.7-1.2 m and agents hopped out of the map. A held full jump peaks at
+    # 3.8 m above take-off (measured, t_flat): the wall top is now >= 7 m above the highest terrain beside it, on the
+    # uphill side too. Draws no random numbers, so the same seed gives the same terrain and start positions.
+    wall_h = 1.5 * math.tan(GROUND["tilt"]) * half + math.tan(GROUND["tilt"]) * half + 2.2 + 7.0
     for dx, dz, sx, sz in ((0, half, half, 0.5), (0, -half, half, 0.5), (half, 0, 0.5, half), (-half, 0, 0.5, half)):
         lvl.box(dx, floor_top - math.tan(GROUND["tilt"]) * half * 1.5 + wall_h / 2, dz, sx, wall_h / 2, sz, kind="wall")
     # uneven rim: 3 segments per side rising toward the wall, plus corner wedges
